@@ -31,6 +31,9 @@ Heuristic notes
 - Stdlib and "always-installed" deps (pytest, click, numpy, …) are
   treated as ambient and not checked. The point is optional 3rd-party
   surface, not core deps that everyone has.
+- Core dependencies cover tests when their markers apply to the current base
+  or development installation. Other platforms and unrelated extras do not
+  provide that coverage.
 - The auditor reads ``pyproject.toml`` only — does not import the
   package, so it is safe to run on broken trees.
 """
@@ -139,7 +142,8 @@ def check_dev_extras_complete(repo: Path, violation_cls: type, out: list) -> Non
     """Append PS-210 violations.
 
     Fires when a dep is declared in some `[X]` extra, used unguarded in
-    tests, but absent from both core and `[dev]`. The fix is to add the dep to `[dev]`
+    tests, but absent from applicable core requirements and `[dev]`. The fix
+    is to add the dep to `[dev]`
     or guard the tests with ``pytest.importorskip``.
     """
     meta = _parse_pyproject(repo)
@@ -151,9 +155,19 @@ def check_dev_extras_complete(repo: Path, violation_cls: type, out: list) -> Non
     core_specs = project.get("dependencies", [])
     if not isinstance(core_specs, list):
         core_specs = []  # malformed metadata is reported by its owning check
-    covered = dev | {
-        _strip_version(spec) for spec in core_specs if isinstance(spec, str)
-    }
+    covered = set(dev)
+    for spec in core_specs:
+        if not isinstance(spec, str):
+            continue
+        try:
+            requirement = Requirement(spec)
+        except InvalidRequirement:
+            continue  # Malformed declarations are not evidence of installation.
+        if requirement.marker is not None and not any(
+            requirement.marker.evaluate({"extra": extra}) for extra in ("", "dev")
+        ):
+            continue
+        covered.add(_strip_version(spec))
     if not extras:
         return
 

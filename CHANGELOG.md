@@ -19,7 +19,8 @@ versions follow [Semantic Versioning](https://semver.org/).
   publisher, so GitHub can admit the unchanged documentation validation jobs.
 - Count declared core dependencies when checking development dependency coverage,
   so dependencies shared by core and optional extras do not require duplicate
-  declarations in the development extra.
+  declarations in the development extra. Honor core dependency markers so
+  requirements for other platforms or extras cannot hide missing test imports.
 
 ## [0.62.7] - 2026-11-02
 

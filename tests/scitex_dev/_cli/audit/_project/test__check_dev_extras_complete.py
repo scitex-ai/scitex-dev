@@ -1,5 +1,6 @@
 """Core dependencies already cover optional imports in a dev installation."""
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,7 @@ from scitex_dev._cli.audit._project._violation import Violation
     (
         '"scitex-logging==0.2.4"',
         '"SCITEX-Logging[all]>=0.2.4"',
+        "'scitex-logging; extra == \"dev\"'",
         "'scitex-logging; python_version >= \"3.9\"'",
     ),
 )
@@ -47,6 +49,31 @@ def test_an_optional_only_unguarded_dependency_still_requires_dev(tmp_path: Path
     (tmp_path / "tests/test_owned.py").write_text(
         "from scitex_logging import getLogger\n"
     )
+    findings = []
+    # Act
+    check_dev_extras_complete(tmp_path, Violation, findings)
+    # Assert
+    assert [finding.rule for finding in findings] == ["PS-210"]
+
+
+@pytest.mark.parametrize(
+    "marker",
+    (
+        'sys_platform == "' + ("win32" if sys.platform != "win32" else "linux") + '"',
+        'extra == "docs"',
+    ),
+)
+def test_inapplicable_core_dependency_does_not_hide_missing_dev(tmp_path, marker):
+    # Arrange: this requirement is absent from a real base/dev installation.
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname="owned-package"\ndependencies=[\'scitex-logging; '
+        + marker
+        + "']\n"
+        '[project.optional-dependencies]\nall=["scitex-logging==0.2.4"]\n'
+        'dev=["pytest"]\n'
+    )
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests/test_owned.py").write_text("import scitex_logging\n")
     findings = []
     # Act
     check_dev_extras_complete(tmp_path, Violation, findings)
