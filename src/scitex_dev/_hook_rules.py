@@ -68,7 +68,10 @@ def _rule(**kw) -> HookRule:
 
 def provide() -> list[HookRule]:
     """Return scitex-dev's declared guardrails."""
+    from ._interfaces._hooks import interface_hooks
+
     return [
+        *interface_hooks(),
         # --- git / branch discipline ------------------------------------
         _rule(
             id="dev.git-dash-c",

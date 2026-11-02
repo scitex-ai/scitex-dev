@@ -109,12 +109,9 @@ def _resolve_mcp_server(package: str):
         return None
 
     import_name = _import_name(package)
-    candidates = [
-        f"{import_name}._mcp_server",
-        f"{import_name}.mcp_server",
-        f"{import_name}._mcp.server",  # scitex-io shape
-        f"{import_name}.mcp.server",
-    ]
+    from scitex_dev._interfaces._conventions import MCP_MODULE_SUFFIXES
+
+    candidates = [f"{import_name}.{suffix}" for suffix in MCP_MODULE_SUFFIXES]
     for mod_name in candidates:
         try:
             mod = importlib.import_module(mod_name)

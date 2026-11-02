@@ -138,6 +138,11 @@ ok  scitex-io: no Python API violations
 ok  scitex-io: no project-structure violations
 ```
 
+MCP §6 suffix matches remain name-based unless bounded owned source proves
+the first public boundary. A proven different boundary vetoes that match;
+`parity_basis` in JSON records contradictions and unproven candidates. This
+does not establish transport DTO equivalence or invoke MCP operations.
+
 Failure mode (sample, scitex-dsp before the Hilbert fix):
 
 ```
@@ -151,7 +156,27 @@ See [`examples/`](examples/) for runnable demos that exercise
 `scitex-dev`'s own commands (search, version-management, docs
 aggregation).
 
-## Four Interfaces
+## Five Interfaces
+
+The five-interface source contract is enabled by default through Dev's existing
+project-auditor provider: Python API, CLI, MCP, Web API and skills. Commit hooks inspect staged source; relevant post-tool hooks inspect the working tree. Missing or
+unproven bindings are `PS-IF-001`–`PS-IF-005` errors; specific justified omissions
+use the existing per-rule/site exemptions. SDK owns Web API descriptor/schema
+quality. Executable hook subsets are installed with repeatable `hooks install
+--provider scitex-dev --rule <exact-id>` options; the full-provider default still
+refuses legacy declarations without executable checks. The same source checker backs relevant-edit and commit hooks. See
+[the contract](src/scitex_dev/_skills/general/03_interface/00_overview.md).
+
+The optional Web binding declares `GET ecosystem/packages` through
+`scitex.apis`. It delegates to the real public `get_all_packages()` operation and
+returns `{"catalog": "curated", "packages": [...]}` with sorted package names.
+This is the curated registry, not an installed/live/complete fleet census; no
+host paths or other registry metadata are returned. Unsupported methods return
+the declared `method_not_allowed` JSON error with status 405 and `Allow: GET`. The CLI/MCP ecosystem
+listings enrich this same registry with other information and use different
+envelopes. Install `scitex-dev[all]` on Python >=3.10 for the optional SDK/Django
+adapter; hosts must explicitly admit and mount it. No server or route is enabled
+by importing Dev or discovering the declaration.
 
 <details>
 <summary><strong>Python API ⭐⭐</strong></summary>
@@ -271,6 +296,18 @@ export SCITEX_DEV_ENV_SRC=~/.scitex/dev/local.src
 # Remote server
 export SCITEX_DEV_ENV_SRC=~/.scitex/dev/remote.src
 ```
+
+</details>
+
+<details>
+<summary><strong>Web API ⭐</strong></summary>
+
+The optional SDK descriptor `scitex_dev._web._api:plugin` exposes a read-only
+`ecosystem/packages` route when explicitly admitted by a host. Its response is
+`{"catalog": "curated", "packages": [...]}` with sorted names from
+`scitex_dev.get_all_packages()`. The catalog describes the curated registry;
+it does not inspect hosts, installed distributions or live agents. SDK/Django
+are optional dependencies in `[all]` (SDK requires Python >=3.10).
 
 </details>
 

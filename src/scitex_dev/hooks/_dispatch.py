@@ -8,9 +8,10 @@ import importlib
 import scitex_logging as slogging
 
 from ._discover import discover_hooks
+from ._selection import select_rules
 
 
-def dispatch(payload, *, provider):
+def dispatch(payload, *, provider, rule_ids=None):
     """Return failures for matching executable rules of one required provider."""
     event = payload.get("hook_event_name", "pre_tool_call")
     event = {
@@ -20,7 +21,10 @@ def dispatch(payload, *, provider):
         "post_tool_call": "post-tool-use",
     }.get(event, event)
     tool = payload.get("tool_name", "")
-    rules = [r for r in discover_hooks() if r.provider == provider]
+    try:
+        rules = select_rules(discover_hooks(), provider=provider, rule_ids=rule_ids)
+    except ValueError as exc:
+        return [f"Invalid hook rule selection: {exc}"]
     if not rules:
         return [
             f"Required hook provider {provider!r} is not installed or could not load"

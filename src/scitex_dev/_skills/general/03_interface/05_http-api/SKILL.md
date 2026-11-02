@@ -1,27 +1,25 @@
 ---
 description: |
   [TOPIC] Interface Http Api
-  [DETAILS] Optional HTTP API interface for SciTeX packages — when to expose one, framework choice (FastAPI canonical for REST; aiohttp when WebSocket is genuinely needed; Starlette only when an SDK forces it), REST endpoint conventions, JSON error envelope, `/health` and observability, auth posture (canonical: nginx reverse proxy in front; helper middleware for dev), CLI integration, and the A2A specialty pattern for agent packages. Use when adding HTTP endpoints to a package, choosing a framework, or auditing an existing HTTP server against the ecosystem convention.
+  [DETAILS] Default Web API implementation contract for SciTeX packages — SDK descriptors and explicit host enablement, framework choice (FastAPI canonical for REST; aiohttp when WebSocket is genuinely needed; Starlette only when an SDK forces it), REST endpoint conventions, JSON error envelope, `/health` and observability, auth posture (canonical: nginx reverse proxy in front; helper middleware for dev), CLI integration, and the A2A specialty pattern for agent packages. Use when adding HTTP endpoints to a package, choosing a framework, or auditing an existing HTTP server against the ecosystem convention.
 tags: [scitex-general-interface-http-api-index]
 ---
 
-# HTTP API (Optional) — Index
+# Web API — Index
 
-Most SciTeX packages do **not** ship an HTTP API. This skill applies only when a package exposes web-accessible endpoints (REST, WebSocket, or specialty protocols like A2A).
+Almost every leaf provides a real SDK Web API binding, or records a specific
+reasoned exception. Implementation is required by default; running an HTTP
+server and enabling its routes remain explicit host decisions. Dev dispatches
+the SDK-owned descriptor/schema/routing checks and its generic presence check.
+See [the five-interface contract](../00_overview.md) for ownership and exceptions.
 
-## When this skill applies
+Domain operations stay in the owning leaf's Python API. Declare adapters
+through SDK `ApiPlugin` data registered in `scitex.apis`, with reviewed routes,
+request/response schemas, errors, auth/scope and rate semantics. Do not load
+private Hub code or start a server just to discover declarations.
 
-You're touching one of these packages, or proposing a new HTTP server:
-
-| Package | Today (drift to fix marked) | Use case |
-|---|---|---|
-| **scitex-cloud** (deployment containers) | FastAPI ✅ | Public REST APIs (crossref-local, citation-graph) |
-| **scitex-orochi** | aiohttp ✅ (WebSocket required) | Real-time agent chat + dashboard |
-| **scitex-audio** | stdlib `http.server` ⚠️ drift → migrate to FastAPI | Local TTS relay |
-| **scitex-dev** | Flask ⚠️ drift → migrate to FastAPI | Internal version dashboard |
-| **scitex-agent-container** | Starlette (forced by A2A SDK) ✅ | A2A agent protocol |
-
-If your package isn't listed, you probably don't need this interface.
+The sections below describe transport implementation details. They do not
+supersede SDK ownership of Web API contracts or authorize host admission.
 
 ## Sections
 
