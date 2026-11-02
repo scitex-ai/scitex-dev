@@ -1,6 +1,10 @@
 """Real lazy Click and argparse entry points must be captured without running."""
 
 import argparse
+import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import click
@@ -35,11 +39,15 @@ def test_click_method_owners_are_restored_after_an_exception():
     }
     before = {owner: owner.__dict__["main"] for owner in owners}
     # Act
-    with pytest.raises(RuntimeError, match="owned failure"), intercept_parse_calls([]):
-        raise RuntimeError("owned failure")
+    caught = None
+    try:
+        with intercept_parse_calls([]):
+            raise RuntimeError("owned failure")
+    except RuntimeError as error:
+        caught = str(error)
     after = {owner: owner.__dict__["main"] for owner in owners}
     # Assert
-    assert after == before
+    assert (after, caught) == (before, "owned failure")
 
 
 @pytest.mark.parametrize("method", ("parse_args", "parse_known_args"))
@@ -48,18 +56,20 @@ def test_argparse_capture_remains_available(method):
     parser = argparse.ArgumentParser(prog="owned-parser")
     captured = []
     # Act
-    with pytest.raises(StopBeforeParse), intercept_parse_calls(captured):
-        getattr(parser, method)([])
+    intercepted = False
+    try:
+        with intercept_parse_calls(captured):
+            getattr(parser, method)([])
+    except StopBeforeParse:
+        intercepted = True
     # Assert
-    assert captured == [parser]
+    assert (captured, intercepted) == ([parser], True)
 
 
 def test_real_console_distribution_resolves_a_lazy_click_entrypoint(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path,
 ):
     # Arrange: genuine importlib metadata, not a replacement entry-point API.
-    from scitex_dev._cli.audit._summary._audit import _resolve_entry_point
-
     (tmp_path / "owned_lazy_cli.py").write_text(
         "def main():\n"
         "    import click\n"
@@ -71,8 +81,22 @@ def test_real_console_distribution_resolves_a_lazy_click_entrypoint(
     (distribution / "entry_points.txt").write_text(
         "[console_scripts]\nowned-lazy-tool = owned_lazy_cli:main\n"
     )
-    monkeypatch.syspath_prepend(str(tmp_path))
-    # Act
-    command = _resolve_entry_point("owned-lazy-tool")
+    environment = dict(os.environ)
+    environment["PYTHONPATH"] = os.pathsep.join([str(tmp_path), *sys.path])
+    program = (
+        "import click, json; "
+        "from scitex_dev._cli.audit._summary._audit import _resolve_entry_point; "
+        "command = _resolve_entry_point('owned-lazy-tool'); "
+        "print(json.dumps([isinstance(command, click.Group), command.name]))"
+    )
+    # Act: a fresh real interpreter discovers the owned distribution.
+    result = subprocess.run(
+        [sys.executable, "-c", program],
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=True,
+        timeout=20,
+    )
     # Assert
-    assert (isinstance(command, click.Group), command.name) == (True, "owned-lazy-tool")
+    assert json.loads(result.stdout) == [True, "owned-lazy-tool"]
