@@ -257,14 +257,25 @@ def test_alias_check_uses_real_virtual_target_and_keeps_callback_identity():
 
 
 def test_incomplete_discovery_produces_real_error_tier_findings(broken_group):
-    # Arrange
+    # Arrange (STX-TQ007: one assert per test — severity asserted separately).
     from scitex_dev._cli.audit._summary._command_snapshot import discovery_violations
 
     group, _kind = broken_group
     snapshot = snapshot_commands(group, "owned")
     # Act
     violations = discovery_violations(snapshot)
+    # Assert
+    assert [v.rule for v in violations] == ["§1a"]
+
+
+def test_incomplete_discovery_violation_is_error_severity(broken_group):
+    # Arrange (companion to the rule-name test above).
+    from scitex_dev._cli.audit._summary._command_snapshot import discovery_violations
     from scitex_dev._cli.audit._summary._severity import severity_of
 
+    group, _kind = broken_group
+    snapshot = snapshot_commands(group, "owned")
+    # Act
+    violations = discovery_violations(snapshot)
     # Assert
-    assert [(v.rule, severity_of(v)) for v in violations] == [("§1a", "error")]
+    assert [severity_of(v) for v in violations] == ["error"]
