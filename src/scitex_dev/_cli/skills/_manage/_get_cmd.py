@@ -18,14 +18,14 @@ def register(skills):
             ),
             examples=(
                 Example(
-                    "{prog} skills get scitex-io save-and-load",
+                    "{prog} dev skills get scitex-io save-and-load",
                     "One skill's content.",
                 ),
                 Example(
-                    "{prog} skills get scitex-stats hypothesis-testing --json",
+                    "{prog} dev skills get scitex-stats hypothesis-testing --json",
                     "As a JSON envelope.",
                 ),
-                Example("{prog} skills get all", "Dump every skill."),
+                Example("{prog} dev skills get all", "Dump every skill."),
             ),
         ),
     )

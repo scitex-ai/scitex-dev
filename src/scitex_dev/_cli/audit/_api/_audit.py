@@ -58,7 +58,7 @@ def audit_api(
     rules: set[str] | None = None,
     repo_root: Path | None = None,
 ) -> int:
-    """Audit `<distribution>` against the Python API checklist. Warn-only.
+    """Audit source against the Python API checklist.
 
     Parameters
     ----------
@@ -69,7 +69,9 @@ def audit_api(
     rules : set of str, optional
         If given, only run these rule codes.
     repo_root : Path, optional
-        Repository root used to load ``.scitex/dev/config.yaml``. When given,
+        Authoritative source checkout and configuration root. When given,
+        inspect only its src/flat package initializer; missing source returns
+        exit 2 instead of substituting an installed copy. Also,
         the project's ``audit.skip`` list defers the named PA rules — they are
         dropped from the violation set entirely, mirroring ``audit-project`` —
         and a ``django`` project-type relaxes the no-mocks rule (PA-306) from
@@ -79,7 +81,8 @@ def audit_api(
     Returns
     -------
     int
-        Exit code: 0 = no violations, 1 = violations, 2 = could not import.
+        Exit code: 0 = no violations, 1 = violations,
+        2 = resolved source is not auditable.
     """
     # Category-aware skip — see `should_skip_audit` in _ecosystem._core.
     try:
@@ -107,8 +110,32 @@ def audit_api(
         return 0
 
     import_name = _import_name(distribution)
-    init_path = _locate_init(distribution, import_name)
+    init_path = _locate_init(distribution, import_name, repo_root=repo_root)
     if init_path is None:
+        if repo_root is not None:
+            detail = (
+                f"resolved checkout {repo_root} contains no source "
+                f"__init__.py for '{import_name}'; installed fallback refused"
+            )
+            if json_out:
+                import json
+
+                click.echo(
+                    json.dumps(
+                        {
+                            "distribution": distribution,
+                            "init": None,
+                            "repo_root": str(repo_root),
+                            "status": "not-auditable",
+                            "detail": detail,
+                            "violations": [],
+                        },
+                        indent=2,
+                    )
+                )
+            else:
+                _emit("error", f"{distribution}: not-auditable: {detail}", err=True)
+            return 2
         # Skipped, not failed: many packages run audit-all from CI before
         # `pip install -e .` (e.g. when scitex_dev is the only install).
         # Treat absence as "no API surface to check" rather than an error.
@@ -226,6 +253,8 @@ def audit_api(
                 {
                     "distribution": distribution,
                     "init": str(init_path),
+                    "repo_root": str(repo_root) if repo_root else None,
+                    "files_inspected": len(inspected),
                     "violations": [
                         {"rule": v.rule, "where": v.where, "detail": v.detail}
                         for v in violations

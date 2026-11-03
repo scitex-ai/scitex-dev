@@ -42,22 +42,22 @@ def register(skills):
             ),
             examples=(
                 Example(
-                    "{prog} skills install", "Install to ~/.scitex/dev/skills/."
+                    "{prog} dev skills install", "Install to ~/.scitex/dev/skills/."
                 ),
                 Example(
-                    "{prog} skills install --claude-symlink",
+                    "{prog} dev skills install --claude-symlink",
                     "Also expose under ~/.claude/skills/scitex/.",
                 ),
                 Example(
-                    "{prog} skills install --dest /tmp/skills --package scitex-writer",
+                    "{prog} dev skills install --dest /tmp/skills --package scitex-writer",
                     "Custom dest, one package.",
                 ),
                 Example(
-                    "{prog} skills install --link",
+                    "{prog} dev skills install --link",
                     "Editable symlink to source (live edits).",
                 ),
                 Example(
-                    "{prog} skills install --dry-run --json", "Preview as JSON."
+                    "{prog} dev skills install --dry-run --json", "Preview as JSON."
                 ),
             ),
         ),

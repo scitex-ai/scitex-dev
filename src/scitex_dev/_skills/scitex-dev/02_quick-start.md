@@ -35,7 +35,7 @@ scitex-dev ecosystem list --json   # machine-readable
 
 This is the entry point for ecosystem-wide work. From here you can:
 
-- `scitex-dev ecosystem fix-mismatches --dry-run` — preview version drift fixes
+- `scitex-dev ecosystem validate-versions --dry-run` — preview version drift fixes
 - `scitex-dev ecosystem audit-skills` — audit `_skills/` directories across packages
 - `scitex-dev ecosystem sync-local` — refresh editable installs
 

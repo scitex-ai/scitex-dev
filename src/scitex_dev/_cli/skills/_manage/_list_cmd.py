@@ -16,10 +16,10 @@ def register(skills):
         help_spec=CliHelp(
             summary="List all skills across installed packages.",
             examples=(
-                Example("{prog} skills list", "Every package's skills."),
-                Example("{prog} skills list --json", "Structured JSON."),
+                Example("{prog} dev skills list", "Every package's skills."),
+                Example("{prog} dev skills list --json", "Structured JSON."),
                 Example(
-                    "{prog} skills list --package scitex-io",
+                    "{prog} dev skills list --package scitex-io",
                     "One package's skills.",
                 ),
             ),

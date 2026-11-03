@@ -145,16 +145,16 @@ execute_rename(
 
 ```bash
 # Preview (dry-run)
-scitex-dev rename old_name new_name --dry-run
-scitex-dev rename old_name new_name --root ./src --dry-run
+scitex-dev rename-symbols old_name new_name --dry-run
+scitex-dev rename-symbols old_name new_name --root ./src --dry-run
 
 # Execute
-scitex-dev rename old_name new_name
-scitex-dev rename old_name new_name --root ./src --exclude tests --exclude docs
+scitex-dev rename-symbols old_name new_name
+scitex-dev rename-symbols old_name new_name --root ./src --exclude tests --exclude docs
 
 # Regex mode
-scitex-dev rename "Foo(\w+)" "Baz\1" --regex --dry-run
+scitex-dev rename-symbols "Foo(\w+)" "Baz\1" --regex --dry-run
 
 # JSON output
-scitex-dev rename old_name new_name --dry-run --json
+scitex-dev rename-symbols old_name new_name --dry-run --json
 ```

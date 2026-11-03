@@ -2,14 +2,14 @@
 # -*- coding: utf-8 -*-
 """scitex-dev: Shared developer utilities for the SciTeX ecosystem.
 
-Zero-dependency package providing:
+Developer utilities providing:
 - Docs aggregation and serving across all scitex packages
 - Unified search across APIs, CLI, MCP tools, and documentation
 - Version management and ecosystem registry
 - Bulk rename with cross-reference updates
 - LLM-friendly types (Result, ErrorCode, @supports_return_as)
 
-Public API (20 functions)::
+Selected lazy public exports (see ``__all__`` for the complete surface)::
 
     # Docs
     get_docs, build_docs, search_docs
