@@ -34,7 +34,7 @@
 | # | Problem | Solution |
 |---|---------|----------|
 | 1 | **~70 ecosystem packages drift apart** -- versions, READMEs, sphinx setups, CLI conventions diverge faster than humans can audit | **`scitex-dev ecosystem audit-*`** -- `audit-project`, `audit-cli`, `audit-mcp-tools`, `audit-python-apis`, `audit-skills`, `audit-summary` enforce ~130 numbered rules across the whole ecosystem |
-| 2 | **Skills scattered across ~70 source repos** -- AI agents can't discover them; humans can't review them | **`scitex-dev skills list / get / export`** -- aggregate every package's `_skills/` and symlink them into `~/.claude/skills/scitex/` for live-edit dev loops |
+| 2 | **Skills scattered across ~70 source repos** -- AI agents can't discover them; humans can't review them | **`scitex-dev dev skills list / get / install`** -- discover installed leaf skills, install them into `~/.scitex/dev/skills/`, and optionally project them into Claude Code with `--claude-symlink` |
 | 3 | **Coordinated releases need ten manual steps** -- bump version, push tag, watch CI, verify PyPI, deploy — done per-package, multiplied by 70 | **`scitex-dev ecosystem sync` + `validate-versions` + `gui open`** -- one-shot install/sync across hosts, version-mismatch detection, and a web dashboard with the live state |
 | 4 | **Bulk renames across 70 repos break cross-references** -- import paths, doc references, symlinks — `sed -i` corrupts something every time | **`scitex-dev rename-symbols`** -- atomic rename with cross-reference updates, regex support, dry-run preview, git-safety guards |
 | 5 | **Lint rules drift from the API they enforce** -- a renamed function in figrecipe leaves the rule pointing at a nonexistent symbol, and the bug only shows up months later | **`scitex-dev linter`** (engine, formerly `scitex-linter`) -- aggregates per-package rule plugins via the `scitex_dev.linter.plugins` entry point. Rules ship in the package whose API they enforce, so rename + rule + test land in one PR. Doc-block linting for `.py` / `.ipynb` / `.md` / `.rst`. `scitex-dev linter sweep` walks every package's README + docs in one shot |
@@ -53,8 +53,8 @@ pip install scitex-dev
 pip install scitex-dev[all]
 ```
 
-`[all]` adds development and documentation tooling on top of the base
-install; it does not unlock features. Extra names are restricted to
+`[all]` adds development and documentation tooling and optional integrations,
+including the Flask dashboard and NumPy diagnostics, on top of the base install. Extra names are restricted to
 `{all, dev, docs}` by PS-225, because a per-feature extra is something
 somebody eventually pins — and a pin naming an extra that does not exist
 installs anyway, warns into a log nobody reads, and silently omits the
@@ -94,7 +94,7 @@ scitex_dev/
 │   │   ├── _skills/          ← skill-file rules (SK-1xx)
 │   │   └── _summary/         ← CLI/MCP §-rules + audit-all wrapper
 │   ├── ecosystem/            ← cross-package commands (audit-all, list, …)
-│   └── _skills.py            ← `scitex-dev skills` group
+│   └── skills/               ← `scitex-dev dev skills` implementation
 ├── _ecosystem/               ← shared helpers (skill-quality, ECOSYSTEM map)
 ├── _skills/                  ← canonical skill-file corpus shipped to agents
 └── testing/                  ← `audit_all_for_package` pytest helper
@@ -151,7 +151,7 @@ See [`examples/`](examples/) for runnable demos that exercise
 `scitex-dev`'s own commands (search, version-management, docs
 aggregation).
 
-## Four Interfaces
+## Five Interfaces
 
 <details>
 <summary><strong>Python API ⭐⭐</strong></summary>
@@ -161,25 +161,16 @@ Version, CI, documentation and error-handling helpers are re-exported from
 those paths). The active-project selector lives in `scitex_dev.project`.
 
 ```python
-# Version management
-from scitex_dev import detect_mismatches, fix_local, fix_remote, verify_versions
-mismatches = detect_mismatches()
-fix_local(packages=["scitex-stats"], confirm=True)
-verify_versions()
-
-# CI/CD
-from scitex_dev import check_ci, get_failing_packages, check_pypi_publish
-status = check_ci()
-failing = get_failing_packages()
-
-# Docs & search
-from scitex_dev import get_docs, build_docs, search
+# Discover installed versions and documentation
+from scitex_dev import list_versions, get_docs, search
+versions = list_versions()
 get_docs(package="scitex-writer")
 search("save figure")
 
-# Deployment
-from scitex_dev import deploy_scitex_hub, verify_production
-deploy_scitex_hub(confirm=True)
+# Preview changes; applying a plan is a separate action
+from scitex_dev import fix_local, preview_rename
+fix_local(packages=["scitex-stats"], confirm=False)
+preview_rename(pattern="old_name", replacement="new_name", directory=".")
 
 # LLM-friendly types
 from scitex_dev import Result, ErrorCode, supports_return_as
@@ -189,7 +180,7 @@ from scitex_dev.project import resolve_project
 resolve_project(explicit="synthetic/owned")
 ```
 
-> Skills are managed through the CLI (`scitex-dev skills list/get/export`),
+> Skills are managed through the CLI (`scitex-dev dev skills list/get/install`),
 > not a Python module.
 
 </details>
@@ -201,8 +192,7 @@ resolve_project(explicit="synthetic/owned")
 # Ecosystem management
 scitex-dev ecosystem list
 scitex-dev ecosystem list --versions
-scitex-dev ecosystem fix-mismatches --dry-run
-scitex-dev ecosystem sync
+scitex-dev ecosystem validate-versions --dry-run
 
 # Active project (scitex-dev >=0.62.0)
 scitex-dev project use synthetic/owned
@@ -210,8 +200,8 @@ scitex-dev project get --json
 scitex-dev project clear
 
 # Documentation
-scitex-dev docs --package scitex-writer
-scitex-dev search-docs "save figure"
+scitex-dev docs get
+scitex-dev docs search "save figure"
 
 # Bulk rename
 scitex-dev rename-symbols old_name new_name --dry-run
@@ -243,33 +233,22 @@ scitex-dev mcp doctor
 scitex-dev mcp list-tools
 
 # Installation info
-scitex-dev mcp installation
+scitex-dev mcp install
 ```
 
-**Claude Code Setup** — add `.mcp.json` to your project root. Use `SCITEX_DEV_ENV_SRC` to load configuration from a `.src` file:
+**Claude Code setup** — add `.mcp.json` to your project root. The executable
+must be available in the client environment; configure supported variables in
+that environment rather than relying on an undocumented `.src` loader.
 
 ```json
 {
   "mcpServers": {
     "scitex-dev": {
       "command": "scitex-dev",
-      "args": ["mcp", "start"],
-      "env": {
-        "SCITEX_DEV_ENV_SRC": "${SCITEX_DEV_ENV_SRC}"
-      }
+      "args": ["mcp", "start"]
     }
   }
 }
-```
-
-Switch environments via your shell profile:
-
-```bash
-# Local machine
-export SCITEX_DEV_ENV_SRC=~/.scitex/dev/local.src
-
-# Remote server
-export SCITEX_DEV_ENV_SRC=~/.scitex/dev/remote.src
 ```
 
 </details>
@@ -282,10 +261,10 @@ export SCITEX_DEV_ENV_SRC=~/.scitex/dev/remote.src
 Skills provide workflow-oriented guides that AI agents query to discover capabilities and usage patterns.
 
 ```bash
-scitex-dev skills list              # List available skill pages
-scitex-dev skills get SKILL         # Show main skill page
-scitex-dev skills export --package scitex-dev  # Export to Claude Code
-# Private skills (~/.scitex/*/skills/*-private/) are symlinked automatically
+scitex-dev dev skills list --package scitex-dev --json
+scitex-dev dev skills get scitex-dev SKILL
+scitex-dev dev skills install --package scitex-dev --claude-symlink --dry-run --json
+# Review the plan; omit --dry-run to install. Use --link for editable sources.
 ```
 
 > **[Full skills directory](https://github.com/scitex-ai/scitex-dev/tree/develop/src/scitex_dev/_skills)**
@@ -304,6 +283,21 @@ scitex-dev skills export --package scitex-dev  # Export to Claude Code
 | `agentic-test-overview` / `-skills` / `-mcp` | Agent-vs-agent quality testing |
 | `dynamic-audit` | Cross-package periodic audit checklist |
 | `env-vars` | `SCITEX_DEV_*` / `SCITEX_*` environment variable reference |
+
+</details>
+
+<details>
+<summary><strong>Web API: leaf contracts, SDK validation, explicit host admission</strong></summary>
+
+scitex-dev dispatches leaf-owned rules and hooks; scitex-sdk owns the Web API
+contract. This is not a claim that scitex-dev's legacy Flask dashboard is a
+complete public Web API. A missing interface needs an implementation or an
+explicit, justified exception.
+
+See [the five-interface audit workflow](src/scitex_dev/_skills/scitex-dev/39_interface-audit.md)
+for discovery commands, source evidence and coverage limits. The legacy
+`deploy_scitex_hub` helper targets an older deployment layout; use Hub-owned
+release and deployment procedures for current services.
 
 </details>
 

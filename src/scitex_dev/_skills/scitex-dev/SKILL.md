@@ -1,9 +1,9 @@
 ---
 name: scitex-dev
 description: |
-  [WHAT] Developer utilities for maintaining the whole SciTeX ecosystem across ~15 packages — version audit and mismatch fixing, editable-install sync, per-host git pull/commit/diff via SSH, bulk rename across files + contents + directories + symlinks (with git-safety guards), aggregated docs search across all packages, a Result/ErrorCode envelope shared by CLI + MCP, DevConfig/HostConfig, a local +…
-  [WHEN] Use whenever the user asks to "list scitex versions", "check for version mismatches", "fix version drift", "rename old_name → new_name across all files", "sync my changes to the HPC / laptop / servers", "run tests on the HPC via Slurm", "poll my sbatch job", "fetch HPC test output", "search the docs for save_fig", "commit remote changes on gpu01", "pull all repos", "audit the ecosystem before a…
-  [HOW] See sub-skills index for entry points.
+  [WHAT] Shared developer tools, audits, hooks and skill discovery for SciTeX packages.
+  [WHEN] Check interfaces, versions, documentation drift or fleet configuration; preview renames and maintenance operations.
+  [HOW] Start with the relevant sub-skill and the command's actual --help. Leaves own expert checks; Dev dispatches them.
 tags: [scitex-dev]
 allowed-tools: mcp__scitex__dev_*
 primary_interface: cli
@@ -67,6 +67,8 @@ interfaces:
 - [37_host-disk-placement.md](37_host-disk-placement.md) — Bulky runtime state on scratch, symlink at home
 - [38_ci-test-environment.md](38_ci-test-environment.md) — CI test environment three-point rule (fleet law)
 
+- [39_interface-audit.md](39_interface-audit.md) — Five-interface discovery, source authority and coverage limits
+
 ### Distribution (40–49)
 - [40_distribution.md](40_distribution.md) — Skill cache update mechanics + drift detection
 
@@ -74,9 +76,9 @@ interfaces:
 
 ```bash
 scitex-dev ecosystem list
-scitex-dev ecosystem fix-mismatches --dry-run
-scitex-dev rename old_name new_name --root . --dry-run
-scitex-dev search "save figure"
+scitex-dev ecosystem validate-versions --dry-run
+scitex-dev rename-symbols old_name new_name --dry-run
+scitex-dev docs search "save figure"
 scitex-dev mcp start
 ```
 
