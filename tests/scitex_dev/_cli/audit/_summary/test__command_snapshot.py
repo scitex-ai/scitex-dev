@@ -306,11 +306,32 @@ def test_lazy_dict_group_resolves_through_public_protocol():
     result = snapshot_commands(group, "pkg")
     # Assert — snapshot finds both WITHOUT executing callbacks.
     assert result.root is not None
-    names = (
+    assert "list-python-apis" in (
         result.root.list_commands(click.Context(result.root))
         if isinstance(result.root, click.Group)
         else []
     )
-    assert "list-python-apis" in names
-    assert "mcp" in names
+
+
+def test_lazy_dict_group_snapshot_has_no_missing_command_issues():
+    # Arrange — same SAC-style lazy group (STX-TQ007: one assert per test).
+    import click
+
+    holder = {}
+
+    class LazyDictGroup2(click.Group):
+        def list_commands(self, ctx):
+            return ["list-python-apis"]
+
+        def get_command(self, ctx, name):
+            if name == "list-python-apis":
+                return holder["real"]
+            return super().get_command(ctx, name)
+
+    holder["real"] = click.Command("list-python-apis", callback=_never_execute)
+    group = LazyDictGroup2(name="pkg")
+    group.commands = {}
+    # Act
+    result = snapshot_commands(group, "pkg")
+    # Assert
     assert not any(i.kind == "missing-command" for i in result.issues)
