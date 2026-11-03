@@ -15,16 +15,16 @@ execution, and failure modes.
 
 ### 13. fix_local — Reinstall bumped packages locally
 
-- **Python**: `from scitex_dev.fix import fix_local`
+- **Python**: `from scitex_dev import fix_local`
   - `fix_local(packages=["figrecipe", "scitex-dev"], confirm=True)` → `{pkg: {status, output}}`
 - **CLI**: `pip install -e ~/proj/PACKAGE`
 - **MCP**: `mcp__scitex__dev_ecosystem_sync_local(packages=["..."], confirm=True)`
 
 ### 14. verify_versions — Confirm local versions aligned
 
-- **Python**: `from scitex_dev.fix import verify_versions`
+- **Python**: `from scitex_dev import verify_versions`
   - `verify_versions(packages=None)` → `{pkg: "ok" | "mismatch: ..."}`
-- **CLI**: `scitex-dev ecosystem fix-mismatches --dry-run` (should show no mismatches)
+- **CLI**: `scitex-dev ecosystem validate-versions --dry-run` (should show no mismatches)
 - **MCP**: `mcp__scitex__dev_ecosystem_list` (all statuses should be "ok")
 
 All packages must show "ok" before proceeding.
@@ -37,30 +37,28 @@ All packages must show "ok" before proceeding.
 
 ### 15. fix_remote — [Custom] Sync packages to NAS
 
-- **Python**: `from scitex_dev.fix import fix_remote`
+- **Python**: `from scitex_dev import fix_remote`
   - `fix_remote(hosts=["nas"], packages=None, install=True, confirm=True)` → `{host: {pkg: {status}}}`
   - Timeout fallback: `fix_remote(hosts=["nas"], install=False, confirm=True)`
 - **CLI**: `scitex-dev ecosystem sync --host nas --confirm`
 - **MCP**: `mcp__scitex__dev_ecosystem_sync(hosts=["nas"], confirm=True)`
 
-### 16. deploy_scitex_hub — [Custom] scitex-hub NAS deploy
+### 16. Hub deployment is owned by scitex-hub
 
-- **Python**: `from scitex_dev.deploy import deploy_scitex_hub`
-  - `deploy_scitex_hub(host="nas", branch="develop", confirm=False)` → `{host, commands, outputs, status}`
-- **CLI**:
-  ```bash
-  ssh nas "cd ~/proj/scitex-cloud && git pull origin develop"
-  ssh nas "cd ~/proj/scitex-cloud && docker compose stop"
-  ssh nas "cd ~/proj/scitex-cloud && npm install && npx vite build"
-  ssh nas "cd ~/proj/scitex-cloud && docker compose up -d"
-  ```
-- **MCP**: via `deploy_scitex_hub` Python API (planned as MCP tool)
+The legacy `scitex_dev.deploy_scitex_hub` helper still targets an older
+`scitex-cloud` layout. It is not the current production rollout procedure.
+Discover the Hub-owned release/deployment skills instead:
 
-**Important:** Stop Docker before Vite build to avoid OOM on NAS.
+```bash
+scitex-dev dev skills list --package scitex-hub --json
+```
+
+Use the current leaf procedure and its artifact, migration, rollback and
+acceptance checks. Do not substitute a generic compose stop/build recipe.
 
 ### 17. verify_production — [Custom] Check scitex.ai is live
 
-- **Python**: `from scitex_dev.deploy import verify_production`
+- **Python**: `from scitex_dev import verify_production`
   - `verify_production(url="https://scitex.ai", timeout=10)` → `{url, status_code, status}`
 - **CLI**: `curl -s -o /dev/null -w "%{http_code}" https://scitex.ai`
 - **MCP**: `mcp__scitex__capture_screenshot(url="https://scitex.ai")`
@@ -73,16 +71,16 @@ All packages must show "ok" before proceeding.
 
 ### 18. verify_versions — Final ecosystem status check
 
-- **Python**: `from scitex_dev.fix import verify_versions`
+- **Python**: `from scitex_dev import verify_versions`
   - `verify_versions()` → all must be `"ok"`
-- **CLI**: `scitex-dev ecosystem fix-mismatches --dry-run`
+- **CLI**: `scitex-dev ecosystem validate-versions --dry-run`
 - **MCP**: `mcp__scitex__dev_ecosystem_list`
 
 ### 19. check_readme — Verify READMEs reflect current codebase
 
 For each released package, confirm README.md contains:
 - Correct version number (matches pyproject.toml)
-- Four Interfaces section (Python API, CLI, MCP Server, Skills)
+- Five interfaces (Python API, CLI, MCP, Web API and skills), with explicit gaps or justified exceptions
 - Installation instructions with current package name
 - No stale API examples referencing removed functions
 
@@ -98,7 +96,7 @@ done
 
 ### 20. check_rtd — Verify Read the Docs builds
 
-- **Python**: `from scitex_dev.rtd import check_all_rtd`
+- **Python**: `from scitex_dev import check_all_rtd`
   - `check_all_rtd()` → `{pkg: {status, url, build_status}}`
 - **CLI**: `scitex-dev rtd check`
 - **MCP**: `mcp__scitex__docs_list`

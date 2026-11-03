@@ -1,37 +1,31 @@
 ---
 description: |
-  [TOPIC] Interface Http Api
-  [DETAILS] Optional HTTP API interface for SciTeX packages — when to expose one, framework choice (FastAPI canonical for REST; aiohttp when WebSocket is genuinely needed; Starlette only when an SDK forces it), REST endpoint conventions, JSON error envelope, `/health` and observability, auth posture (canonical: nginx reverse proxy in front; helper middleware for dev), CLI integration, and the A2A specialty pattern for agent packages. Use when adding HTTP endpoints to a package, choosing a framework, or auditing an existing HTTP server against the ecosystem convention.
-tags: [scitex-general-interface-http-api-index]
+  [TOPIC] SKILL
+  [DETAILS] Web API interface ownership, SDK contracts and evidence limits.
+tags: ['scitex-general-interface-http-api-index']
 ---
 
-# HTTP API (Optional) — Index
+# Web API — index
 
-Most SciTeX packages do **not** ship an HTTP API. This skill applies only when a package exposes web-accessible endpoints (REST, WebSocket, or specialty protocols like A2A).
+Web API is a default interface target alongside Python, CLI, MCP and skills.
+A justified exception is appropriate when it is inapplicable. A missing or
+placeholder implementation is a gap, not a successful audit.
 
-## When this skill applies
+scitex-sdk owns the contract; leaves own descriptors and handlers; scitex-dev
+discovers leaf audit/hook providers. Hosts explicitly admit and mount routes.
+A framework choice alone proves none of these things.
 
-You're touching one of these packages, or proposing a new HTTP server:
+Read the SDK-owned `scitex-app/24_web-api-contract.md` from an installation that
+contains that skill and its provider entry points. The shared execution workflow
+is [the five-interface audit](../../../scitex-dev/39_interface-audit.md).
 
-| Package | Today (drift to fix marked) | Use case |
-|---|---|---|
-| **scitex-cloud** (deployment containers) | FastAPI ✅ | Public REST APIs (crossref-local, citation-graph) |
-| **scitex-orochi** | aiohttp ✅ (WebSocket required) | Real-time agent chat + dashboard |
-| **scitex-audio** | stdlib `http.server` ⚠️ drift → migrate to FastAPI | Local TTS relay |
-| **scitex-dev** | Flask ⚠️ drift → migrate to FastAPI | Internal version dashboard |
-| **scitex-agent-container** | Starlette (forced by A2A SDK) ✅ | A2A agent protocol |
-
-If your package isn't listed, you probably don't need this interface.
-
-## Sections
-
-1. [01_overview.md](01_overview.md) — when to use HTTP, delegation rule, the 3 transport shapes
-2. [02_framework-choice.md](02_framework-choice.md) — FastAPI canonical / aiohttp / Starlette / discouraged options
-3. [03_endpoint-conventions.md](03_endpoint-conventions.md) — REST routes, HTTP verbs, JSON shape, OpenAPI `/docs`
-4. [04_error-envelope.md](04_error-envelope.md) — Pydantic ErrorResponse, HTTP status codes, `ErrorCode` integration
-5. [05_health-and-ops.md](05_health-and-ops.md) — `/health`, CORS, caching, observability
-6. [06_auth.md](06_auth.md) — nginx reverse proxy canonical; shared middleware for local dev
-7. [07_cli-integration.md](07_cli-integration.md) — `<cli> http start` subcommand, port conventions, env vars
-8. [08_a2a-pattern.md](08_a2a-pattern.md) — A2A specialty for agent packages (one-off, not generalizable)
-9. [09_audit-checklist.md](09_audit-checklist.md) — release-gate checklist
-10. [TODO.md](TODO.md) — drift fixes + planned `audit-http` linter
+- [Overview](01_overview.md): ownership and transport boundaries
+- [Framework choice](02_framework-choice.md): standalone versus host adapters
+- [Endpoints](03_endpoint-conventions.md): descriptors and schema ownership
+- [Errors](04_error-envelope.md): contract-specific responses
+- [Health](05_health-and-ops.md): runtime qualification
+- [Authentication](06_auth.md): explicit host admission and authorization
+- [CLI](07_cli-integration.md): inspect actual supported commands
+- [Agent protocol](08_a2a-pattern.md): A2A is a separate transport
+- [Audit checklist](09_audit-checklist.md): source and live evidence
+- [Remaining work](TODO.md): gaps and non-existent commands

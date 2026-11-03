@@ -7,6 +7,7 @@ domain layer.
 """
 
 from ._discover import discover_skills, hash_skill_tree
+from ._installed import discover_installed_skills
 from ._model import RegistryIssue, RegistryReport, SkillRecord, SkillRegistryError
 from ._projection import (
     MANIFEST_NAME,
@@ -18,7 +19,14 @@ from ._projection import (
 )
 from ._write import write_projection_manifest
 
+# Projection format alone does not prove that an installer protects user data.
+# Harnesses probe this inert marker in the actual installer interpreter.
+INSTALL_CAPABILITIES: frozenset[str] = frozenset(
+    {"transactional-projection-v1", "installed-provider-registry-v1", "force-copy"}
+)
+
 __all__ = [
+    "INSTALL_CAPABILITIES",
     "MANIFEST_NAME",
     "SCHEMA",
     "ProjectionManifestError",
@@ -29,6 +37,7 @@ __all__ = [
     "audit_projection",
     "build_projection_manifest",
     "discover_skills",
+    "discover_installed_skills",
     "hash_skill_tree",
     "projection_manifest_json",
     "write_projection_manifest",

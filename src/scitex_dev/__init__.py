@@ -2,14 +2,14 @@
 # -*- coding: utf-8 -*-
 """scitex-dev: Shared developer utilities for the SciTeX ecosystem.
 
-Zero-dependency package providing:
+Developer utilities providing:
 - Docs aggregation and serving across all scitex packages
 - Unified search across APIs, CLI, MCP tools, and documentation
 - Version management and ecosystem registry
 - Bulk rename with cross-reference updates
 - LLM-friendly types (Result, ErrorCode, @supports_return_as)
 
-Public API (20 functions)::
+Selected lazy public exports (see ``__all__`` for the complete surface)::
 
     # Docs
     get_docs, build_docs, search_docs
@@ -44,6 +44,11 @@ from __future__ import annotations
 # at module top — that re-introduces eager loading and slows every CLI call.
 # See `_skills/general/03_interface/01_python-api/04_lazy-imports-and-optional-deps.md`.
 _LAZY_ATTRS: dict[str, str] = {
+    "normalize_distribution_name": "_core.names",
+    "build_mcp_install_manifest": "mcp_setup",
+    "install_mcp_client_config": "mcp_setup",
+    "DocProvider": "doc_providers",
+    "list_doc_providers": "doc_providers",
     # cli_utils
     "add_dry_run_argument": "_cli",
     "add_json_argument": "_cli",

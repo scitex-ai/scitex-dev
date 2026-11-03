@@ -1,45 +1,34 @@
 ---
 description: |
   [TOPIC] Skill distribution and update mechanics
-  [DETAILS] How scitex-dev's skill tree is shipped, refreshed in `~/.claude/skills/scitex/`, and how private per-machine skills are symlinked. Source of truth = the in-package `_skills/` directory; the user-cache is a refreshable copy.
+  [DETAILS] Installed leaf skill discovery, canonical user store, editable links and optional Claude projection. Source remains in each leaf package.
 tags: [scitex-dev-distribution]
 ---
 
 # Skill distribution and update
 
-These skills are distributed inside the `scitex-dev` wheel under
-`scitex_dev/_skills/scitex-dev/` — that's the **single source of truth**.
-Local edits at `~/.claude/skills/scitex/` may be overwritten on update.
-
-## Refresh the user cache
+Leaf packages ship their skill resources and register discovery providers. The
+installed resources are the source for projection; generated state belongs
+outside Git authority checkouts.
 
 ```bash
-pip install --upgrade scitex-dev
-scitex-dev skills export          # overwrite all (+ symlink private skills)
-scitex-dev skills update          # preserve local changes
-scitex-dev skills upgrade         # clean replacement
+scitex-dev dev skills list --package scitex-dev --json
+scitex-dev dev skills install --package scitex-dev --claude-symlink --dry-run --json
 ```
 
-## Private skills (per-machine)
+Review the plan; omit `--dry-run` to install into `~/.scitex/dev/skills/`.
+`--dest` selects another external directory. `--claude-symlink` projects the
+store through `~/.claude/skills/scitex`; it does not grant client approval or
+prove the client loaded the skills. `--link` links editable source resources.
+`--clean` removes package subdirectories before export, so use it deliberately.
+Existing real content at the projection link is not overwritten.
 
-Private skills are symlinked into the export destination automatically:
+The installer writes `.scitex-skills.json`, finalizes the registry, and audits
+the projection before reporting success. A dry run lists resources without
+copying or proving the eventual installed projection. There are no canonical
+`skills update` or `skills upgrade` subcommands; rerun `dev skills install`.
 
-```
-~/.scitex/<suffix>/skills/<package>-private/
-  → ~/.claude/skills/scitex/<package>-private/
-```
-
-Where `<suffix>` is the package name minus the `scitex-` prefix. Private
-skills are never copied or shipped — the symlink keeps edits live.
-
-## Drift detection
-
-`scitex-dev skills export` stamps each cached leaf's frontmatter with the
-exporting package version (`version: <importlib.metadata.version()>`).
-On `skills get` / `skills list`, the framework compares the cached
-version to the currently installed version and warns if drift is
-detected (cached < installed). See the audit rule `SK-105` (forbids
-`MANIFEST.md` — this leaf replaces it) and the version-stamping
-behaviour documented in `13_versions.md`.
-</content>
-</invoke>
+Source: `_cli/skills/_manage/_install_cmd.py`, `_projection_finalize.py` and
+`skill_registry/`. See [36_skill-registry.md](36_skill-registry.md) for hashes
+and harness-neutral validation, and [39_interface-audit.md](39_interface-audit.md)
+for the distinction between discovery, installation and client execution.

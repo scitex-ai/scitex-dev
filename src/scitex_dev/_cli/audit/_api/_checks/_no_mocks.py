@@ -86,13 +86,15 @@ def _audit_no_mocks(
         if candidate.is_dir() and candidate not in scan_roots:
             scan_roots.append(candidate)
 
-    # `seen` doubles as this auditor's DENOMINATOR. It is filled in place when
+    # The successfully-read set is this auditor's DENOMINATOR, separate
+    # from traversal deduplication. It is filled in place when
     # the caller passes a set, the same way `out` accumulates violations — so
     # a verdict can state how many files it actually read instead of leaving a
     # reader unable to tell a clean tree from a tree nothing reached. This is
     # the widest walk in the API auditor (package + tests + examples +
     # scripts); the other checks read subsets of it.
-    seen: set[Path] = set() if inspected is None else inspected
+    seen: set[Path] = set()
+    successfully_read: set[Path] = set() if inspected is None else inspected
     rel_anchor = repo_root if repo_root != pkg_root else pkg_root.parent
     for root in scan_roots:
         for py_file in sorted(root.rglob("*.py")):
@@ -117,6 +119,7 @@ def _audit_no_mocks(
                 text = py_file.read_text(encoding="utf-8")
             except OSError:
                 continue
+            successfully_read.add(py_file)
             if not any(
                 tok in text
                 for tok in ("mock", "Mock", "patch", "monkeypatch", "mocker")

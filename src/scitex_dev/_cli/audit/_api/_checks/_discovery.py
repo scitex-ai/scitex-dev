@@ -1,9 +1,8 @@
 """Package-resolution helpers for the Python API auditor.
 
-Split out of `_audit.py` — pure refactor, no behaviour change. Resolves a
-distribution name to its on-disk ``__init__.py`` (installed package first,
-then the ecosystem-registry source tree). Re-exported from `_audit` so
-existing imports (`from ..._audit import _locate_init`) keep resolving.
+A resolved source checkout is authoritative. Installed-package discovery and
+registry fallback apply only when the caller has not resolved a checkout.
+Re-exported from ``_audit`` for existing imports.
 """
 
 from __future__ import annotations
@@ -17,30 +16,32 @@ def _import_name(distribution: str) -> str:
     return distribution.replace("-", "_")
 
 
-def _locate_init(distribution: str, import_name: str) -> Path | None:
+def _locate_init(
+    distribution: str, import_name: str, *, repo_root: Path | None = None
+) -> Path | None:
     """Locate ``<pkg>/__init__.py`` for the given distribution.
 
-    Resolution order (each step proceeds to the next on miss, so a package
-    that is *neither* pip-installed *nor* registered still returns None and
-    the caller skips the audit cleanly):
+    With ``repo_root``, inspect only that checkout's src or flat package
+    layout. A missing source initializer returns None; the auditor reports
+    that the requested source cannot be audited rather than substituting an
+    installed package. No consumer module is imported in this branch.
 
-    1. **Installed package.** Import via ``importlib.util.find_spec``; use
-       ``spec.origin`` when it points at an ``__init__.py``.
-    2. **On-disk source tree (registry fallback).** When the package is
-       NOT installed in the auditor's venv (the common case on a fresh
-       ecosystem clone or in a CI runner that audits before
-       ``pip install -e .``), look up ``distribution`` in
-       ``scitex_dev._ecosystem._registry.ECOSYSTEM`` and probe
-       ``<local_path>/src/<import_name>/__init__.py``.
-
-    Without step 2, every non-installed peer's audit-python-apis silently
-    "skips" (`return 0` with an info-level "package not importable"
-    message) even when its on-disk `__init__.py` is right there waiting
-    to be audited — a fail-silent class that hides real PA-1xx through
-    PA-3xx violations behind a clean exit code. Mirrors the same fix
-    landed for `_locate_skills_dir` in PR #177.
+    Without a resolved checkout, try installed metadata first and then the
+    ecosystem registry's source tree. Return None when neither is available.
     """
-    # 1. Installed package.
+    # An already resolved checkout is authoritative. Never silently replace a
+    # requested worktree with an installed copy or a registry checkout.
+    if repo_root is not None:
+        root = Path(repo_root)
+        for candidate in (
+            root / "src" / import_name / "__init__.py",
+            root / import_name / "__init__.py",
+        ):
+            if candidate.is_file():
+                return candidate
+        return None
+
+    # 1. Installed package (only when no checkout was resolved).
     spec = importlib.util.find_spec(import_name)
     if spec is not None and spec.origin is not None:
         origin = Path(spec.origin)

@@ -90,7 +90,7 @@ def test_install_fails_and_returns_findings_for_obsolete_projection(tmp_path):
         result.exit_code,
         payload["ok"],
         {(finding["code"], finding["kind"]) for finding in payload["findings"]},
-    ) == (1, False, {("SP-301", "obsolete")})
+    ) == (1, False, {("SI-200", "unmanaged")})
 
 
 def test_install_dry_run_uses_projection_envelope_without_writing(tmp_path):
@@ -212,7 +212,7 @@ class TestSkillsCollectCLI:
         # Assert
         dest = tmp_path / "skills-out"
         r = subprocess.run(
-            ["scitex-dev", "skills", "collect", str(dest), "--dry-run"],
+            ["scitex-dev", "skills", "collect", str(dest), "--package", "scitex-dev", "--dry-run"],
             capture_output=True,
             text=True,
             timeout=60,
@@ -227,7 +227,7 @@ class TestSkillsCollectCLI:
         # Assert
         dest = tmp_path / "skills-out"
         r = subprocess.run(
-            ["scitex-dev", "skills", "collect", str(dest), "--dry-run"],
+            ["scitex-dev", "skills", "collect", str(dest), "--package", "scitex-dev", "--dry-run"],
             capture_output=True,
             text=True,
             timeout=60,
