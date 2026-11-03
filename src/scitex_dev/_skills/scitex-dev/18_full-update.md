@@ -111,12 +111,16 @@ First-publish packages need manual `twine upload` before OIDC works.
 - **CLI**: `sed -i 's/^version = "OLD"/version = "NEW"/' pyproject.toml`
 - **MCP**: via `mcp__scitex__dev_ecosystem_fix_mismatches` (planned)
 
-### 7. verify_docs_and_skills — Ensure docs/skills match codebase
+### 7. Verify documentation against the source under review
 
-- **Python**: `from scitex_dev import verify_docs_and_skills`
-  - `verify_docs_and_skills(package_path=None)` → `{skills_stale, stale_files, readme_version_match, issues, status}`
-- **CLI**: `scitex-dev dev skills install --dry-run` (preview skill changes)
-- **MCP**: via `mcp__scitex__dev_ecosystem_list` (planned)
+Use [39_interface-audit.md](39_interface-audit.md) for source audits, actual
+CLI help and skill discovery. Verify documented imports and call signatures
+without executing release operations.
+
+The legacy root export `verify_docs_and_skills` currently points to a removed
+module. Its internal predecessor also exports user skills while checking and
+suppresses some failures. Do not use it as a read-only or complete documentation
+verification gate; that helper needs a separate implementation repair.
 
 Check before pushing:
 - Skill files reference functions that actually exist

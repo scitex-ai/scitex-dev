@@ -146,6 +146,38 @@ def audit_project(
 
     surface_resolved_tree(distribution, resolved_ctx, json_out, via=via)
 
+    # A selected leaf rule must exist in the loaded provider registry. Merely
+    # filtering findings would otherwise turn an absent provider into success.
+    unavailable_rules = sorted(set(rules or ()) - RULES.keys())
+    if unavailable_rules:
+        if json_out:
+            import json
+
+            click.echo(
+                json.dumps(
+                    {
+                        "distribution": distribution,
+                        "repo": str(repo_root),
+                        **resolved_ctx,
+                        "resolved_via": via,
+                        "status": "not-auditable",
+                        "unavailable_rules": unavailable_rules,
+                        "violations": [],
+                    },
+                    indent=2,
+                )
+            )
+        else:
+            from .._emit import emit
+
+            emit(
+                "error",
+                f"{distribution}: requested audit rule(s) not registered: "
+                + ", ".join(unavailable_rules),
+                err=True,
+            )
+        return 2
+
     # Category-aware skip — see `should_skip_audit` in _ecosystem._core.
     try:
         from ...._ecosystem import ECOSYSTEM, should_skip_audit

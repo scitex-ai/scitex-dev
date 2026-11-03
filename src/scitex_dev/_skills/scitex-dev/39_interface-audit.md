@@ -62,6 +62,9 @@ scitex-dev ecosystem audit-project scitex-dev --path . --rule PS-SDK-WEB --json
 ```
 
 Use the leaf under review, not this example target, for its declarations.
+Require the rule to be registered in the loaded project-rule registry. An
+unavailable requested rule must return not-auditable; older dispatchers may
+merely filter findings and return empty success, which is not proof of coverage.
 The check parses inert descriptors and owned handler bindings; passing it does
 not mount routes, enable hooks or verify live authorization/availability.
 

@@ -71,3 +71,15 @@ def test_source_without_violation_remains_auditable(tmp_path):
     assert payload["init"] == str(init)
     assert payload["violations"] == []
     assert payload["files_inspected"] >= 1
+
+
+def test_inspected_counter_excludes_ignored_build_and_venv_paths(tmp_path):
+    init = _repo(tmp_path, "src")
+    init.write_text("__all__ = []\n")
+    for excluded in ("build", ".venv"):
+        ignored = init.parent / excluded / "ignored.py"
+        ignored.parent.mkdir()
+        ignored.write_text("raise RuntimeError('ignored source must not execute')\n")
+    result = _audit(tmp_path)
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.stdout)["files_inspected"] == 1
