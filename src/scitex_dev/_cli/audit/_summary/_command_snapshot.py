@@ -35,14 +35,40 @@ class CommandSnapshot:
     nodes: int
 
 
-def _names(group, _context):
-    return list(group.commands)
+def _names(group, context):
+    # Public discovery protocol FIRST: lazy groups (e.g. SAC LazyGroup)
+    # populate ``commands`` only on by-name access, so dict keys undercount
+    # the tree. list_commands(ctx) is the advertised surface.
+    try:
+        names = list(group.list_commands(context))
+    except Exception:
+        names = []
+    seen = set(names)
+    for key in group.commands:
+        if key not in seen:
+            seen.add(key)
+            names.append(key)
+    return names
 
 
 def _command(group, context, name):
-    command = group.commands.get(name)
+    # Same ordering: context-bound get_command resolves lazy entries;
+    # direct dict access is the fallback for exotic mappings.
+    try:
+        command = group.get_command(context, name)
+    except Exception:
+        command = None
+    if command is None:
+        command = group.commands.get(name)
     if command is None and context.token_normalize_func is not None:
-        command = group.commands.get(context.token_normalize_func(name))
+        try:
+            command = group.get_command(
+                context, context.token_normalize_func(name)
+            )
+        except Exception:
+            command = None
+        if command is None:
+            command = group.commands.get(context.token_normalize_func(name))
     return command
 
 

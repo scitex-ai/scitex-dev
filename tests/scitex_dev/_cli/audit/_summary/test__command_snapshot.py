@@ -278,4 +278,39 @@ def test_incomplete_discovery_violation_is_error_severity(broken_group):
     # Act
     violations = discovery_violations(snapshot)
     # Assert
-    assert [severity_of(v) for v in violations] == ["error"]
+    assert [(v.rule, severity_of(v)) for v in violations] == [("§1a", "error")]
+
+
+def test_lazy_dict_group_resolves_through_public_protocol():
+    # Arrange — a SAC-style lazy group: dict keys EMPTY, public
+    # protocol advertises + resolves without executing callbacks.
+    import click
+
+    real = click.Command("list-python-apis", callback=_never_execute)
+    lazy = click.Command("mcp-real", callback=_never_execute)
+
+    class LazyDictGroup(click.Group):
+        def list_commands(self, ctx):
+            return ["list-python-apis", "mcp"]
+
+        def get_command(self, ctx, name):
+            if name == "list-python-apis":
+                return real
+            if name == "mcp":
+                return click.Group("mcp")
+            return super().get_command(ctx, name)
+
+    group = LazyDictGroup(name="pkg")
+    group.commands = {}  # lazy: nothing stored, like _LazyCommandsDict pre-access
+    # Act
+    result = snapshot_commands(group, "pkg")
+    # Assert — snapshot finds both WITHOUT executing callbacks.
+    assert result.root is not None
+    names = (
+        result.root.list_commands(click.Context(result.root))
+        if isinstance(result.root, click.Group)
+        else []
+    )
+    assert "list-python-apis" in names
+    assert "mcp" in names
+    assert not any(i.kind == "missing-command" for i in result.issues)
