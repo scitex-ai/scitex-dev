@@ -80,6 +80,12 @@ providers, applies opt-outs/exclusions and audits the staged projection. That is
 a separate runtime adapter, not proof that a manual install or a running profile
 is current. Preserve each consumer's opt-outs and qualify its actual profile.
 
+Adapters that require the protected installer must check
+`scitex_dev.skill_registry.INSTALL_CAPABILITIES` for
+`transactional-projection-v1` before invoking it in the same interpreter.
+A version string or the existence of an older `skills install` command does
+not establish this capability.
+
 Record installed package versions, config/projection results, client load and
 runtime checks separately. Do not report empty or unresolved discovery as a
 successful installation.
