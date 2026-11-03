@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import stat
 from collections.abc import Mapping, Sequence
 
 from packaging.utils import canonicalize_name
@@ -97,13 +98,17 @@ def install_mcp_client_config(
     if dry_run:
         return result
 
+    if os.name != "posix":
+        raise ValueError("This JSON config writer requires POSIX file locks")
     import fcntl
 
     path.parent.mkdir(parents=True, exist_ok=True)
     lock_path = path.with_name("." + path.name + ".scitex-mcp.lock")
-    fd = os.open(lock_path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    fd = os.open(lock_path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
     temporary = None
     try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise ValueError("MCP installer lock must be a regular file")
         fcntl.flock(fd, fcntl.LOCK_EX)
         config, original, mode = _read_config(path)
         merged, changed = _merge(config, fragment)

@@ -48,7 +48,7 @@ Config merge preserves foreign settings, refuses a conflicting same-name server
 and invalid/symlink destinations, and reports no existing values. Writes use a
 same-directory atomic replacement and a persistent per-file lock. Writers using
 this installer serialize; other editors must coordinate to exclude all races.
-Dry runs create neither config, parent directory nor lock. This JSON adapter is
+Dry runs create neither config, parent directory nor lock. This writer uses POSIX file locks. The JSON adapter is
 not a universal installer for every client's TOML/YAML or approval format.
 
 ```bash
