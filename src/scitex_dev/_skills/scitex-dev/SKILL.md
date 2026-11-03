@@ -72,6 +72,8 @@ interfaces:
 ### Distribution (40–49)
 - [40_distribution.md](40_distribution.md) — Skill cache update mechanics + drift detection
 
+- [41_agent-setup.md](41_agent-setup.md) — Leaf-owned MCP setup, metadata discovery and skill projection verification
+
 ## Quick Reference
 
 ```bash

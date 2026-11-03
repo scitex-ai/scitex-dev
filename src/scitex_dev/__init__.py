@@ -44,6 +44,11 @@ from __future__ import annotations
 # at module top — that re-introduces eager loading and slows every CLI call.
 # See `_skills/general/03_interface/01_python-api/04_lazy-imports-and-optional-deps.md`.
 _LAZY_ATTRS: dict[str, str] = {
+    "normalize_distribution_name": "_core.names",
+    "build_mcp_install_manifest": "mcp_setup",
+    "install_mcp_client_config": "mcp_setup",
+    "DocProvider": "doc_providers",
+    "list_doc_providers": "doc_providers",
     # cli_utils
     "add_dry_run_argument": "_cli",
     "add_json_argument": "_cli",

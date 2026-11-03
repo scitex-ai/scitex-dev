@@ -8,6 +8,7 @@ budget. All commands attach to the root `main` group via
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import click
 
@@ -47,7 +48,7 @@ def register_mcp_commands(main: click.Group) -> click.Group:
             summary="Start the scitex-dev MCP server.",
             description=(
                 "Runs the fastmcp server on stdio, blocking until killed. "
-                "Requires the `mcp` extra (fastmcp).",
+                "FastMCP is a base dependency.",
             ),
             examples=(
                 Example("{prog} mcp start", "Start the server on stdio."),
@@ -76,7 +77,9 @@ def register_mcp_commands(main: click.Group) -> click.Group:
                 f"scitex-dev`.\n{e}"
             ) from e
 
-        click.echo("Starting scitex-dev MCP server...")
+        from scitex_logging import getLogger
+
+        getLogger(__name__).info("Starting scitex-dev MCP server on stdio")
         mcp_server.run()
 
     @mcp.command(
@@ -87,38 +90,41 @@ def register_mcp_commands(main: click.Group) -> click.Group:
             examples=(Example("{prog} mcp doctor", "Verify fastmcp + tool loading."),),
         ),
     )
-    def mcp_doctor():
-        click.echo("Checking MCP dependencies...")
+    @click.option("--json", "as_json", is_flag=True, help="Emit a catalog/dependency diagnosis.")
+    def mcp_doctor(as_json):
+        from importlib import metadata
 
-        try:
-            import fastmcp
-
-            click.echo(f"  [OK] fastmcp {fastmcp.__version__}")
-        except ImportError:
-            click.echo("  [!!] fastmcp not installed")
-            click.echo(
-                "    fastmcp is a BASE dependency — its absence means a "
-                "broken or partial install, not a missing feature."
-            )
-            click.echo(
-                "    Reinstall: python -m pip install --force-reinstall "
-                "scitex-dev"
-            )
-            return
-
+        versions = {}
+        for package in ("fastmcp", "mcp"):
+            try:
+                versions[package] = metadata.version(package)
+            except metadata.PackageNotFoundError:
+                versions[package] = None
+        result = {"versions": versions, "runtime_verified": False,
+                  "client_loaded": False, "tools_discovered": 0}
+        code = 0
         try:
             from .._mcp._server import mcp as mcp_server
             from .._ecosystem._mcp import get_tools_sync
 
-            tool_count = len(get_tools_sync(mcp_server))
-            click.echo(f"  [OK] MCP server loaded ({tool_count} tools)")
-        except Exception as e:
-            click.echo(f"  [!!] MCP server error: {e}")
-            return
-
-        click.echo()
-        click.echo("MCP server is ready.")
-        click.echo("Run with: scitex-dev mcp start")
+            count = len(get_tools_sync(mcp_server))
+            if not count:
+                raise ValueError("MCP catalog contains no tools")
+            result.update(status="catalog-available", tools_discovered=count)
+        except Exception as exc:
+            result.update(status="not-ready", error_type=type(exc).__name__,
+                          detail=str(exc))
+            code = 2
+        if as_json:
+            click.echo(json.dumps(result, indent=2))
+        elif code:
+            click.echo("MCP catalog unavailable: " + result["detail"], err=True)
+            click.echo("Check the installed fastmcp/mcp dependency combination.", err=True)
+        else:
+            click.echo(f"MCP catalog available ({result['tools_discovered']} tools).")
+            click.echo("Client loading, authorization and a stdio handshake remain separate.")
+        if code:
+            raise SystemExit(code)
 
     @mcp.command(
         "installation",
@@ -156,14 +162,16 @@ def register_mcp_commands(main: click.Group) -> click.Group:
         "install",
         cls=SpecCommand,
         help_spec=CliHelp(
-            summary="Show installation instructions for MCP server integration.",
+            summary="Show MCP setup or merge it into an explicit JSON client config.",
             description=(
-                "Read-only: prints the pip install line and the MCP client "
-                "JSON snippet (or emits it as --json).",
+                "Without --config, only prints the leaf-owned setup manifest. "
+                "With --config, merges this server while preserving foreign settings.",
             ),
             examples=(
                 Example("{prog} mcp install", "Human-readable instructions."),
                 Example("{prog} mcp install --json", "Machine-readable manifest."),
+                Example("{prog} mcp install --config /tmp/owned-mcp.json --dry-run --json",
+                        "Preview an explicit JSON client config merge."),
             ),
         ),
     )
@@ -176,54 +184,50 @@ def register_mcp_commands(main: click.Group) -> click.Group:
     @click.option(
         "--dry-run",
         is_flag=True,
-        help="Accepted for §2 compliance; this command is informational and never mutates state.",
+        help="Preview an explicit --config merge without writing.",
     )
     @click.option(
         "--yes",
         "-y",
         is_flag=True,
-        help="Accepted for §2 compliance; this command is informational and never mutates state.",
+        help="Accepted for CLI consistency; conflicts are always refused.",
     )
-    def mcp_install(as_json, dry_run, yes):
-        del dry_run, yes  # accepted for §2 mutation flags; this verb is read-only
-        if as_json:
-            click.echo(
-                json.dumps(
-                    {
-                        "install": "pip install scitex-dev",
-                        "mcp_servers": {
-                            "scitex-dev": {
-                                "command": "scitex-dev",
-                                "args": ["mcp", "start"],
-                            },
-                        },
-                        "verify": [
-                            "scitex-dev mcp doctor",
-                            "scitex-dev mcp list-tools",
-                        ],
-                    },
-                    indent=2,
+    @click.option(
+        "--config", type=click.Path(path_type=Path),
+        help="Merge into this compatible JSON MCP client config; no default file is changed.",
+    )
+    def mcp_install(as_json, dry_run, yes, config):
+        del yes
+        from ..mcp_setup import build_mcp_install_manifest, install_mcp_client_config
+
+        manifest = build_mcp_install_manifest(
+            "scitex-dev", command="scitex-dev", args=("mcp", "start"),
+            verify=(("scitex-dev", "mcp", "doctor", "--json"),
+                    ("scitex-dev", "mcp", "list-tools", "--json")),
+        )
+        # Retain the former JSON keys as compatibility aliases; client_config
+        # is the normalized fragment shared with leaf providers and consumers.
+        manifest["install"] = "pip install scitex-dev"
+        manifest["mcp_servers"] = manifest["client_config"]["mcpServers"]
+        manifest["verify"] = ["scitex-dev mcp doctor", "scitex-dev mcp list-tools"]
+        if config is not None:
+            try:
+                manifest["installation"] = install_mcp_client_config(
+                    manifest["client_config"], config, dry_run=dry_run
                 )
-            )
+            except (ValueError, OSError) as exc:
+                raise click.ClickException(str(exc)) from exc
+        if as_json:
+            click.echo(json.dumps(manifest, indent=2))
             return
         click.echo("Install scitex-dev (MCP support is in the base install):")
-        click.echo()
         click.echo("  pip install scitex-dev")
-        click.echo()
-        click.echo("Add to your MCP client configuration:")
-        click.echo()
-        click.echo("  {")
-        click.echo('    "mcpServers": {')
-        click.echo('      "scitex-dev": {')
-        click.echo('        "command": "scitex-dev",')
-        click.echo('        "args": ["mcp", "start"]')
-        click.echo("      }")
-        click.echo("    }")
-        click.echo("  }")
-        click.echo()
-        click.echo("Verify with:")
-        click.echo("  scitex-dev mcp doctor")
-        click.echo("  scitex-dev mcp list-tools")
+        click.echo("Compatible JSON MCP client configuration:")
+        click.echo(json.dumps(manifest["client_config"], indent=2))
+        if config is not None:
+            click.echo(json.dumps(manifest["installation"], indent=2))
+        click.echo("Client reload/authorization and runtime verification are separate.")
+        click.echo("Verify: scitex-dev mcp doctor; scitex-dev mcp list-tools --json")
 
     @mcp.command(
         "list-tools",

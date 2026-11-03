@@ -10,6 +10,23 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.62.10] - 2026-11-03
+
+- Add inert leaf documentation-provider metadata and the normalized
+  `docs list-providers --json` catalog without importing consumer modules.
+- Add shared MCP setup manifests and protected explicit POSIX JSON client
+  configuration merges; distinguish catalog, client loading and protocol
+  readiness, and keep MCP diagnostics off protocol stdout.
+- Discover skill resources through their own leaf declarations and distribution
+  owners, including General and Scientific resources. Provide a public installed
+  registry adapter, preserve opt-outs, refuse ambiguous ownership and contain
+  skill reads within declared resource trees.
+- Stage and validate skill projections before promotion, preserve other owners
+  and modified local content, roll back handled promotion failures, support
+  deliberate copies and report unresolved discovery instead of false success.
+- Audit the requested source checkout, refuse unavailable requested rules, and
+  document five-interface checks with source-versus-installed evidence.
+
 - Report PS-233 at genuinely unguarded import locations without relabeling guarded optional sites when another module imports the same dependency unguarded.
 
 - Parse documentation dependency floors as requirements and versions, accepting

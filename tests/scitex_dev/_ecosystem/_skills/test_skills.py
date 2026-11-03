@@ -450,58 +450,38 @@ class TestExportSkills:
         # But the link target should remain
         assert "sub-skill.md" in skill_content
 
-    def test_clean_removes_stale_files_not_stale_file_exists(
-        self, tmp_path, skills_tree
-    ):
+    def test_clean_removes_only_previously_managed_removed_skills(self, tmp_path, skills_tree):
         # Arrange
-        # Act
-        # Assert
         dest = tmp_path / "out"
-        pkg_dir = dest / "test-pkg"
-        pkg_dir.mkdir(parents=True)
-        stale_file = pkg_dir / "old-removed-skill.md"
-        stale_file.write_text("stale content")
-
-        export_skills(dest, clean=True, **_inject_kwargs(skills_tree))
-
-        # Stale file should be gone after clean=True (rmtree then re-copy)
-        assert not stale_file.exists()
-        # Fresh files should be present
-
-    def test_clean_removes_stale_files_pkg_dir_skill_md_exists(
-        self, tmp_path, skills_tree
-    ):
-        # Arrange
-        # Act
-        # Assert
-        dest = tmp_path / "out"
-        pkg_dir = dest / "test-pkg"
-        pkg_dir.mkdir(parents=True)
-        stale_file = pkg_dir / "old-removed-skill.md"
-        stale_file.write_text("stale content")
-
-        export_skills(dest, clean=True, **_inject_kwargs(skills_tree))
-
-        # Stale file should be gone after clean=True (rmtree then re-copy)
-        # Fresh files should be present
-        assert (pkg_dir / "SKILL.md").exists()
-
-    def test_overwrite_read_only_file_succeeds(self, tmp_path, skills_tree):
-        # Arrange
-        # Act
-        # Assert
-        dest = tmp_path / "out"
-        pkg_dir = dest / "test-pkg"
-        pkg_dir.mkdir(parents=True)
-        ro_file = pkg_dir / "SKILL.md"
-        ro_file.write_text("read-only content")
-        ro_file.chmod(stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)  # 0o444
-
-        # Should not raise PermissionError
+        canonical = skills_tree / "_skills" / "test-pkg" / "old-removed-skill.md"
+        canonical.write_text("managed old skill")
         export_skills(dest, **_inject_kwargs(skills_tree))
+        canonical.unlink()
+        # Act
+        export_skills(dest, clean=True, **_inject_kwargs(skills_tree))
+        # Assert
+        assert not (dest / "test-pkg" / "old-removed-skill.md").exists()
 
-        # File should now contain the fresh export
-        assert "read-only content" not in ro_file.read_text()
+    def test_managed_refresh_preserves_current_skill_index(self, tmp_path, skills_tree):
+        # Arrange
+        dest = tmp_path / "out"
+        export_skills(dest, **_inject_kwargs(skills_tree))
+        # Act
+        export_skills(dest, clean=True, **_inject_kwargs(skills_tree))
+        # Assert
+        assert (dest / "test-pkg" / "SKILL.md").is_file()
+
+    def test_managed_read_only_copy_can_be_refreshed(self, tmp_path, skills_tree):
+        # Arrange
+        dest = tmp_path / "out"
+        export_skills(dest, **_inject_kwargs(skills_tree))
+        readonly = dest / "test-pkg" / "SKILL.md"
+        original = readonly.read_bytes()
+        readonly.chmod(stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)
+        # Act
+        export_skills(dest, **_inject_kwargs(skills_tree))
+        # Assert
+        assert readonly.read_bytes() == original
 
     def test_root_skill_md_index_is_generated_root_skill_exists(
         self, tmp_path, skills_tree

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """`scitex-dev skills install` (+ hidden deprecated `export` / `collect`)."""
 
 import json
@@ -8,7 +7,12 @@ import click
 import scitex_logging as slogging
 
 from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
-from ....skill_registry import MANIFEST_NAME, SCHEMA, audit_projection
+from ....skill_registry import (
+    MANIFEST_NAME,
+    SCHEMA,
+    SkillRegistryError,
+    audit_projection,
+)
 from ._helpers import (
     _default_skills_destination,
     _ensure_symlink,
@@ -18,10 +22,8 @@ from ._helpers import (
     _require_symlink_slot,
 )
 from ._projection_finalize import (
-    finalize_projection,
     install_result_dict,
     registry_from_listing,
-    registry_from_projection,
 )
 
 _logger = slogging.getLogger(__name__)
@@ -35,10 +37,12 @@ def register(skills):
         help_spec=CliHelp(
             summary="Install skills from installed/PyPI packages into DEST.",
             description=(
-                "Default DEST is ~/.scitex/dev/skills/ — the canonical "
-                "store, peer to ~/.scitex/{audio,browser,scholar,...}/. "
-                "Pass --claude-symlink to also expose the store under "
-                "~/.claude/skills/scitex/.",
+                (
+                    "Default DEST is ~/.scitex/dev/skills/ — the canonical "
+                    "store, peer to ~/.scitex/{audio,browser,scholar,...}/. "
+                    "Pass --claude-symlink to also expose the store under "
+                    "~/.claude/skills/scitex/."
+                ),
             ),
             examples=(
                 Example(
@@ -80,13 +84,20 @@ def register(skills):
         help="installed or pypi.",
     )
     @click.option(
-        "--clean", is_flag=True, help="Delete package subdirs before installing."
+        "--clean",
+        is_flag=True,
+        help="Refresh requested managed namespaces in the validated staging projection.",
     )
     @click.option(
         "--link",
         is_flag=True,
         help="Symlink skill files to editable source (source=installed only); "
         "edits propagate live with no re-install.",
+    )
+    @click.option(
+        "--no-link",
+        is_flag=True,
+        help="Copy even when the package is editable; overrides automatic linking.",
     )
     @click.option(
         "--claude-symlink",
@@ -98,12 +109,22 @@ def register(skills):
     @click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
     @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
     def skills_install(
-        dest, package, source, clean, link, claude_symlink, dry_run, as_json, yes
+        dest,
+        package,
+        source,
+        clean,
+        link,
+        no_link,
+        claude_symlink,
+        dry_run,
+        as_json,
+        yes,
     ):
         del yes  # accepted for §2 compliance; install honours --dry-run for preview
         from pathlib import Path
 
-        from ...._ecosystem._skills.skills import export_skills, list_skills
+        from ...._ecosystem._skills.skills import list_skills
+        from ...._ecosystem._skills.transaction import install_projection
 
         # DATA/STATE is user-canonical and never project-shadowed.
         target = Path(dest) if dest else _default_skills_destination()
@@ -112,11 +133,90 @@ def register(skills):
         if claude_symlink:
             _require_symlink_slot(claude_link)
 
+        if link and no_link:
+            raise click.UsageError("--link and --no-link cannot be combined")
+        if dry_run and source == "pypi":
+            if as_json:
+                click.echo(
+                    json.dumps(
+                        {
+                            "schema_version": SCHEMA,
+                            "status": "not-resolved",
+                            "ok": False,
+                            "discovery_performed": False,
+                            "packages": None,
+                            "source": "pypi",
+                            "requested_package": package,
+                            "dry_run": True,
+                            "destination": str(target),
+                        },
+                        indent=2,
+                    )
+                )
+            else:
+                click.echo(
+                    "PyPI dry-run is unresolved: no wheel metadata was downloaded.",
+                    err=True,
+                )
+            click.get_current_context().exit(2)
+        try:
+            listed = list_skills(package=package) if source == "installed" else None
+        except SkillRegistryError as error:
+            if as_json:
+                click.echo(
+                    json.dumps(
+                        {
+                            "schema_version": SCHEMA,
+                            "ok": False,
+                            "status": "refused",
+                            "packages": None,
+                            "destination": str(target),
+                            "findings": [
+                                {
+                                    "code": "SI-103",
+                                    "kind": "invalid",
+                                    "name": package or "*",
+                                    "path": str(target),
+                                    "message": str(error),
+                                }
+                            ],
+                        },
+                        indent=2,
+                    )
+                )
+                click.get_current_context().exit(2)
+            raise click.ClickException(str(error)) from error
+        discovered = (
+            registry_from_listing(listed, allow_empty=package is None)
+            if listed is not None
+            else None
+        )
+        if discovered is not None and not discovered.ok:
+            if as_json:
+                click.echo(
+                    json.dumps(
+                        {
+                            "schema_version": SCHEMA,
+                            "status": "not-resolved",
+                            "ok": False,
+                            "discovery_performed": True,
+                            "packages": {},
+                            "source": source,
+                            "dry_run": dry_run,
+                            "findings": [
+                                issue.to_dict() for issue in discovered.issues
+                            ],
+                        },
+                        indent=2,
+                    )
+                )
+            else:
+                click.echo(
+                    "Installed skill package discovery is empty or invalid.", err=True
+                )
+            click.get_current_context().exit(2)
         if dry_run:
-            result = {
-                k: [e["name"] + ".md" for e in v]
-                for k, v in list_skills(package=package).items()
-            }
+            result = {k: [e["name"] + ".md" for e in v] for k, v in listed.items()}
             if as_json:
                 click.echo(
                     json.dumps(
@@ -150,17 +250,15 @@ def register(skills):
                     click.echo(f"Would symlink {claude_link} → {target}")
             return
 
-        target.mkdir(parents=True, exist_ok=True)
-        listed = list_skills(package=package) if source == "installed" else None
-        exported = export_skills(
-            target, package=package, clean=clean, source=source, link=link
+        finalized, exported = install_projection(
+            target,
+            package=package,
+            clean=clean,
+            source=source,
+            link=link,
+            force_copy=no_link,
         )
-        registry = (
-            registry_from_listing(listed)
-            if listed is not None
-            else registry_from_projection(exported, target)
-        )
-        finalized = finalize_projection(registry, target, adapter="scitex-dev")
+        registry = finalized.registry
         extra_findings = ()
 
         if claude_symlink and finalized.audit.ok:
