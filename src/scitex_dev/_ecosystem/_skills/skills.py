@@ -144,6 +144,10 @@ def _collect_skills_from_dir(
             for part in md_file.relative_to(skills_dir).parts[:-1]
         ):
             continue
+        try:
+            md_file.resolve(strict=True).relative_to(skills_dir.resolve(strict=True))
+        except ValueError as exc:
+            raise SkillRegistryError("skill resource escapes its declared tree") from exc
         rel = md_file.relative_to(skills_dir)
         rel_str = str(rel)
         # `name` keeps backward-compat semantics for top-level files; nested
@@ -227,6 +231,7 @@ def list_skills(
             )
         result[name] = [{**entry, "owner": owner} for entry in entries]
 
+    scanned_roots: set[tuple[str, Path]] = set()
     for pkg_name, module_name in packages.items():
         if pkg_name not in selected:
             continue
@@ -236,6 +241,11 @@ def list_skills(
             if _root_fn is not None
             else get_skill_package_root(owner, module_name)
         )
+        if root is not None:
+            identity = (owner, root.resolve(strict=True))
+            if identity in scanned_roots:
+                continue
+            scanned_roots.add(identity)
         provider_found = False
         # 1. Standard per-package skills
         skills_dir = _find_skills_dir(module_name, pkg_name, _root_fn=lambda _: root)
@@ -295,6 +305,13 @@ def get_skill(
     if skills_dir is None:
         return None
 
+    if name is not None:
+        candidate_name = Path(name)
+        if (candidate_name.is_absolute() or ".." in candidate_name.parts
+                or "\\" in name or any(ord(char) < 32 for char in name)):
+            raise SkillRegistryError("skill name must remain inside its declared resource tree")
+        if name.endswith(".md"):
+            name = name[:-3]
     if name is None:
         skill_file = skills_dir / "SKILL.md"
     else:
@@ -318,6 +335,10 @@ def get_skill(
         else:
             return None
 
+    try:
+        skill_file.resolve(strict=True).relative_to(skills_dir.resolve(strict=True))
+    except ValueError as exc:
+        raise SkillRegistryError("skill resource escapes its declared tree") from exc
     try:
         return skill_file.read_text()
     except Exception as e:

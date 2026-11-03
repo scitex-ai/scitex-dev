@@ -232,6 +232,8 @@ scitex-dev = "scitex_dev"
 
 [project.entry-points."scitex_dev.skills"]
 scitex-dev = "scitex_dev"
+general = "scitex_dev"
+scientific = "scitex_dev"
 
 # Project auditors operate on repository paths, independently of AST linters.
 # Each provider returns rule five-tuples and checks(repo, violation_cls, out).

@@ -15,12 +15,12 @@ between conflicting declarations.
 ## Discover installed declarations
 
 ```bash
-scitex-dev docs providers --json
+scitex-dev docs list-providers --json
 scitex-dev dev skills list --package scitex-dev --json
 scitex-dev dev skills get scitex-dev SKILL
 ```
 
-`docs providers` reads `scitex_dev.docs` metadata without loading consumer code.
+`docs list-providers` reads `scitex_dev.docs` metadata without loading consumer code.
 Its versioned JSON reports ambiguous names and explicitly says declarations are
 not verified live endpoints. Python consumers use `list_doc_providers()`; rows
 include canonical distribution names, targets, versions and summaries, not host
@@ -68,17 +68,23 @@ execution needs its own appropriate tests.
 scitex-dev dev skills install --package scitex-dev --claude-symlink --dry-run --json
 ```
 
-The canonical store is `~/.scitex/dev/skills/`. Leaf resources remain authoritative;
+The canonical store is `~/.scitex/dev/skills/`. Discovery uses the leaf
+`scitex_dev.skills` declarations, real distribution ownership and central
+opt-outs. Duplicate namespaces refuse selection. Full refresh reconciles clean
+managed removals; a package-specific refresh preserves other owners. Leaf resources remain authoritative;
 the store and harness directories are projections. Use the existing
 `scitex_dev.skill_registry` hashes and `audit_projection`, not another registry.
 Review the plan, then omit `--dry-run` to install. Inspect actual installed help
 for supported projection and source options; a source checkout does not upgrade
 a different installed wheel.
 
-SAC's Hermes profile materializer already discovers installed enabled skill
-providers, applies opt-outs/exclusions and audits the staged projection. That is
-a separate runtime adapter, not proof that a manual install or a running profile
-is current. Preserve each consumer's opt-outs and qualify its actual profile.
+Harness adapters use `scitex_dev.skill_registry.discover_installed_skills()`
+and `RegistryReport` / `SkillRecord`, rather than deriving skill providers from
+the Docs registry. The `installed-provider-registry-v1` capability identifies
+this source API. SAC's corresponding runtime adapter applies profile exclusions
+and audits its staged projection. An older installed SAC adapter may still use
+Docs discovery; source changes do not prove a running profile is current.
+Preserve each consumer's opt-outs and qualify its actual profile.
 
 Adapters that require the protected installer must check
 `scitex_dev.skill_registry.INSTALL_CAPABILITIES` for

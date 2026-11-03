@@ -243,3 +243,101 @@ def test_factory_entry_point_is_not_silently_reinterpreted_as_module_resources(
     # Assert
     with pytest.raises(SkillRegistryError, match="unsupported skill module target"):
         list_skills(_discover_fn=partial(discover_skill_packages, path=[site]))
+
+
+def test_explicit_same_owner_root_aliases_are_listed_and_gettable(installed_provider):
+    # Arrange
+    from scitex_dev._ecosystem._skills.skills import get_skill, get_skill_dir
+
+    site, owner, root, marker, dist = installed_provider
+    aliases = ["audit-general", "audit-scientific"]
+    for name in aliases:
+        namespace = root / "_skills" / name
+        namespace.mkdir()
+        (namespace / "SKILL.md").write_text(f"# Explicit {name}\n")
+    with (dist / "entry_points.txt").open("a") as handle:
+        for name in aliases:
+            handle.write(f"{name} = unrelated_module.nested\n")
+    # Act
+    listed = list_skills(
+        package=owner, _discover_fn=partial(discover_skill_packages, path=[site])
+    )
+    actual = {name: (get_skill_dir(name), get_skill(name)) for name in listed}
+    # Assert
+    assert (actual, marker.exists()) == (
+        {
+            name: (
+                root / "_skills" / name,
+                (root / "_skills" / name / "SKILL.md").read_text(),
+            )
+            for name in [owner, *aliases]
+        },
+        False,
+    )
+
+
+def test_same_owner_different_resource_root_collision_still_refuses(installed_provider):
+    # Arrange
+    site, owner, _, _, dist = installed_provider
+    namespace = site / "second_target" / "_skills" / owner
+    namespace.mkdir(parents=True)
+    (namespace / "SKILL.md").write_text("# Conflicting distinct root\n")
+    with (dist / "entry_points.txt").open("a") as handle:
+        handle.write("audit-second-alias = second_target\n")
+    # Act
+    # Assert
+    with pytest.raises(SkillRegistryError, match="duplicate skill namespace"):
+        list_skills(
+            package=owner, _discover_fn=partial(discover_skill_packages, path=[site])
+        )
+
+
+@pytest.mark.parametrize("style", ["parent", "absolute", "symlink"])
+def test_public_skill_read_cannot_escape_declared_resource_tree(installed_provider, style):
+    # Arrange
+    from scitex_dev._ecosystem._skills.skills import get_skill
+
+    _, owner, root, _, _ = installed_provider
+    outside = root.parent / "outside.md"
+    outside.write_text("owned-private-sentinel")
+    names = {"parent": "../../../outside", "absolute": str(outside.with_suffix("")),
+             "symlink": "linked"}
+    (root / "_skills" / owner / "linked.md").symlink_to(outside)
+    # Act
+    refused = False
+    try:
+        get_skill(owner, names[style])
+    except SkillRegistryError:
+        refused = True
+    # Assert
+    assert refused
+
+
+def test_public_skill_read_keeps_listed_relative_filename_compatibility(installed_provider):
+    # Arrange
+    from scitex_dev._ecosystem._skills.skills import get_skill
+
+    _, owner, root, _, _ = installed_provider
+    nested = root / "_skills" / owner / "guide"
+    nested.mkdir()
+    (nested / "chapter.md").write_text("# Owned chapter\n")
+    # Act
+    observed = (get_skill(owner, "guide/chapter"), get_skill(owner, "guide/chapter.md"))
+    # Assert
+    assert observed == ("# Owned chapter\n", "# Owned chapter\n")
+
+
+def test_skill_catalog_refuses_external_symlink_before_reading_metadata(installed_provider):
+    # Arrange
+    _, owner, root, _, _ = installed_provider
+    outside = root.parent / "private.md"
+    outside.write_text("# Owned private sentinel\n")
+    (root / "_skills" / owner / "linked.md").symlink_to(outside)
+    # Act
+    refused = False
+    try:
+        list_skills(package=owner)
+    except SkillRegistryError:
+        refused = True
+    # Assert
+    assert refused

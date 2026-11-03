@@ -51,10 +51,10 @@ def register_docs_commands(main):
         )
 
     @docs_grp.command(
-        "providers", cls=SpecCommand,
+        "list-providers", cls=SpecCommand,
         help_spec=CliHelp(
             summary="List leaf-owned installed documentation declarations without loading them.",
-            examples=(Example("{prog} docs providers --json", "Metadata-only provider catalog."),),
+            examples=(Example("{prog} docs list-providers --json", "Metadata-only provider catalog."),),
         ),
     )
     @click.option("--json", "as_json", is_flag=True, help="Emit normalized provider metadata.")

@@ -16,7 +16,7 @@ def test_provider_catalog_is_structured_and_explicitly_not_live():
 
     register_docs_commands(command)
     # Act
-    result = CliRunner().invoke(command, ["docs", "providers", "--json"])
+    result = CliRunner().invoke(command, ["docs", "list-providers", "--json"])
     payload = json.loads(result.stdout)
     observed = (result.exit_code, payload["schema_version"],
                 isinstance(payload["providers"], list),
