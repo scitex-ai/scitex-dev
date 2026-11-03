@@ -7,7 +7,12 @@ import click
 import scitex_logging as slogging
 
 from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
-from ....skill_registry import MANIFEST_NAME, SCHEMA, audit_projection
+from ....skill_registry import (
+    MANIFEST_NAME,
+    SCHEMA,
+    SkillRegistryError,
+    audit_projection,
+)
 from ._helpers import (
     _default_skills_destination,
     _ensure_symlink,
@@ -154,8 +159,38 @@ def register(skills):
                     err=True,
                 )
             click.get_current_context().exit(2)
-        listed = list_skills(package=package) if source == "installed" else None
-        discovered = registry_from_listing(listed) if listed is not None else None
+        try:
+            listed = list_skills(package=package) if source == "installed" else None
+        except SkillRegistryError as error:
+            if as_json:
+                click.echo(
+                    json.dumps(
+                        {
+                            "schema_version": SCHEMA,
+                            "ok": False,
+                            "status": "refused",
+                            "packages": None,
+                            "destination": str(target),
+                            "findings": [
+                                {
+                                    "code": "SI-103",
+                                    "kind": "invalid",
+                                    "name": package or "*",
+                                    "path": str(target),
+                                    "message": str(error),
+                                }
+                            ],
+                        },
+                        indent=2,
+                    )
+                )
+                click.get_current_context().exit(2)
+            raise click.ClickException(str(error)) from error
+        discovered = (
+            registry_from_listing(listed, allow_empty=package is None)
+            if listed is not None
+            else None
+        )
         if discovered is not None and not discovered.ok:
             if as_json:
                 click.echo(

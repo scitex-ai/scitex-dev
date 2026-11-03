@@ -135,7 +135,7 @@ def install_projection(
     _root_fn=None,
     _version_fn=None,
 ):
-    """Preserve foreign content and unselected namespaces; never write a partial store."""
+    """Refresh validated managed scopes; refuse foreign or dirty store contents."""
     from .skills import _export_skills_unchecked, _generate_root_skill_md, list_skills
 
     target = Path(dest).expanduser().resolve(strict=False)
@@ -150,7 +150,9 @@ def install_projection(
         else None
     )
     requested = (
-        registry_from_listing(listed) if listed is not None else RegistryReport((), ())
+        registry_from_listing(listed, allow_empty=package is None)
+        if listed is not None
+        else RegistryReport((), ())
     )
     if listed is not None and not requested.ok:
         return _refused(requested, target, requested.issues)
@@ -209,6 +211,23 @@ def install_projection(
                 shutil.copytree(target, stage, symlinks=True)
             else:
                 stage.mkdir()
+            # A full install reconciles the installed/enabled inventory. A
+            # package-specific install replaces that owner's complete namespace
+            # set while retaining other owners' validated records.
+            selected_owners = {item.owner for item in requested.records} or {package}
+            retained = {
+                item.name: item
+                for item in previous.records
+                if package is not None and item.owner not in selected_owners
+            }
+            desired_names = {item.name for item in requested.records}
+            for item in previous.records:
+                if item.name not in retained and item.name not in desired_names:
+                    obsolete = stage / item.name
+                    if obsolete.is_symlink():
+                        obsolete.unlink()
+                    elif obsolete.is_dir():
+                        shutil.rmtree(obsolete)
             # Never write through an adapter-index symlink copied from the old store.
             staged_index = stage / "SKILL.md"
             if staged_index.is_symlink():
@@ -233,10 +252,21 @@ def install_projection(
             )
             if not desired.ok:
                 return _refused(desired, target, desired.issues)
-            combined = {item.name: item for item in previous.records}
+            combined = retained
+            previous_by_name = {item.name: item for item in previous.records}
             for item in desired.records:
-                old = combined.get(item.name)
-                if old is not None and old.owner != item.owner:
+                old = previous_by_name.get(item.name)
+                legacy_owner_correction = (
+                    old is not None
+                    and old.owner == old.name
+                    and old.path == item.path
+                    and old.source_hash == item.source_hash
+                )
+                if (
+                    old is not None
+                    and old.owner != item.owner
+                    and not legacy_owner_correction
+                ):
                     issue = RegistryIssue(
                         "SI-201",
                         "conflict",
@@ -255,6 +285,8 @@ def install_projection(
             registry = RegistryReport(
                 tuple(combined[name] for name in sorted(combined)), ()
             )
+            if not combined and staged_index.exists():
+                staged_index.unlink()
             _generate_root_skill_md(stage, {name: () for name in combined})
             finalized = finalize_projection(registry, stage, "scitex-dev")
             if not finalized.audit.ok:

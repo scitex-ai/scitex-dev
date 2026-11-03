@@ -36,13 +36,19 @@ from typing import Optional
 
 import scitex_logging as slogging
 
-from ..._core.discovery import discover_packages, get_package_root
+from ..._core.discovery import get_package_root
+from ..._core.names import normalize_distribution_name
+from ...skill_registry import SkillRegistryError
 from ._frontmatter import _parse_frontmatter
 from ._frontmatter import _stamp_frontmatter_field as _stamp_frontmatter_field
+from .installed_providers import (
+    discover_skill_packages,
+    enabled_skill_packages,
+    get_skill_package_root,
+)
 
 logger = slogging.getLogger(__name__)
 
-_ENTRY_POINT_GROUP = "scitex_dev.skills"
 
 _DEFAULT_EXPORT_DIR_ENV = "SCITEX_DEV_SKILLS_DEFAULT_EXPORT_DIR"
 
@@ -180,37 +186,71 @@ def list_skills(
     """List all skills across the ecosystem or for a specific package.
 
     Returns:
-        Dict mapping package name -> list of skill info dicts.
-        Each dict has: name, path, description, version.
+        Dict mapping skill namespace -> list of skill info dicts.
+        Each entry carries its owning distribution plus name, path,
+        rel_path, description and installed owner version. Disabled owners
+        are excluded; ambiguous namespaces raise SkillRegistryError.
     """
-    discover = _discover_fn if _discover_fn is not None else discover_packages
+    package = normalize_distribution_name(package) if package is not None else None
+    discover = (
+        _discover_fn
+        if _discover_fn is not None
+        else lambda: discover_skill_packages(package=package)
+    )
     root_lookup = _root_fn if _root_fn is not None else get_package_root
     version_lookup = _version_fn if _version_fn is not None else _get_package_version
 
-    packages = discover()
+    packages = enabled_skill_packages(discover())
 
     if package:
-        if package not in packages:
+        selected = {
+            name
+            for name in packages
+            if package in (name, packages.owners.get(name, name))
+        }
+        if not selected:
             return {}
-        packages = {package: packages[package]}
+        selected_owners = {packages.owners[name] for name in selected}
+        selected = {
+            name for name in packages if packages.owners[name] in selected_owners
+        }
+    else:
+        selected = set(packages)
 
     result: dict[str, list[dict[str, str]]] = {}
 
+    def add_namespace(name, entries, owner):
+        if name in result:
+            previous = result[name][0]["owner"]
+            raise SkillRegistryError(
+                f"duplicate skill namespace {name!r}: {previous!r} and {owner!r}"
+            )
+        result[name] = [{**entry, "owner": owner} for entry in entries]
+
     for pkg_name, module_name in packages.items():
+        if pkg_name not in selected:
+            continue
+        owner = packages.owners.get(pkg_name, pkg_name)
+        root = (
+            root_lookup(module_name)
+            if _root_fn is not None
+            else get_skill_package_root(owner, module_name)
+        )
+        provider_found = False
         # 1. Standard per-package skills
-        skills_dir = _find_skills_dir(module_name, pkg_name, _root_fn=root_lookup)
+        skills_dir = _find_skills_dir(module_name, pkg_name, _root_fn=lambda _: root)
         if skills_dir is not None:
-            version = version_lookup(pkg_name)
+            version = version_lookup(owner)
             skills = _collect_skills_from_dir(skills_dir, version)
             if skills:
-                result[pkg_name] = skills
+                add_namespace(pkg_name, skills, owner)
+                provider_found = True
 
         # 2. Extra skill namespaces (e.g., _skills/general/ in scitex-python)
-        root = root_lookup(module_name)
         if root is not None:
             extra_skills_root = root / "_skills"
             if extra_skills_root.is_dir():
-                version = version_lookup(pkg_name)
+                version = version_lookup(owner)
                 for sub_dir in sorted(extra_skills_root.iterdir()):
                     if not sub_dir.is_dir():
                         continue
@@ -221,7 +261,12 @@ def list_skills(
                     if (sub_dir / "SKILL.md").exists():
                         extra = _collect_skills_from_dir(sub_dir, version)
                         if extra:
-                            result[ns_name] = extra
+                            add_namespace(ns_name, extra, owner)
+                            provider_found = True
+        if not provider_found and _discover_fn is None:
+            raise SkillRegistryError(
+                f"registered skill provider {owner!r} has no skill resources in {root}"
+            )
 
     return result
 
@@ -239,12 +284,14 @@ def get_skill(
     Returns:
         Skill content as string, or None if not found.
     """
-    packages = discover_packages()
+    package = normalize_distribution_name(package)
+    packages = enabled_skill_packages(discover_skill_packages(package=package))
     module_name = packages.get(package)
     if module_name is None:
         return None
 
-    skills_dir = _find_skills_dir(module_name, package)
+    root = get_skill_package_root(packages.owners.get(package, package), module_name)
+    skills_dir = _find_skills_dir(module_name, package, _root_fn=lambda _: root)
     if skills_dir is None:
         return None
 
@@ -280,11 +327,13 @@ def get_skill(
 
 def get_skill_dir(package: str) -> Optional[Path]:
     """Get the skills directory path for a package."""
-    packages = discover_packages()
+    package = normalize_distribution_name(package)
+    packages = enabled_skill_packages(discover_skill_packages(package=package))
     module_name = packages.get(package)
     if module_name is None:
         return None
-    return _find_skills_dir(module_name, package)
+    root = get_skill_package_root(packages.owners.get(package, package), module_name)
+    return _find_skills_dir(module_name, package, _root_fn=lambda _: root)
 
 
 def export_skills(
@@ -305,12 +354,22 @@ def export_skills(
     """
     from ...skill_registry import SkillRegistryError
     from .transaction import install_projection
+
     finalized, exported = install_projection(
-        dest, package=package, clean=clean, source=source, link=link,
-        force_copy=force_copy, _discover_fn=_discover_fn,
-        _root_fn=_root_fn, _version_fn=_version_fn)
+        dest,
+        package=package,
+        clean=clean,
+        source=source,
+        link=link,
+        force_copy=force_copy,
+        _discover_fn=_discover_fn,
+        _root_fn=_root_fn,
+        _version_fn=_version_fn,
+    )
     if not finalized.audit.ok:
-        details = "; ".join(f"{i.code}:{i.name}: {i.message}" for i in finalized.audit.issues)
+        details = "; ".join(
+            f"{i.code}:{i.name}: {i.message}" for i in finalized.audit.issues
+        )
         raise SkillRegistryError(f"skill install refused: {details}")
     return exported
 

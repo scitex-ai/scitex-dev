@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import sys
 
 import click
 import pytest
@@ -160,3 +162,51 @@ def test_pypi_dry_run_is_unresolved_without_installed_listing(installer, tmp_pat
         payload["discovery_performed"],
         destination.parent.exists(),
     ) == (2, "not-resolved", None, False, False)
+
+
+def test_real_duplicate_entry_points_refuse_as_json_before_destination_writes(
+    installer, tmp_path, isolated_metadata_environment
+):
+    # Arrange
+    site = isolated_metadata_environment
+    for owner in ["audit-collision", "audit-second"]:
+        dist = site / f"{owner.replace('-', '_')}-1.0.dist-info"
+        dist.mkdir()
+        (dist / "METADATA").write_text(f"Name: {owner}\nVersion: 1.0\n")
+        (dist / "entry_points.txt").write_text(
+            f"[scitex_dev.skills]\naudit-collision = {owner.replace('-', '_')}\n"
+        )
+    destination = tmp_path / "untouched" / "skills"
+    # Act
+    result = _install(installer, destination, "audit-collision")
+    payload = json.loads(result.stdout)
+    # Assert
+    assert (
+        result.exit_code,
+        payload["ok"],
+        payload["findings"][0]["code"],
+        destination.parent.exists(),
+    ) == (2, False, "SI-103", False)
+
+
+@pytest.fixture
+def isolated_metadata_environment(tmp_path):
+    site = tmp_path / "site"
+    site.mkdir()
+    before_path = sys.path[:]
+    keys = {
+        "SCITEX_DIR": str(tmp_path / "state"),
+        "SCITEX_DEV_KNOB_STATE": str(tmp_path / "knobs.json"),
+    }
+    before_env = {key: os.environ.get(key) for key in keys}
+    sys.path.insert(0, str(site))
+    os.environ.update(keys)
+    try:
+        yield site
+    finally:
+        sys.path[:] = before_path
+        for key, value in before_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value

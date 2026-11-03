@@ -31,12 +31,14 @@ class ProjectionFinalizeResult:
 
 def registry_from_listing(
     listed: Mapping[str, Sequence[Mapping[str, str]]],
+    *,
+    allow_empty: bool = False,
 ) -> RegistryReport:
     """Convert the exporter's source listing to authoritative records."""
 
     records: list[SkillRecord] = []
     issues: list[RegistryIssue] = []
-    if not listed:
+    if not listed and not allow_empty:
         issues.append(
             RegistryIssue(
                 "SI-100",
@@ -84,7 +86,7 @@ def registry_from_listing(
         records.append(
             SkillRecord(
                 name=name,
-                owner=name,
+                owner=skill_entries[0].get("owner", name),
                 path=source_root.resolve(strict=True),
                 skill_file=skill_file.resolve(strict=True),
                 source_hash=hash_skill_tree(source_root),
