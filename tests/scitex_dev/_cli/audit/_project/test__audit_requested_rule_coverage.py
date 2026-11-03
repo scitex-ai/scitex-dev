@@ -23,19 +23,30 @@ def _run(root, rules):
 
 
 def test_unregistered_rule_refuses_a_clean_verdict(tmp_path):
-    result = _run(tmp_path, ["PS-UNREGISTERED-OWNED-FIXTURE"])
-    assert result.exit_code == 2, result.output
+    # Arrange
+    requested = ["PS-UNREGISTERED-OWNED-FIXTURE"]
+    # Act
+    result = _run(tmp_path, requested)
     payload = json.loads(result.stdout)
-    assert payload["status"] == "not-auditable"
-    assert payload["unavailable_rules"] == ["PS-UNREGISTERED-OWNED-FIXTURE"]
+    observed = (result.exit_code, payload["status"], payload["unavailable_rules"])
+    # Assert
+    assert observed == (2, "not-auditable", requested), result.output
 
 
 def test_mixed_available_and_unavailable_rules_also_refuse(tmp_path):
-    result = _run(tmp_path, ["PS-101", "PS-UNREGISTERED-OWNED-FIXTURE"])
+    # Arrange
+    requested = ["PS-101", "PS-UNREGISTERED-OWNED-FIXTURE"]
+    # Act
+    result = _run(tmp_path, requested)
+    # Assert
     assert result.exit_code == 2, result.output
 
 
 def test_registered_rule_can_return_a_clean_verdict(tmp_path):
-    result = _run(tmp_path, ["PS-101"])
-    assert result.exit_code == 0, result.output
-    assert json.loads(result.stdout)["violations"] == []
+    # Arrange
+    requested = ["PS-101"]
+    # Act
+    result = _run(tmp_path, requested)
+    observed = (result.exit_code, json.loads(result.stdout)["violations"])
+    # Assert
+    assert observed == (0, []), result.output
