@@ -65,7 +65,7 @@ dependencies = [
     # Undeclared until 2026-08-05 because pip/setuptools environments almost
     # always have it transitively; a clean `uv` venv does not, which is why it
     # only ever failed in CI.
-    "packaging>=21.0",
+    "packaging>=23.2",
     # SECOND INSTANCE OF THE DEFECT DIRECTLY ABOVE, found 2026-08-10 by
     # scitex-hub reporting that `scitex-dev[cli-audit]` provisions nothing.
     # It does not, but that extra was empty on purpose (its contents became

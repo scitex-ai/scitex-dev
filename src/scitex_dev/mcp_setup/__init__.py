@@ -13,7 +13,7 @@ import tempfile
 import stat
 from collections.abc import Mapping, Sequence
 
-from packaging.utils import canonicalize_name
+from .._core.names import normalize_distribution_name
 
 __all__ = ["build_mcp_install_manifest", "install_mcp_client_config"]
 
@@ -23,7 +23,7 @@ def build_mcp_install_manifest(
     verify: Sequence[Sequence[str]] = (), server_name: str | None = None,
 ) -> dict:
     """Normalize explicit leaf launch data, without importing or starting it."""
-    package = canonicalize_name(package, validate=True)
+    package = normalize_distribution_name(package)
     name = package if server_name is None else server_name
     if any(isinstance(cmd, (str, bytes)) for cmd in verify):
         raise ValueError("MCP verification commands must be argument sequences")
