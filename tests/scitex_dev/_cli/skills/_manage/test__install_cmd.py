@@ -212,7 +212,7 @@ class TestSkillsCollectCLI:
         # Assert
         dest = tmp_path / "skills-out"
         r = subprocess.run(
-            ["scitex-dev", "skills", "collect", str(dest), "--dry-run"],
+            ["scitex-dev", "skills", "collect", str(dest), "--package", "scitex-dev", "--dry-run"],
             capture_output=True,
             text=True,
             timeout=60,
@@ -227,7 +227,7 @@ class TestSkillsCollectCLI:
         # Assert
         dest = tmp_path / "skills-out"
         r = subprocess.run(
-            ["scitex-dev", "skills", "collect", str(dest), "--dry-run"],
+            ["scitex-dev", "skills", "collect", str(dest), "--package", "scitex-dev", "--dry-run"],
             capture_output=True,
             text=True,
             timeout=60,

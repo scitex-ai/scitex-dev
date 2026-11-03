@@ -74,7 +74,19 @@ opt-outs. Duplicate namespaces refuse selection. Full refresh reconciles clean
 managed removals; a package-specific refresh preserves other owners. Leaf resources remain authoritative;
 the store and harness directories are projections. Use the existing
 `scitex_dev.skill_registry` hashes and `audit_projection`, not another registry.
-Review the plan, then omit `--dry-run` to install. Inspect actual installed help
+When discovery reports conflicting owners, retain the refusal: an archived
+package and its successor can both declare the same namespace. Preview one
+known distribution with `--package` to isolate its ownership. If an old package
+is intentionally retired, preview its opt-out before applying it deliberately.
+For example, the archived `scitex-app` distribution can conflict with SDK-owned
+resources. Do not silently prefer one owner or delete installed distributions
+from discovery.
+
+```bash
+scitex-dev dev skills disable scitex-app --dry-run
+```
+
+Review the `skills install` plan, then omit `--dry-run` from that command to install. Inspect actual installed help
 for supported projection and source options; a source checkout does not upgrade
 a different installed wheel.
 

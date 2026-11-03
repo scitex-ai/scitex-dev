@@ -341,3 +341,18 @@ def test_skill_catalog_refuses_external_symlink_before_reading_metadata(installe
         refused = True
     # Assert
     assert refused
+
+
+def test_same_entrypoint_namespace_from_distinct_owners_is_refused(installed_provider):
+    # Arrange
+    site, owner, _, _, _ = installed_provider
+    other = site / "scitex_audit_collision-1.0.dist-info"
+    other.mkdir()
+    (other / "METADATA").write_text("Name: scitex-audit-collision\nVersion: 1.0\n")
+    (other / "entry_points.txt").write_text(
+        f"[scitex_dev.skills]\n{owner} = different_module\n"
+    )
+    # Act
+    # Assert
+    with pytest.raises(SkillRegistryError, match="ambiguous skill namespace"):
+        discover_skill_packages(path=[site])
