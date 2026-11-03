@@ -154,11 +154,11 @@ results = search("save", scope="api", package="scitex-io")
 
 ```bash
 # Search across all packages
-scitex-dev search "save figure"
-scitex-dev search "ttest" --scope api
-scitex-dev search "stats" --scope mcp --max-results 5
-scitex-dev search '"session decorator"'
-scitex-dev search "save figure" --json
+scitex-dev docs search "save figure"
+scitex-dev docs search "ttest" --scope api
+scitex-dev docs search "stats" --scope mcp --max-results 5
+scitex-dev docs search '"session decorator"'
+scitex-dev docs search "save figure" --json
 
 # Docs commands
 scitex-dev docs list

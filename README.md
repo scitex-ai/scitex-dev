@@ -180,8 +180,10 @@ from scitex_dev.project import resolve_project
 resolve_project(explicit="synthetic/owned")
 ```
 
-> Skills are managed through the CLI (`scitex-dev dev skills list/get/install`),
-> not a Python module.
+> Discover and install skills through `scitex-dev dev skills list/get/install`.
+> Python discovery/export helpers are public in `scitex_dev.ecosystem`:
+> `list_skills`, `get_skill` and `export_skills`; the root module does not
+> re-export them.
 
 </details>
 

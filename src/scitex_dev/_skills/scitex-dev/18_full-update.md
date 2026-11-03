@@ -15,7 +15,7 @@ steps within a phase may run in parallel via subagents.
 Retrieved programmatically from the ecosystem config — never hard-code the list.
 
 ```python
-from scitex_dev.config import load_config
+from scitex_dev import load_config
 config = load_config()
 packages = list(config.ecosystem.keys())  # canonical list
 ```
@@ -34,7 +34,7 @@ Each level includes ALL steps from the previous level.
 | 2 | **GitHub Release** | Level 1 + `gh release create vX.Y.Z --generate-notes` |
 | 3 | **PyPI** | Level 2 + verify `publish-pypi.yml` triggered (or manual `twine upload` for first publish) + confirm version on PyPI |
 | 4 | **Hosts** | Level 3 + `pip install -e .` locally + `mcp__scitex__dev_ecosystem_sync` (NAS, Spartan) + verify remote versions |
-| 5 | **Skills** | Level 4 + `scitex-dev skills export` (stamps MANIFEST.md version from pyproject.toml) |
+| 5 | **Skills** | Level 4 + `scitex-dev dev skills install` (writes the projection registry; no MANIFEST.md) |
 
 Pick the highest applicable level. Most packages need Level 4.
 Packages with `_skills/` directories need Level 5.
@@ -47,7 +47,7 @@ Packages with `_skills/` directories need Level 5.
 
 ### 1. check_ci — Verify GitHub Actions pass
 
-- **Python**: `from scitex_dev.ci import check_ci, get_failing_packages`
+- **Python**: `from scitex_dev import check_ci, get_failing_packages`
   - `check_ci(packages=None)` → `{pkg: CIStatus}`
   - `get_failing_packages(packages=None)` → `list[str]`
 - **CLI**: `gh run list -R ywatanabe1989/PACKAGE --limit 3`
@@ -57,14 +57,14 @@ If any package is failing, fix CI before proceeding. Do not skip.
 
 ### 2. detect_mismatches — Find version inconsistencies
 
-- **Python**: `from scitex_dev.fix import detect_mismatches`
+- **Python**: `from scitex_dev import detect_mismatches`
   - `detect_mismatches(packages=None)` → `{pkg: {status, issues, local, git, remote}}`
-- **CLI**: `scitex-dev ecosystem fix-mismatches --dry-run`
+- **CLI**: `scitex-dev ecosystem validate-versions --dry-run`
 - **MCP**: `mcp__scitex__dev_ecosystem_fix_mismatches(confirm=False)`
 
 ### 3. fix_init_version — Sync `__init__.py` with `pyproject.toml`
 
-- **Python**: `from scitex_dev.fix import fix_init_version`
+- **Python**: `from scitex_dev import fix_init_version`
   - `fix_init_version(package_path, confirm=False)` → `{toml_version, init_version, action, status}`
 - **CLI**: manual `sed` or editor
 - **MCP**: via `fix_init_version` Python API (planned as MCP tool)
@@ -73,7 +73,7 @@ These block PyPI publish. Fix and commit before bumping.
 
 ### 4. verify_pypi_config — Check trusted publisher setup
 
-- **Python**: `from scitex_dev.ci import verify_pypi_config, verify_all_pypi_configs`
+- **Python**: `from scitex_dev import verify_pypi_config, verify_all_pypi_configs`
   - `verify_pypi_config(repo)` → `{repo, workflow_exists, needs_first_publish}`
   - `verify_all_pypi_configs(packages=None)` → `{pkg: {...}}`
 - **CLI**: `gh api repos/ywatanabe1989/PACKAGE/actions/workflows`
@@ -89,7 +89,7 @@ First-publish packages need manual `twine upload` before OIDC works.
 
 ### 5. determine_bump_type — Check diff and classify as minor/patch
 
-- **Python**: `from scitex_dev.fix import determine_bump_type`
+- **Python**: `from scitex_dev import determine_bump_type`
   - `determine_bump_type(package_path)` → `{has_diff, commits_since_tag, has_feat, bump_type, current_version, suggested_version}`
 - **CLI**:
   ```bash
@@ -106,16 +106,16 @@ First-publish packages need manual `twine upload` before OIDC works.
 
 ### 6. bump_version — Edit `pyproject.toml` and `__init__.py`
 
-- **Python**: `from scitex_dev.fix import bump_version`
+- **Python**: `from scitex_dev import bump_version`
   - `bump_version(package_path, new_version, confirm=False)` → `{old_version, new_version, toml_updated, init_updated, status}`
 - **CLI**: `sed -i 's/^version = "OLD"/version = "NEW"/' pyproject.toml`
 - **MCP**: via `mcp__scitex__dev_ecosystem_fix_mismatches` (planned)
 
 ### 7. verify_docs_and_skills — Ensure docs/skills match codebase
 
-- **Python**: `from scitex_dev.skills import verify_docs_and_skills`
+- **Python**: `from scitex_dev import verify_docs_and_skills`
   - `verify_docs_and_skills(package_path=None)` → `{skills_stale, stale_files, readme_version_match, issues, status}`
-- **CLI**: `scitex-dev skills export --dry-run` (preview skill changes)
+- **CLI**: `scitex-dev dev skills install --dry-run` (preview skill changes)
 - **MCP**: via `mcp__scitex__dev_ecosystem_list` (planned)
 
 Check before pushing:
@@ -138,7 +138,7 @@ If stale, update and commit before tagging.
 
 ### 9. check_ci_before_push — Last CI gate before push
 
-- **Python**: `from scitex_dev.ci import check_ci`
+- **Python**: `from scitex_dev import check_ci`
   - `check_ci(packages=["PACKAGE"])` → `{pkg: CIStatus}`
 - **CLI**: `gh run list -R ywatanabe1989/PACKAGE --limit 1`
 - **MCP**: `mcp__scitex__dev_ecosystem_list` (check status field)
@@ -153,14 +153,14 @@ If failures found, fix now. This is the last opportunity before release.
 
 ### 11. create_github_release — Create release on GitHub
 
-- **Python**: `from scitex_dev.ci import create_github_release`
+- **Python**: `from scitex_dev import create_github_release`
   - `create_github_release(repo, tag, generate_notes=True, confirm=False)` → `{repo, tag, url, status}`
 - **CLI**: `gh release create vX.Y.Z --repo ywatanabe1989/PACKAGE --generate-notes`
 - **MCP**: via `mcp__scitex__dev_ecosystem_list` (planned)
 
 ### 12. wait_for_pypi — Watch PyPI publish (background)
 
-- **Python**: `from scitex_dev.ci import wait_for_workflow, check_pypi_publish`
+- **Python**: `from scitex_dev import wait_for_workflow, check_pypi_publish`
   - `wait_for_workflow(repo, workflow="publish-pypi.yml", timeout=600, poll_interval=30)` → `WorkflowRun | None`
   - `check_pypi_publish(repo)` → `WorkflowRun | None`
 - **CLI**:

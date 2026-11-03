@@ -56,6 +56,6 @@ is on `$PATH` (e.g. `~/.local/bin`).
 - **`mcp start` fails with `ModuleNotFoundError: fastmcp`** — install the
   `mcp` extra.
 - **Version mismatches across the ecosystem** — run
-  `scitex-dev ecosystem fix-mismatches --dry-run` (see [13_versions.md](13_versions.md)).
+  `scitex-dev ecosystem validate-versions --dry-run` (see [13_versions.md](13_versions.md)).
 
 See [02_quick-start.md](02_quick-start.md) for a guided first run.

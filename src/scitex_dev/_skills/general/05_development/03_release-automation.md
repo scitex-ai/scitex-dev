@@ -46,7 +46,7 @@ scitex-dev ecosystem list --json                  # JSON output
 scitex-dev ecosystem list -p scitex               # Specific package
 scitex-dev show-stats                             # Ecosystem-wide stats (count/LOC/tests)
 scitex-dev show-config                            # Show resolved dev config
-scitex-dev search-docs <query>                    # Search package docs
+scitex-dev docs search <query>                    # Search package docs
 ```
 
 ### Sync

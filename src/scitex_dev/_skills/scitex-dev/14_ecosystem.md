@@ -186,7 +186,7 @@ scitex-dev ecosystem commit           # commit on remote hosts
 scitex-dev ecosystem diff             # show remote diffs
 
 # Fix mismatches
-scitex-dev ecosystem fix-mismatches --dry-run
+scitex-dev ecosystem validate-versions --dry-run
 scitex-dev ecosystem fix-mismatches
 
 # Dashboard — the canonical `gui` group (§12 19_gui-commands.md)
