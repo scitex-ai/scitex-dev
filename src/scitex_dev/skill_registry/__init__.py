@@ -18,7 +18,14 @@ from ._projection import (
 )
 from ._write import write_projection_manifest
 
+# Projection format alone does not prove that an installer protects user data.
+# Harnesses probe this inert marker in the actual installer interpreter.
+INSTALL_CAPABILITIES: frozenset[str] = frozenset(
+    {"transactional-projection-v1", "force-copy"}
+)
+
 __all__ = [
+    "INSTALL_CAPABILITIES",
     "MANIFEST_NAME",
     "SCHEMA",
     "ProjectionManifestError",
