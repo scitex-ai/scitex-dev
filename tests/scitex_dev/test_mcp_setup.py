@@ -91,3 +91,35 @@ def test_concurrent_shared_installs_preserve_both_servers(tmp_path):
     config = json.loads(target.read_text())
     # Assert
     assert set(config["mcpServers"]) == {"owned-a", "owned-b"}
+
+
+def test_symlink_config_is_not_replaced_or_followed(tmp_path):
+    # Arrange
+    original = tmp_path / "real.json"
+    original.write_text('{"sentinel":"owned-original"}')
+    link = tmp_path / "linked.json"
+    link.symlink_to(original)
+    # Act
+    refused = False
+    try:
+        install_mcp_client_config(_manifest()["client_config"], link)
+    except ValueError:
+        refused = True
+    observed = (refused, link.is_symlink(), original.read_text())
+    # Assert
+    assert observed == (True, True, '{"sentinel":"owned-original"}')
+
+
+def test_invalid_fragment_cannot_create_client_config(tmp_path):
+    # Arrange
+    target = tmp_path / "absent" / "mcp.json"
+    invalid = {"mcpServers": {"owned": {"command": "python", "args": "shell text"}}}
+    # Act
+    refused = False
+    try:
+        install_mcp_client_config(invalid, target)
+    except ValueError:
+        refused = True
+    observed = (refused, target.parent.exists())
+    # Assert
+    assert observed == (True, False)

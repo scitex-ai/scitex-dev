@@ -382,43 +382,10 @@ _register_registry_normalize(main)
 # Documentation commands
 # -------------------------------------------------------------------
 
-from .._core.dispatch import docs_click_group
+from ._docs_cmds import register_docs_commands
 
-docs_grp = docs_click_group(package="scitex-dev")
-main.add_command(docs_grp)
-
-# `docs search` — canonical home for ecosystem-wide search across APIs,
-# CLI, MCP tools, and documentation. The legacy top-level `search-docs`
-# is kept as a hidden deprecation alias (see below). Removed in 0.11.0.
-@docs_grp.command(
-    "search",
-    cls=SpecCommand,
-    help_spec=CliHelp(
-        summary="Search across APIs, CLI, MCP tools, and documentation.",
-        examples=(
-            Example('{prog} docs search "save figure"', "Full-text search everywhere."),
-            Example("{prog} docs search version --scope api", "Limit to the API scope."),
-            Example("{prog} docs search hpc --max-results 20 --json", "More hits, as JSON."),
-        ),
-    ),
-)
-@click.argument("query")
-@click.option(
-    "--scope", default="all", help="Search scope: all, api, cli, mcp, docs."
-)
-@click.option("--max-results", default=10, help="Maximum results.")
-@click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
-def _docs_search(query, scope, max_results, as_json):
-    from .. import search as do_search
-    from ._utils import wrap_as_cli
-
-    wrap_as_cli(
-        do_search,
-        as_json=as_json,
-        query=query,
-        scope=scope,
-        max_results=max_results,
-    )
+docs_grp = register_docs_commands(main)
+_docs_search = docs_grp.commands["search"]
 
 # -------------------------------------------------------------------
 # dev — the canonical §13 self-maintenance group (step 2 of
