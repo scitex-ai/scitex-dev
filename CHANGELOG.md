@@ -10,6 +10,16 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.62.13] - 2026-11-04
+
+- Preserve registered package metadata when YAML skill opt-outs override a
+  partial configuration. Align configuration and agent-setup skills with
+  environment-local provider discovery, override precedence, destinations and
+  existing nightly checks; exercise the documented examples in isolation.
+- Preserve required executable header imports when regenerating ecosystem
+  gates. Check header bindings statically and refuse conflicting generated
+  imports, so preserved handwritten checks retain their required names.
+
 ## [0.62.12] - 2026-11-04
 
 - Reuse FastMCP's existing selective discovery transform after host selection

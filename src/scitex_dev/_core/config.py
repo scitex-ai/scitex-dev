@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -298,7 +298,9 @@ def load_config(config_path: str | Path | None = None) -> DevConfig:
     if "packages" in data and isinstance(data["packages"], list):
         for pkg_data in data["packages"]:
             if isinstance(pkg_data, dict):
-                parsed = _parse_package_config(pkg_data)
+                existing = pkg_map.get(pkg_data.get("name", "unknown"))
+                defaults = asdict(existing) if existing is not None else {}
+                parsed = _parse_package_config({**defaults, **pkg_data})
                 pkg_map[parsed.name] = parsed
 
     packages = list(pkg_map.values())

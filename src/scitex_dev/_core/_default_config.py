@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # File: scitex_dev/_core/_default_config.py
 
 """Default ``config.yaml`` template + writer.
@@ -24,12 +23,17 @@ freshness:
   cards: auto
 
 # Ecosystem packages to track
+# Entries override only the supplied fields. Registered providers installed in
+# this interpreter are discoverable by default; these switches opt owners out.
+# CLI-managed runtime/knob-state.json entries take precedence over this YAML.
 packages:
   - name: scitex
     local_path: ~/proj/scitex-python
     pypi_name: scitex
     github_repo: ywatanabe1989/scitex-python
     import_name: scitex
+    skills_enabled: true
+    mcp_enabled: true
   - name: figrecipe
     local_path: ~/proj/figrecipe
     pypi_name: figrecipe

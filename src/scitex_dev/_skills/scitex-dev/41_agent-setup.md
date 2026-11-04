@@ -15,9 +15,9 @@ between conflicting declarations.
 ## Discover installed declarations
 
 ```bash
-scitex-dev docs list-providers --json
-scitex-dev dev skills list --package scitex-dev --json
-scitex-dev dev skills get scitex-dev SKILL
+scitex dev docs list-providers --json
+scitex dev dev skills list --package scitex-dev --json
+scitex dev dev skills get scitex-dev SKILL
 ```
 
 `docs list-providers` reads `scitex_dev.docs` metadata without loading consumer code.
@@ -41,7 +41,7 @@ for namespace, entries in listing.items():
 ```
 
 ```bash
-scitex-dev dev skills get scitex-app SKILL --owner scitex-sdk --json
+scitex dev dev skills get scitex-app SKILL --owner scitex-sdk --json
 ```
 
 MCP `dev_skills_get` accepts the same optional `owner` argument. Dev 0.62.11 adds
@@ -61,8 +61,8 @@ selection does not relax resource containment.
 ## MCP setup
 
 ```bash
-scitex-dev mcp install --json
-scitex-dev mcp install --config /tmp/owned-mcp.json --dry-run --json
+scitex dev mcp install --json
+scitex dev mcp install --config /tmp/owned-mcp.json --dry-run --json
 ```
 
 Without `--config`, installation is informational. With an explicit compatible
@@ -84,8 +84,8 @@ Dry runs create neither config, parent directory nor lock. This writer uses POSI
 not a universal installer for every client's TOML/YAML or approval format.
 
 ```bash
-scitex-dev mcp doctor --json
-scitex-dev mcp list-tools --json
+scitex dev mcp doctor --json
+scitex dev mcp list-tools --json
 ```
 
 Doctor returns nonzero for dependency/import or empty-catalog failures. A catalog
@@ -96,8 +96,12 @@ execution needs its own appropriate tests.
 
 ## Skills setup
 
+For environment-local defaults, YAML opt-outs, CLI override precedence and custom
+destinations, read [12_config.md](12_config.md). Discovery and generated stores
+do not imply that every skill should be loaded into agent context.
+
 ```bash
-scitex-dev dev skills install --package scitex-dev --claude-symlink --dry-run --json
+scitex dev dev skills install --package scitex-dev --dry-run --json
 ```
 
 The canonical store is `~/.scitex/dev/skills/`. Discovery uses the leaf
@@ -115,7 +119,7 @@ resources. Do not silently prefer one owner or delete installed distributions
 from discovery.
 
 ```bash
-scitex-dev dev skills disable scitex-app --dry-run
+scitex dev dev skills disable scitex-app --dry-run
 ```
 
 Review the `skills install` plan, then omit `--dry-run` from that command to install. Inspect actual installed help
