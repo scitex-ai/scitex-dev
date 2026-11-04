@@ -64,7 +64,9 @@ def load_exposure_policy(
     Reuses Dev's existing file selection/defaults/YAML/override precedence.
     Malformed state and conflicting owner identities refuse visibly. Raw state
     overrides also apply to owners absent from the curated package defaults.
-    No file is created and no package inventory is discovered by this helper.
+    Configuration/knob-state files are not created or rewritten, and no package
+    inventory is discovered. Ordinary dependency/logging bootstrap is separate
+    from the policy read; this does not promise import-side-effect isolation.
     """
     import yaml
 

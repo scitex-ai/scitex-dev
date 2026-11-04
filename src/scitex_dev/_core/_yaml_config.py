@@ -4,6 +4,24 @@ from pathlib import Path
 from typing import Any
 
 
+def validate_packages(data: dict[str, Any]) -> None:
+    """Refuse malformed package selection in strict exposure snapshots only."""
+    from .names import normalize_distribution_name
+
+    if "packages" not in data:
+        return
+    packages = data["packages"]
+    if not isinstance(packages, list):
+        raise TypeError("exposure config packages must be a list")
+    for package in packages:
+        if not isinstance(package, dict):
+            raise TypeError("exposure config package entries must be objects")
+        name = package.get("name")
+        if not isinstance(name, str):
+            raise TypeError("exposure config package name must be a string")
+        normalize_distribution_name(name)
+
+
 def load_yaml(path: Path, *, strict: bool = False) -> dict[str, Any]:
     """Load YAML file."""
     if not strict and not path.exists():

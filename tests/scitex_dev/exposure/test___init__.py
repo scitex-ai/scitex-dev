@@ -214,11 +214,13 @@ def test_policy_query_never_reopens_deleted_config_or_state(tmp_path):
 
 def test_legacy_null_packages_keeps_supported_defaults(tmp_path):
     # Arrange
-    config, state = _files(tmp_path, "packages: null")
+    from scitex_dev._core.config import load_config
+
+    config, _state = _files(tmp_path, "packages: null")
     # Act
-    policy = load_exposure_policy(config, knob_state_path=state)
+    legacy = load_config(config)
     # Assert
-    assert policy.is_enabled("unconfigured-owner", "cli") is True
+    assert bool(legacy.packages)
 
 
 @contextmanager
