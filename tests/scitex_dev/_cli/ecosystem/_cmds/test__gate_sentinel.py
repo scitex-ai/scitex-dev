@@ -17,6 +17,7 @@ The fixtures are the real shapes scitex-hpc measured across 20 checkouts on
 from __future__ import annotations
 
 from scitex_dev._cli.ecosystem._cmds._gate_sentinel import (
+    BEGIN_SENTINEL,
     END_SENTINEL,
     SplitGate,
     split_at_sentinel,
@@ -24,7 +25,7 @@ from scitex_dev._cli.ecosystem._cmds._gate_sentinel import (
 
 # The scitex-dev shape: a test AND prose. The prose is the reason the
 # contract is "everything after", not "the tests after".
-TAIL_WITH_PROSE = f'''{END_SENTINEL}
+TAIL_WITH_PROSE = f"""{END_SENTINEL}
 
 
 @pytest.mark.parametrize("module_name", CROSS_PACKAGE_IMPORTS)
@@ -39,21 +40,25 @@ def test_cross_package_import_returns_non_none_module(module_name):
 #: Roots reached through a compat-ALIAS shim, where ``__name__`` reports the
 #: CANONICAL module rather than the name that was requested — by design.
 ALIAS_ROOTS = ("scitex_io",)
-'''
+"""
 
 # The scitex-io shape: no added test, but the GENERATED one deliberately
 # strengthened. A "regenerate, the block is authoritative" approach reverts
 # this silently, which is why it counts as preservable content.
-TAIL_STRENGTHENED = f'''{END_SENTINEL}
+TAIL_STRENGTHENED = f"""{END_SENTINEL}
 
 
 @pytest.mark.parametrize("module_name", CROSS_PACKAGE_IMPORTS)
 def test_cross_package_import_resolves(module_name):
     mod = pytest.importorskip(module_name)
     assert mod.__name__ == module_name
-'''
+"""
 
-HEAD = '"""Cross-package import gate."""\n\nCROSS_PACKAGE_IMPORTS = [\n    "scitex_io",\n]\n\n'
+HEAD = (
+    '"""Cross-package import gate."""\n\n'
+    + BEGIN_SENTINEL
+    + '\nCROSS_PACKAGE_IMPORTS = [\n    "scitex_io",\n]\n\n'
+)
 
 
 def test_absent_file_reports_readable():
