@@ -246,3 +246,23 @@ def test_status_paths_reports_selected_files_without_raw_config(tmp_path):
         data["preferences"]["unknown-leaf"],
         "PRIVATE_SENTINEL" in result.output,
     ) == (0, str(config), str(state), False, False)
+
+
+def test_local_toggle_without_yes_is_noninteractive_and_help_is_truthful(tmp_path):
+    # Arrange
+    config, state = tmp_path / "config.yaml", tmp_path / "state.json"
+    config.write_text("packages: []\n")
+    group = click.Group()
+    add_knob_commands(group, "cli")
+    runner = CliRunner()
+    env = {"SCITEX_DEV_CONFIG": str(config), "SCITEX_DEV_KNOB_STATE": str(state)}
+    # Act
+    result = runner.invoke(group, ["disable", "unknown-owner"], env=env)
+    help_result = runner.invoke(group, ["disable", "--help"], env=env)
+    # Assert
+    assert (
+        result.exit_code,
+        json.loads(state.read_text())["cli"]["unknown-owner"],
+        "non-interactive" in help_result.stdout,
+        "Skip confirmation" in help_result.stdout,
+    ) == (0, False, True, False)

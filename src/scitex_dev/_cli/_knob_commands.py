@@ -85,7 +85,7 @@ def add_knob_commands(group: click.Group, kind: str) -> click.Group:
     @click.option(
         "--dry-run", is_flag=True, help="Print what would change; do not write."
     )
-    @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+    @click.option("--yes", "-y", is_flag=True, help="Compatibility flag; package toggles are non-interactive.")
     def knob_enable(package, dry_run, yes):
         del yes  # non-interactive; accepted for CLI-audit §2
         if dry_run:
@@ -114,7 +114,7 @@ def add_knob_commands(group: click.Group, kind: str) -> click.Group:
     @click.option(
         "--dry-run", is_flag=True, help="Print what would change; do not write."
     )
-    @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+    @click.option("--yes", "-y", is_flag=True, help="Compatibility flag; package toggles are non-interactive.")
     def knob_disable(package, dry_run, yes):
         del yes  # non-interactive; accepted for CLI-audit §2
         if dry_run:

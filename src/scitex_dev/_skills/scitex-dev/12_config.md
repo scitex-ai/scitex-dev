@@ -183,3 +183,6 @@ effective host view; preferences do not invent absent commands or enable endpoin
 Only locations and selected booleans are shown, never raw configuration values.
 The snapshot exposes the same frozen paths, so a project-local file shadowing a
 home default is visible without adding another provenance registry.
+
+These local package toggles are non-interactive. `--yes` is retained as a
+compatibility flag; it does not add consent enforcement or authorization.
