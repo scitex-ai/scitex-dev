@@ -26,18 +26,25 @@ at least two repositories and silently revert a deliberate strengthening in a
 third. "At least" is load-bearing: that scan covered working checkouts on ONE
 host and compared line counts, not semantics, so it is a LOWER BOUND.
 
-TWO PROPERTIES THIS MODULE EXISTS TO GUARANTEE:
+PRESERVATION BOUNDARIES:
 
 1. Everything after the closing sentinel is preserved BYTE-IDENTICALLY. Not
    "the tests found there" -- scitex-dev's tail is partly prose, and a
    tests-aware preserver would drop exactly that.
 2. A file that cannot be parsed for a sentinel is REFUSED, never silently
    overwritten. Unparseable is not empty.
+3. Imports before the opening sentinel are preserved as exact AST source
+   segments. Other header statements are refused rather than discarded.
+   The generated header prose and comments are regenerated.
 """
 
 from __future__ import annotations
 
+import io
+import tokenize
 from dataclasses import dataclass
+
+from ._gate_header import read_header_imports
 
 __all__ = [
     "BEGIN_SENTINEL",
@@ -72,9 +79,12 @@ class SplitGate:
     readable: bool
     has_sentinel: bool
     tail: str
+    header_imports: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        if not self.readable and (self.has_sentinel or self.tail):
+        if not self.readable and (
+            self.has_sentinel or self.tail or self.header_imports
+        ):
             raise ValueError(
                 "SplitGate(readable=False) cannot carry a sentinel or a tail: "
                 "nothing was read, so any content here would be invented."
@@ -82,7 +92,7 @@ class SplitGate:
 
 
 def split_at_sentinel(existing: str | None) -> SplitGate:
-    """Split an existing gate into (discarded head, preserved tail).
+    """Read a unique marker pair, supported header imports and untouched tail.
 
     `existing` is the file's current text, or None when it does not exist.
     The returned `tail` includes the closing sentinel line itself, so a
@@ -92,11 +102,31 @@ def split_at_sentinel(existing: str | None) -> SplitGate:
     if existing is None:
         return SplitGate(readable=True, has_sentinel=False, tail="")
 
-    index = existing.find(END_SENTINEL)
-    if index == -1:
+    try:
+        tokens = tokenize.generate_tokens(io.StringIO(existing).readline)
+        markers = [
+            token
+            for token in tokens
+            if token.type == tokenize.COMMENT
+            and token.string in (BEGIN_SENTINEL, END_SENTINEL)
+        ]
+    except (tokenize.TokenError, IndentationError) as exc:
+        raise ValueError("Cannot locate markers in an unparseable gate") from exc
+    if not markers:
         return SplitGate(readable=True, has_sentinel=False, tail="")
-
-    return SplitGate(readable=True, has_sentinel=True, tail=existing[index:])
+    if [token.string for token in markers] != [BEGIN_SENTINEL, END_SENTINEL] or any(
+        token.start[1] != 0 for token in markers
+    ):
+        raise ValueError(
+            "Gate requires one unambiguous, ordered column-zero sentinel pair"
+        )
+    lines = existing.splitlines(keepends=True)
+    begin = sum(map(len, lines[: markers[0].start[0] - 1]))
+    end = sum(map(len, lines[: markers[1].start[0] - 1]))
+    imports = read_header_imports(existing[:begin])
+    return SplitGate(
+        readable=True, has_sentinel=True, tail=existing[end:], header_imports=imports
+    )
 
 
 # EOF

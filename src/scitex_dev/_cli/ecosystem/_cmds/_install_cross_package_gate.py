@@ -34,6 +34,7 @@ from ...audit._project._check_umbrella_dep_and_integration import (
     _collect_cross_package_imports,
     _own_import_name,
 )
+from ._gate_header import render_header_imports
 from ._gate_sentinel import BEGIN_SENTINEL, END_SENTINEL, split_at_sentinel
 from ._write_target import assert_target_is_distribution, resolve_write_target
 
@@ -51,16 +52,16 @@ DEFAULT_GATE_TAIL = (
     '@pytest.mark.parametrize("module_name", CROSS_PACKAGE_IMPORTS)\n'
     "def test_cross_package_import_resolves(module_name):\n"
     "    # Arrange \u2014 skip on the ROOT, and only on the ROOT. PS-140's own\n"
-    "    # prose: banning the skip outright \"would convert a legitimate\n"
+    '    # prose: banning the skip outright "would convert a legitimate\n'
     "    # absence into a hard failure \u2014 a gate that cannot PASS, in place\n"
-    "    # of one that cannot FAIL.\" A lean install where a peer\n"
+    '    # of one that cannot FAIL." A lean install where a peer\n'
     "    # distribution is genuinely absent must SKIP here, not fail.\n"
     "    #\n"
     "    # Two statements ON PURPOSE. The intermediate binding is what\n"
     "    # makes the root/full-path distinction visible to a reader, which\n"
     "    # is the entire point of the shape; inlining it to satisfy a\n"
     "    # checker would make this file harder to read.\n"
-    "    root = module_name.split(\".\")[0]\n"
+    '    root = module_name.split(".")[0]\n'
     "    pytest.importorskip(root)\n"
     "\n"
     "    # Act \u2014 a real import of the FULL dotted path. Not\n"
@@ -77,7 +78,11 @@ DEFAULT_GATE_TAIL = (
 
 
 def render_cross_package_gate(
-    distribution: str, imports: list[str], tail: str | None = None
+    distribution: str,
+    imports: list[str],
+    tail: str | None = None,
+    *,
+    header_imports: tuple[str, ...] = (),
 ) -> str:
     """Source of the generated `test_cross_package_imports.py`.
 
@@ -93,6 +98,10 @@ def render_cross_package_gate(
     is what :func:`split_at_sentinel` returns), so it is concatenated
     directly. None means "no existing file to preserve" and yields
     :data:`DEFAULT_GATE_TAIL`.
+
+    `header_imports` carries admitted AST source segments from before the
+    opening sentinel. The generated header prose is refreshed; custom imports
+    retain their aliases and multiline syntax, with future imports first.
 
     The sentinel pair is emitted around the list and NOWHERE else. Before
     this, the renderer emitted no sentinels at all while the deployed
@@ -138,15 +147,13 @@ def render_cross_package_gate(
         "source on every run and fails on any drift in either direction\n"
         "(a missing entry OR a stale one).\n"
         "\n"
-        "Hand-written cases go BELOW the second sentinel. Everything there\n"
-        "is preserved byte-identically across regeneration; everything\n"
-        "between the sentinels is overwritten.\n"
+        "Hand-written cases go BELOW the second sentinel; that tail is\n"
+        "preserved byte-identically. The header is regenerated, preserving\n"
+        "top-level imports (including aliases and future imports). Only the\n"
+        "import list between the sentinels is generator-owned. Unsupported\n"
+        "header statements or ambiguous markers are refused before writing.\n"
         '"""\n'
-        "\n"
-        "import importlib\n"
-        "\n"
-        "import pytest\n"
-        "\n" + BEGIN_SENTINEL + "\n"
+        "\n" + render_header_imports(header_imports) + BEGIN_SENTINEL + "\n"
         "CROSS_PACKAGE_IMPORTS = [\n" + listed + "\n"
         "]\n" + (DEFAULT_GATE_TAIL if tail is None else tail)
     )
@@ -157,9 +164,7 @@ def register(ecosystem):
         "install-cross-package-gate",
         cls=SpecCommand,
         help_spec=CliHelp(
-            summary=(
-                "Install the PS-140 cross-package import gate for DISTRIBUTION."
-            ),
+            summary=("Install the PS-140 cross-package import gate for DISTRIBUTION."),
             description=(
                 "Materialises "
                 "`tests/integration/test_cross_package_imports.py` "
@@ -174,7 +179,12 @@ def register(ecosystem):
                 "in either direction, so a stale entry is a violation too. "
                 "Unregistered distributions are supported from their own "
                 "Git checkout or with --path; the target's project.name "
-                "must match DISTRIBUTION before any file is written."
+                "must match DISTRIBUTION before any file is written. "
+                "Existing gates require one unambiguous sentinel pair. "
+                "The header is regenerated with its top-level imports "
+                "preserved; unsupported header statements are refused. "
+                "The handwritten tail stays byte-identical unless "
+                "--repair-tail is explicitly selected."
             ),
             examples=(
                 Example(
@@ -194,7 +204,7 @@ def register(ecosystem):
     )
     @click.argument("distribution")
     @click.option(
-        "--force", is_flag=True, help="Overwrite an existing gate file."
+        "--force", is_flag=True, help="Regenerate a supported existing gate file."
     )
     @click.option(
         "--dry-run",
@@ -294,8 +304,9 @@ def register(ecosystem):
         existing: str | None = None
         if target.exists():
             try:
-                existing = target.read_text()
-            except OSError as exc:
+                with target.open(encoding="utf-8", newline="") as stream:
+                    existing = stream.read()
+            except (OSError, UnicodeError) as exc:
                 click.echo(
                     f"error: {target} exists but could not be read ({exc}). "
                     "Refusing to overwrite — an unreadable gate is not an "
@@ -305,15 +316,14 @@ def register(ecosystem):
                 )
                 raise SystemExit(1)
 
-        split = split_at_sentinel(existing)
+        try:
+            split = split_at_sentinel(existing)
+        except ValueError as exc:
+            raise click.ClickException(str(exc)) from exc
         if existing is not None and not split.has_sentinel:
-            click.echo(
-                f"note: {target} carries no '{END_SENTINEL}' marker, so no "
-                "hand-written region is delimited in it. Anything below the "
-                "generated list is REPLACED by this run. The rewritten file "
-                "gains the sentinel pair, so future regenerations preserve "
-                "that region.",
-                err=True,
+            raise click.ClickException(
+                f"{target} has no sentinel pair; refusing to guess which "
+                "header or handwritten content may be replaced"
             )
 
         # PS-140's defect lives in the PRESERVED half, so the only way to fix
@@ -340,7 +350,9 @@ def register(ecosystem):
                 err=True,
             )
 
-        content = render_cross_package_gate(distribution, imports, tail=tail)
+        content = render_cross_package_gate(
+            distribution, imports, tail=tail, header_imports=split.header_imports
+        )
         init = target.parent / "__init__.py"
 
         # Show WHAT was computed, not just where it will go. The reported
@@ -422,14 +434,12 @@ def register(ecosystem):
         else:
             preserved = ""
         click.echo(
-            f"wrote {target} ({len(imports)} cross-package import(s)"
-            f"{preserved})"
+            f"wrote {target} ({len(imports)} cross-package import(s)" f"{preserved})"
         )
 
         if not init.exists():
-            init.write_text(
-                '"""Integration tests — cross-package runtime gates."""\n'
-            )
+            init.write_text('"""Integration tests — cross-package runtime gates."""\n')
             click.echo(f"wrote {init}")
+
 
 # EOF
