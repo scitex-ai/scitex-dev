@@ -14,6 +14,12 @@ projection, never a source. Do not repair package content by editing
 
 ## Runtime contract
 
+For installed discovery, `discover_installed_skills()` reads registered providers
+from the interpreter running Dev and applies owner opt-outs. See
+[12_config.md](12_config.md) for configuration and precedence. The explicit-root
+API below is for source/harness adapters; it does not broaden installed discovery
+to every checkout.
+
 ```python
 from pathlib import Path
 

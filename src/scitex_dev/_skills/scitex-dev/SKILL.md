@@ -35,7 +35,7 @@ interfaces:
 ### Workflows (10–19)
 - [10_result-types.md](10_result-types.md) — Result envelope, ErrorCode, @supports_return_as, SideEffect
 - [11_cli-mcp-utils.md](11_cli-mcp-utils.md) — Adapters: CLI exit codes, MCP JSON, option factories
-- [12_config.md](12_config.md) — DevConfig, HostConfig, load_config, create_default_config
+- [12_config.md](12_config.md) — Environment-local discovery, skills/MCP opt-outs, override precedence and skill destinations
 - [13_versions.md](13_versions.md) — list_versions, check_versions, get_mismatches, fix_mismatches
 - [14_ecosystem.md](14_ecosystem.md) — Package registry, sync_local, sync_all, sync_host, pull_local
 - [15_rename.md](15_rename.md) — bulk_rename, preview_rename, execute_rename
