@@ -17,6 +17,22 @@ def _original(command):
     return getattr(command, "_audit_original_command", command)
 
 
+def helper_binding(command):
+    """Reject stale/copied metadata without calling or authenticating Python.
+
+    Identity associates the record with the actual factory callback only; it
+    is not cryptographic provenance or isolation from hostile in-process code.
+    """
+    binding = getattr(command, "_deprecated_alias_binding", None)
+    if (
+        type(binding) is _AliasBinding
+        and binding.callback is vars(command).get("callback")
+        and binding.callback is vars(_original(command)).get("callback")
+    ):
+        return binding
+    return None
+
+
 def _nodes(root):
     """Retain shared-object bindings while bounding malformed command graphs."""
     pending = [(root, ())]
@@ -134,9 +150,9 @@ def _path(start, parts):
 
 def resolve_binding(root, command, parent, *, require_warn=True, _seen=()):
     """Return a uniquely bound effective target, never an alternate rescue path."""
-    binding = getattr(command, "_deprecated_alias_binding", None)
+    binding = helper_binding(command)
     if (
-        type(binding) is not _AliasBinding
+        binding is None
         or (require_warn and binding.phase != "warn")
         or id(command) in _seen
         or len(_seen) >= 32

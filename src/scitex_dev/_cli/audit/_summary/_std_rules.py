@@ -354,8 +354,9 @@ def check_deprecated_alias_metadata(
                     Violation(
                         full,
                         "§5",
-                        f"deprecated alias target {target!r} not found in "
-                        f"the command tree — the alias forwards nowhere",
+                        f"deprecated alias target {target!r} is unresolved or "
+                        "unverifiable in the effective command tree "
+                        "(including fixed arguments)",
                     )
                 )
         if isinstance(cmd, click.Group):
@@ -367,16 +368,18 @@ def check_deprecated_alias_metadata(
 
 def _alias_reference_exists(root, parent, command, target):
     """Helper routes prove forwarding; other metadata only names a reference."""
-    from ...._ecosystem.click_compat import _AliasBinding
-    from ._alias_binding import resolve_binding
+    from ._alias_binding import helper_binding, resolve_binding
 
-    binding = getattr(command, "_deprecated_alias_binding", None)
-    if type(binding) is _AliasBinding and binding.phase == "error":
+    declared = getattr(command, "_deprecated_alias_binding", None)
+    binding = helper_binding(command)
+    if declared is not None and binding is None:
+        return False
+    if binding is not None and binding.phase == "error":
         # Error-phase helpers redirect; their display is a reference, not
         # forwarding input (the legacy helper need not have a live route).
         return _target_exists(root, parent, target)
     if binding is not None:
-        return isinstance(binding, _AliasBinding) and resolve_binding(
+        return resolve_binding(
             root, command, parent, require_warn=False
         ) is not None
     return _target_exists(root, parent, target)

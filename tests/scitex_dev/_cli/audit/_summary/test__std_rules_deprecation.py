@@ -96,7 +96,7 @@ class TestDeprecatedAliasStaticMetadata:
         check_deprecated_alias_metadata(root, "demo", out)
         # Assert
         assert any(
-            v.rule == "§5" and "not found in" in v.message and "old-thing" in v.command
+            v.rule == "§5" and "unresolved or unverifiable" in v.message and "old-thing" in v.command
             for v in out
         )
 

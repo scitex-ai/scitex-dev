@@ -69,6 +69,7 @@ class _AliasBinding:
     group: click.Group
     target: click.Command | str | tuple[str, ...]
     phase: str
+    callback: object
 
 
 def _marker_path(old_name: str) -> Path:
@@ -272,6 +273,6 @@ def deprecated_alias(
         "remove_in": remove_in,
         "phase": phase,
     }
-    cmd._deprecated_alias_binding = _AliasBinding(group, target, phase)
+    cmd._deprecated_alias_binding = _AliasBinding(group, target, phase, cmd.callback)
     group.add_command(cmd, old_name)
     return cmd

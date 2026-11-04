@@ -233,7 +233,10 @@ def test_miswired_string_cannot_be_rescued_by_valid_display():
     # Assert
     assert (
         target,
-        any(v.command == "fixture old" and "not found" in v.message for v in out),
+        any(
+            v.command == "fixture old" and "unresolved or unverifiable" in v.message
+            for v in out
+        ),
     ) == (None, True)
 
 
@@ -403,3 +406,72 @@ def test_binding_uses_frozen_effective_group_not_mutated_raw_owner():
     target = resolve_binding(view, alias, view)
     # Assert
     assert target is leaf
+
+
+@pytest.mark.parametrize("mode", ["copied", "replaced"])
+@pytest.mark.parametrize("phase", ["warn", "error"])
+def test_factory_binding_cannot_be_reused_for_another_callback(mode, phase):
+    # Arrange
+    root, _dev, _leaf, alias = _tree(phase=phase)
+    custom = click.Command("list-python-apis", callback=_poison, hidden=True)
+    custom._deprecated_alias = dict(alias._deprecated_alias)
+    custom._deprecated_alias_binding = alias._deprecated_alias_binding
+    choices = {"copied": custom, "replaced": alias}
+    command = choices[mode]
+    command.callback = _poison
+    root.commands["list-python-apis"] = command
+    out = []
+    # Act
+    view = snapshot_commands(root, "fixture").root
+    check_deprecated_alias_metadata(view, "fixture", out)
+    findings = _json_findings(view)
+    # Assert
+    assert (
+        len(findings),
+        any(v.command == "fixture list-python-apis" and v.rule == "§5" for v in out),
+        resolve_binding(view, command, view),
+    ) == (1, True, None)
+
+
+def test_normal_command_copy_retains_factory_callback_association():
+    # Arrange
+    from copy import copy
+
+    root, _dev, leaf, alias = _tree()
+    cloned = copy(alias)
+    root.commands["list-python-apis"] = cloned
+    # Act
+    view = snapshot_commands(root, "fixture").root
+    target = resolve_binding(view, cloned, view)
+    findings = _json_findings(view)
+    # Assert
+    assert (target is leaf, findings) == (True, [])
+
+
+@pytest.mark.parametrize("mode", ["custom-reference", "error-reference"])
+def test_unverifiable_reference_message_does_not_invent_forwarding(mode):
+    # Arrange
+    root = _completion()
+    factories = {
+        "custom-reference": lambda: click.Command("old", hidden=True),
+        "error-reference": lambda: deprecated_alias(
+            root, "old", target="missing", phase="error", remove_in="9"
+        ),
+    }
+    command = factories[mode]()
+    command._deprecated_alias = {
+        "target": "install --shell invalid",
+        "phase": "error" if mode == "error-reference" else "warn",
+        "remove_in": "9",
+    }
+    root.add_command(command)
+    out = []
+    # Act
+    check_deprecated_alias_metadata(root, "fixture", out)
+    # Assert
+    assert (
+        len(out),
+        out[0].rule,
+        "unresolved or unverifiable" in out[0].message,
+        "forwards nowhere" in out[0].message,
+    ) == (1, "§5", True, False)
