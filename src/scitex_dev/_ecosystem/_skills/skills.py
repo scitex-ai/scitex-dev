@@ -284,18 +284,23 @@ def list_skills(
 def get_skill(
     package: str,
     name: Optional[str] = None,
+    *,
+    owner: Optional[str] = None,
 ) -> Optional[str]:
     """Get the content of a skill file.
 
     Args:
-        package: Package name (e.g. "scitex-stats")
+        package: Registered skill namespace (e.g. "scitex-app"), not its owner.
         name: Skill name (e.g. "test-selection"). If None, returns SKILL.md.
+        owner: Owning distribution from list_skills entries. No cross-owner fallback.
 
     Returns:
         Skill content as string, or None if not found.
     """
     package = normalize_distribution_name(package)
-    packages = enabled_skill_packages(discover_skill_packages(package=package))
+    packages = enabled_skill_packages(
+        discover_skill_packages(package=package, owner=owner)
+    )
     module_name = packages.get(package)
     if module_name is None:
         return None
@@ -346,10 +351,12 @@ def get_skill(
         return None
 
 
-def get_skill_dir(package: str) -> Optional[Path]:
+def get_skill_dir(package: str, *, owner: Optional[str] = None) -> Optional[Path]:
     """Get the skills directory path for a package."""
     package = normalize_distribution_name(package)
-    packages = enabled_skill_packages(discover_skill_packages(package=package))
+    packages = enabled_skill_packages(
+        discover_skill_packages(package=package, owner=owner)
+    )
     module_name = packages.get(package)
     if module_name is None:
         return None

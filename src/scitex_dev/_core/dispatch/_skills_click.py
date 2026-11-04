@@ -73,13 +73,14 @@ def skills_click_group(package: str, name: str = "skills"):
     )
     @click.argument("skill_name", required=False, default=None)
     @click.option("--json", "as_json", is_flag=True, help="JSON output")
-    def skills_get(skill_name, as_json):
-        if skill_name is None:
+    @click.option("--owner", default=None, help="Owning distribution from skill discovery")
+    def skills_get(skill_name, as_json, owner=None):
+        if skill_name is None and owner is None:
             # No name given — show available skills
             ns = argparse.Namespace(as_json=as_json)
             _skills_list(ns, package=package)
             return
-        ns = argparse.Namespace(name=skill_name, as_json=as_json)
+        ns = argparse.Namespace(name=skill_name, as_json=as_json, owner=owner)
         _skills_get(ns, package=package)
 
     @skills_grp.command(

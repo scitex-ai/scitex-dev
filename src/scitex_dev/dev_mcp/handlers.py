@@ -372,11 +372,14 @@ async def skills_list_handler(
 async def skills_get_handler(
     package: str,
     name: str,
+    owner: str | None = None,
 ) -> str:
-    """Fetch the full Markdown of one skill page — e.g. `package='scitex-io', name='01_save-and-load'` returns that file's contents. Use whenever the user asks "show me the scitex-io quick-start skill", "read the figrecipe composition skill", "get the claims skill page from scitex-writer", or is diving into a specific guide. Pair with `skills_list_handler` to discover names."""
+    """Fetch the full Markdown of one skill page — e.g. `package='scitex-io', name='01_save-and-load'` returns that file's contents. Use whenever the user asks "show me the scitex-io quick-start skill", "read the figrecipe composition skill", "get the claims skill page from scitex-writer", or is diving into a specific guide. Pair with `skills_list_handler` to discover names and pass the listed distribution `owner` to retain namespace identity."""
     from .._ecosystem._skills.skills import get_skill
 
-    return wrap_as_mcp(get_skill, idempotent=True, package=package, name=name)
+    return wrap_as_mcp(
+        get_skill, idempotent=True, package=package, name=name, owner=owner
+    )
 
 
 # EOF
