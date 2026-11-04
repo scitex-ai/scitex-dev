@@ -10,6 +10,20 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.62.15] - 2026-11-05
+
+- Resolve independent CLI, MCP and skills aggregation preferences through one
+  immutable exposure snapshot, including configured owners absent from the
+  curated ecosystem registry. Keep installed declarations separate from
+  operator selection, authorization and runtime readiness.
+- Add CLI preference controls using the existing configuration and knob state,
+  with explicit config/state path diagnostics, strict CLI booleans and visible
+  malformed-input refusal. Preserve supported configuration precedence and
+  unrelated surface settings; leave raw `cli list` metadata unchanged.
+- Document qualified umbrella controls, standalone bootstrap/recovery and the
+  existing non-interactive toggle behavior without implying consent enforcement
+  or automatic host adoption of a new preference.
+
 ## [0.62.14] - 2026-11-04
 
 - Discover installed CLI exposure through independent metadata declarations,
