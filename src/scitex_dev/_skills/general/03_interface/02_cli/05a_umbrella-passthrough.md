@@ -103,3 +103,18 @@ For each `scitex-<pkg>` (or branded sibling) the maintainer must:
 - [05_pass-through.md](05_pass-through.md) — verbatim forwarding to **upstream** binaries (`git`, `uv`). Different concept.
 - MCP equivalent: [03_interface/03_mcp/02_server-registration.md](../03_mcp/02_server-registration.md) — `safe_mount(..., namespace="<short>")`.
 - Source escalation: `GITIGNORED/ESCALATION.md` (2026-05-06, scitex-dataset audit).
+
+## Installed command eligibility
+
+Declare leaf CLI exposure through `[project.entry-points."scitex.cli"]`:
+`name = "owned_package.cli:main"`, or `name = "none"` for explicit CLI opt-out.
+This is independent of Python, MCP and skills. Hosts use the public metadata-only
+`scitex_dev.cli_providers.list_cli_providers`; they must reserve opted-out and
+invalid names, refuse all ambiguous names, and validate callability at invocation.
+Canonical legacy console evidence is labeled `legacy_unknown`, never verified
+CLI support. See `docs/cli-provider-metadata.md` for ownership proof and migration.
+
+Use `deprecated_alias(..., target=("dev", "skills"), ...)` for a nested hidden
+alias. Tuple paths resolve lazily through effective `get_command` policy and
+forward target help; do not create a second alias dispatcher or split arbitrary
+space-containing strings into command paths.
