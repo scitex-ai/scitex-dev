@@ -94,6 +94,7 @@ def snapshot_commands(
                     "group did not produce an independent same-class view",
                 )
                 return None
+            frozen._audit_original_command = command
             frozen.commands = {}
             frozen.list_commands = MethodType(_names, frozen)
             frozen.get_command = MethodType(_command, frozen)
