@@ -10,6 +10,20 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.62.12] - 2026-11-04
+
+- Reuse FastMCP's existing selective discovery transform after host selection
+  and authorization. Add pure caller-selected context metadata accounting with
+  explicit ownership, Unicode/UTF-8 sizes, separate raw/serialized instruction
+  sizes and unknown token/client totals. Expose the same report through Python,
+  `context measure` and `dev_context_measure`, without reading skill bodies or
+  client state, and document the source-versus-installed/runtime limits.
+- Restore the public documentation/skills verifier as a read-only static check
+  of selected Markdown Python fences against local source. Remove user-skill
+  exports, audited-source execution and suppressed failures. Report checked
+  scope, unverified references and limitations explicitly; a literal README
+  version is optional and complete documentation drift coverage is not claimed.
+
 ## [0.62.11] - 2026-11-04
 
 - Preserve explicit distribution ownership in Python, CLI and MCP skill reads.
