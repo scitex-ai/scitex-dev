@@ -119,3 +119,83 @@ def test_skills_backing_module_is_absent_under_core():
     found = importlib.util.find_spec("scitex_dev._core._ecosystem")
     # Assert
     assert found is None
+
+
+def _owner_parser(namespace):
+    from scitex_dev.cli import register_skills_subcommand
+
+    parser = argparse.ArgumentParser()
+    register_skills_subcommand(parser.add_subparsers(), package=namespace)
+    return parser
+
+
+def test_bound_argparse_default_retains_ambiguity_refusal(colliding_skill_providers):
+    # Arrange
+    import pytest
+    from scitex_dev.skill_registry import SkillRegistryError
+
+    namespace, _ = colliding_skill_providers
+    args = _owner_parser(namespace).parse_args(["skills", "get", "SKILL"])
+    # Act
+    # Assert
+    with pytest.raises(SkillRegistryError, match="ambiguous skill namespace"):
+        args.func(args)
+
+
+def test_bound_argparse_owner_read_has_no_imports(colliding_skill_providers, capsys):
+    # Arrange
+    import json
+
+    namespace, marker = colliding_skill_providers
+    args = _owner_parser(namespace).parse_args(
+        ["skills", "get", "SKILL", "--owner", "scitex-adapter-current", "--json"]
+    )
+    # Act
+    args.func(args)
+    # Assert
+    assert (
+        json.loads(capsys.readouterr().out)["content"], marker.exists(),
+        (marker.parent / "state").exists(),
+    ) == ("# Current owner\n", False, False)
+
+
+def test_bound_argparse_owner_without_name_reads_index(colliding_skill_providers, capsys):
+    # Arrange
+    import json
+
+    namespace, _ = colliding_skill_providers
+    args = _owner_parser(namespace).parse_args(
+        ["skills", "get", "--owner", "scitex-adapter-archived", "--json"]
+    )
+    # Act
+    args.func(args)
+    # Assert
+    assert json.loads(capsys.readouterr().out)["content"] == "# Archived owner\n"
+
+
+def test_bound_argparse_wrong_owner_refuses_without_import(colliding_skill_providers):
+    # Arrange
+    namespace, marker = colliding_skill_providers
+    args = _owner_parser(namespace).parse_args(
+        ["skills", "get", "SKILL", "--owner", "scitex-adapter-missing", "--json"]
+    )
+    exit_code = None
+    # Act
+    try:
+        args.func(args)
+    except SystemExit as exc:
+        exit_code = exc.code
+    # Assert
+    assert (exit_code, marker.exists()) == (2, False)
+
+
+def test_legacy_namespace_without_owner_keeps_named_read(capsys):
+    # Arrange
+    import json
+    from scitex_dev._core.dispatch._skills_argparse import _skills_get
+
+    args = argparse.Namespace(name="SKILL", as_json=True)
+    # Act
+    _skills_get(args, package="scitex-dev")
+    # Assert
+    assert json.loads(capsys.readouterr().out)["package"] == "scitex-dev"

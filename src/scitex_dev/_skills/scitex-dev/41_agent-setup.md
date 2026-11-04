@@ -26,6 +26,38 @@ not verified live endpoints. Python consumers use `list_doc_providers()`; rows
 include canonical distribution names, targets, versions and summaries, not host
 paths. Keep missing providers and duplicate ownership visible in browser views.
 
+### Preserve namespace ownership when reading
+
+A skill namespace can differ from its distribution: SDK owns `scitex-app` and
+`scitex-ui`. Keep each listing entry's `owner` when fetching its content:
+
+```python
+from scitex_dev.ecosystem import get_skill, list_skills
+
+listing = list_skills(package="scitex-sdk")
+for namespace, entries in listing.items():
+    for entry in entries:
+        content = get_skill(namespace, entry["name"], owner=entry["owner"])
+```
+
+```bash
+scitex-dev dev skills get scitex-app SKILL --owner scitex-sdk --json
+```
+
+MCP `dev_skills_get` accepts the same optional `owner` argument. Dev 0.62.11 adds
+`owned-skill-read-v1` to `scitex_dev.skill_registry.INSTALL_CAPABILITIES`.
+Consumers requiring this behavior must check that capability in their actual
+interpreter. With an explicit owner, discovery stays within that distribution;
+a missing, disabled or undeclared namespace returns no content. There is no
+fallback to another owner, including when its resource directory exists on disk.
+Without `owner`, ambiguous namespaces still raise `SkillRegistryError`.
+`--owner` applies to a single namespace; the CLI's `all` mode retains its global
+ambiguity refusal. Shared `scitex_dev.cli` Click/argparse skill factories expose
+the same option on their namespace-bound `skills get` commands. These shared
+commands keep their existing no-name listing when no owner is supplied; with an
+explicit owner and no name they read that namespace's SKILL index. Ownership
+selection does not relax resource containment.
+
 ## MCP setup
 
 ```bash

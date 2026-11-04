@@ -124,11 +124,13 @@ async def dev_skills_list(package: str | None = None) -> str:
 
 
 @mcp.tool()
-async def dev_skills_get(package: str, name: str) -> str:
-    """Get content of a specific skill from a package."""
+async def dev_skills_get(
+    package: str, name: str, owner: str | None = None
+) -> str:
+    """Get a skill namespace; pass its listed distribution owner to retain identity."""
     from ..dev_mcp.handlers import skills_get_handler
 
-    return await skills_get_handler(package=package, name=name)
+    return await skills_get_handler(package=package, name=name, owner=owner)
 
 
 @mcp.tool()

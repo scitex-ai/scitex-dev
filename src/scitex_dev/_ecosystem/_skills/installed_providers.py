@@ -14,7 +14,7 @@ class SkillPackages(dict):
         self.owners: dict[str, str] = {}
 
 
-def discover_skill_packages(*, package=None, path=None) -> dict[str, str]:
+def discover_skill_packages(*, package=None, owner=None, path=None) -> dict[str, str]:
     """Read skill entry points without importing their provider modules.
 
     One distribution may legitimately expose several skill namespaces. Duplicate
@@ -22,9 +22,15 @@ def discover_skill_packages(*, package=None, path=None) -> dict[str, str]:
     """
     from ..._core.provider_metadata import read_provider_metadata
 
+    if owner is not None:
+        from ..._core.names import normalize_distribution_name
+
+        owner = normalize_distribution_name(owner)
     result = SkillPackages()
     enabled = _enabled_state()
     providers = read_provider_metadata("scitex_dev.skills", path=path)
+    if owner is not None:
+        providers = tuple(item for item in providers if item.distribution == owner)
     selected_owners = (
         {
             item.distribution

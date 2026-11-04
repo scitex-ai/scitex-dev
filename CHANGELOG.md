@@ -10,6 +10,18 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.62.11] - 2026-11-04
+
+- Preserve explicit distribution ownership in Python, CLI and MCP skill reads.
+  Scope metadata discovery before namespace collision checks, refuse cross-owner
+  fallback, retain opt-outs and resource containment, and keep unscoped ambiguity
+  refusal. Expose the `owned-skill-read-v1` capability for consumer adapters.
+
+- Align the installation skill with base CLI/MCP runtime dependencies and the
+  declared `all`/`dev`/`docs` extras. Remove retired extras, the obsolete clone
+  URL and a hardcoded historical version; distinguish catalog checks from client
+  and protocol readiness.
+
 ## [0.62.10] - 2026-11-03
 
 - Add inert leaf documentation-provider metadata and the normalized
