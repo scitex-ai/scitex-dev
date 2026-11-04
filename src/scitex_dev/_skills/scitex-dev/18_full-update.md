@@ -117,10 +117,15 @@ Use [39_interface-audit.md](39_interface-audit.md) for source audits, actual
 CLI help and skill discovery. Verify documented imports and call signatures
 without executing release operations.
 
-The legacy root export `verify_docs_and_skills` currently points to a removed
-module. Its internal predecessor also exports user skills while checking and
-suppresses some failures. Do not use it as a read-only or complete documentation
-verification gate; that helper needs a separate implementation repair.
+`from scitex_dev import verify_docs_and_skills` provides a read-only static
+check of selected Markdown Python fences against local `src/` modules and
+direct definitions. It defaults to README plus packaged `_skills` Markdown;
+pass `documents=[Path("docs/guide.md")]` for an explicit documentation scope.
+Inspect `checked_scope`, `unverified`, `issues` and `limitations`: dynamic
+exports, signatures, runtime results and other interfaces remain unverified.
+It never exports skills, imports audited source or executes examples. An
+`incomplete` report is not a full drift pass; even `ok` covers only the stated
+static scope. See `docs/documentation-verification.md` in the source checkout.
 
 Check before pushing:
 - Skill files reference functions that actually exist

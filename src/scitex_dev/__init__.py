@@ -172,7 +172,7 @@ _LAZY_ATTRS: dict[str, str] = {
     "deploy_scitex_hub": "_release.deploy",
     "verify_production": "_release.deploy",
     # skills
-    "verify_docs_and_skills": "_docs.skills",
+    "verify_docs_and_skills": "_ecosystem._skills.skills_verify",
     # test_runner
     "TestConfig": "test_runner",
     "fetch_hpc_result": "test_runner",
