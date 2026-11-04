@@ -34,6 +34,7 @@ packages:
     import_name: scitex
     skills_enabled: true
     mcp_enabled: true
+    cli_enabled: true
   - name: figrecipe
     local_path: ~/proj/figrecipe
     pypi_name: figrecipe

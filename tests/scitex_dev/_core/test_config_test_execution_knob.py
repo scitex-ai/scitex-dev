@@ -101,7 +101,7 @@ def test_load_knob_state_includes_test_execution_section(tmp_path):
     # Act
     state = _load_knob_state(state_file)
     # Assert
-    assert state == {"skills": {}, "mcp": {}, "test_execution": {}}
+    assert state == {"skills": {}, "mcp": {}, "cli": {}, "test_execution": {}}
 
 
 def test_get_test_execution_mode_reads_resolved_package():

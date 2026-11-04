@@ -63,8 +63,12 @@ a host may separately own explicit wrappers without claiming a leaf console.
 Consumers must reserve every named non-eligible row, refuse ambiguous names,
 apply independent host naming/retirement policy, and load targets only on
 invocation. A hidden deprecated alias must resolve the effective canonical
-command, so an alias cannot resurrect a disabled target. No new config switch
-or shared-interface enablement is introduced by this reader.
+command, so an alias cannot resurrect a disabled target. The reader never applies operator configuration. The separate
+`scitex_dev.exposure.load_exposure_policy()` snapshot supplies independent CLI,
+MCP and skills preferences; hosts must combine CLI eligibility with that policy.
+`scitex-dev cli status/enable/disable` manages the CLI preference using existing
+configuration/state files. This does not revoke standalone binaries or enable
+other interfaces.
 
 Repeated searches of the same physical metadata origin are deduplicated. A
 setuptools editable source egg-info shadow is collapsed only when its canonical
