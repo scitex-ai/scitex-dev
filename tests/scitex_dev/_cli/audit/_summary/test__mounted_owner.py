@@ -67,7 +67,7 @@ def _install(root, name, namespace, dictionary=_DICT, variant="valid", loaded=Tr
         rows = rows[1:]
     if variant == "unhashed":
         rows[-1] = f"{namespace}/_cli_audit_dict.yaml,,"
-    (info / "RECORD").write_text("\n".join(rows) + f"\n{info.name}/RECORD,,\n")
+    (info / "RECORD").write_text("\n".join([*rows, f"{info.name}/RECORD,,"]) + "\n")
     if variant == "no-record":
         (info / "RECORD").unlink()
     if variant == "tampered":
@@ -351,3 +351,226 @@ def test_public_snapshot_preserves_recorded_owner_under_callback_free_mount(
         _unknown(out),
         "scitex-owner-control" in owners.sources[0],
     ) == ([], None, True, True, "verified", [], True)
+
+
+def _additional_claim(root, name, namespace, *, version="0.0.0", suffix="", owned=True):
+    """Write another real metadata claimant without loading its entry point."""
+    info = root / f"{name.replace('-', '_')}-{version}{suffix}.dist-info"
+    info.mkdir()
+    (info / "METADATA").write_text(
+        f"Metadata-Version: 2.1\nName: {name}\nVersion: {version}\n"
+    )
+    (info / "entry_points.txt").write_text(
+        f"[console_scripts]\n{name} = {namespace}:cli\n"
+    )
+    rows = []
+    if owned:
+        source = root / namespace / "__init__.py"
+        rows.append(_record(f"{namespace}/__init__.py", source.read_bytes()))
+    (info / "RECORD").write_text("\n".join([*rows, f"{info.name}/RECORD,,"]) + "\n")
+    return info
+
+
+@pytest.mark.parametrize(
+    "variant", ["valid", "unrecorded", "tampered", "missing", "escape", "unhashed"]
+)
+def test_foreign_entrypoint_claim_cannot_override_actual_source_owner(
+    installation, tmp_path, variant
+):
+    # Arrange
+    peer = _install(
+        installation, "scitex-owner-control", "owned_cli_control", variant=variant
+    )
+    _additional_claim(
+        installation, "scitex-foreign-claim", "owned_cli_control", owned=False
+    )
+    owners = MountedOwners()
+    # Act
+    owner = owners.owner(peer)
+    parent, root = _parent(tmp_path, _DICT)
+    root.add_command(peer, "control")
+    out = []
+    with use_dict_root(parent):
+        _walk(root, [], out, "umbrella", owners=owners)
+    # Assert
+    assert (
+        owner.distribution,
+        owner.ambiguous,
+        owner.source_record_owned,
+        len(owner.unowned_source_claims),
+        _unknown(out),
+        any("unowned entry-point source claim" in line for line in owners.sources),
+    ) == (
+        "scitex-owner-control",
+        False,
+        True,
+        1,
+        [] if variant == "valid" else ["umbrella control zorbulate-result"],
+        True,
+    )
+
+
+@pytest.mark.parametrize("version,suffix", [("1.0.0", ""), ("0.0.0", "-other")])
+def test_distinct_physical_metadata_owners_remain_ambiguous(
+    installation, version, suffix
+):
+    # Arrange
+    peer = _install(installation, "scitex-owner-control", "owned_cli_control")
+    _additional_claim(
+        installation,
+        "scitex-owner-control",
+        "owned_cli_control",
+        version=version,
+        suffix=suffix,
+    )
+    # Act
+    owner = MountedOwners().owner(peer)
+    # Assert
+    assert (
+        owner.ambiguous,
+        owner.resource,
+        "distinct metadata" in owner.reason,
+        version in owner.reason,
+    ) == (True, None, True, True)
+
+
+def test_two_source_owners_cannot_be_selected_by_dictionary_validity(installation):
+    # Arrange
+    peer = _install(installation, "scitex-owner-control", "owned_cli_control")
+    _additional_claim(installation, "scitex-owner-second", "owned_cli_control")
+    # Act
+    owner = MountedOwners().owner(peer)
+    # Assert
+    assert (owner.ambiguous, owner.resource) == (True, None)
+
+
+def test_repeated_same_physical_metadata_origin_deduplicates(installation):
+    # Arrange
+    peer = _install(installation, "scitex-owner-control", "owned_cli_control")
+    info = installation / "scitex_owner_control-0.0.0.dist-info"
+    (installation / "same_origin-0.0.0.dist-info").symlink_to(
+        info, target_is_directory=True
+    )
+    # Act
+    owner = MountedOwners().owner(peer)
+    # Assert
+    assert (owner.ambiguous, owner.resource is not None, owner.identity[-1]) == (
+        False,
+        True,
+        str(info.resolve()),
+    )
+
+
+class _OriginDistribution(importlib.metadata.Distribution):
+    """Real metadata reader with an unsupported private origin capability."""
+
+    def __init__(self, delegate, origin):
+        self.delegate = delegate
+        if origin is not None:
+            self._path = origin
+
+    def read_text(self, filename):
+        return self.delegate.read_text(filename)
+
+    def locate_file(self, path):
+        return self.delegate.locate_file(path)
+
+
+@pytest.mark.parametrize("origin_kind", ["missing", "nonpath", "unresolvable", "file"])
+def test_unknown_metadata_origin_blocks_parent_dictionary(
+    installation, tmp_path, origin_kind
+):
+    # Arrange
+    peer = _install(installation, "scitex-owner-control", "owned_cli_control")
+    owners = MountedOwners()
+    key = id(peer.callback)
+    ep, module, dist = owners._entries[key][0]
+    origins = {
+        "missing": None,
+        "nonpath": str(installation),
+        "unresolvable": installation / "absent.dist-info",
+        "file": installation / "owned_cli_control/__init__.py",
+    }
+    owners._entries[key] = [
+        (ep, module, _OriginDistribution(dist, origins[origin_kind]))
+    ]
+    # Act
+    owner = owners.owner(peer)
+    parent, root = _parent(tmp_path, _DICT)
+    root.add_command(peer, "control")
+    out = []
+    with use_dict_root(parent):
+        _walk(root, [], out, "umbrella", owners=owners)
+    # Assert
+    assert (
+        owner.resource,
+        owner.source_record_owned,
+        "metadata origin unavailable" in owner.reason,
+        "umbrella control zorbulate-result" in _unknown(out),
+    ) == (None, False, True, True)
+
+
+def test_distinct_unknown_metadata_objects_do_not_collapse(installation):
+    # Arrange
+    peer = _install(installation, "scitex-owner-control", "owned_cli_control")
+    owners = MountedOwners()
+    key = id(peer.callback)
+    ep, module, dist = owners._entries[key][0]
+    owners._entries[key] = [
+        (ep, module, _OriginDistribution(dist, None)),
+        (ep, module, _OriginDistribution(dist, None)),
+    ]
+    # Act
+    owner = owners.owner(peer)
+    # Assert
+    assert (owner.ambiguous, owner.resource, "unavailable:" in owner.reason) == (
+        True,
+        None,
+        True,
+    )
+
+
+@pytest.mark.parametrize("entry_order", [(0, 1), (1, 0)])
+def test_same_origin_rejected_forwarder_cannot_erase_source_owner(
+    installation, entry_order
+):
+    # Arrange
+    peer = _install(installation, "scitex-owner-control", "owned_cli_control")
+    (installation / "owned_cli_control/forwarder.py").write_text("from . import cli\n")
+    importlib.import_module("owned_cli_control.forwarder")
+    info = installation / "scitex_owner_control-0.0.0.dist-info"
+    entries = [
+        "owned = owned_cli_control:cli",
+        "forward = owned_cli_control.forwarder:cli",
+    ]
+    entries = [entries[index] for index in entry_order]
+    (info / "entry_points.txt").write_text(
+        "[console_scripts]\n" + "\n".join(entries) + "\n"
+    )
+    # Act
+    owner = MountedOwners().owner(peer)
+    # Assert
+    assert (
+        owner.ambiguous,
+        owner.resource is not None,
+        owner.source_record_owned,
+        len(owner.unowned_source_claims),
+    ) == (False, True, True, 1)
+
+
+def test_ambiguous_source_owners_preserve_foreign_claim_diagnostics(installation):
+    # Arrange
+    peer = _install(installation, "scitex-owner-control", "owned_cli_control")
+    _additional_claim(installation, "scitex-owner-second", "owned_cli_control")
+    _additional_claim(
+        installation, "scitex-foreign-claim", "owned_cli_control", owned=False
+    )
+    # Act
+    owner = MountedOwners().owner(peer)
+    # Assert
+    assert (
+        owner.ambiguous,
+        owner.resource,
+        len(owner.unowned_source_claims),
+        "scitex-foreign-claim" in owner.unowned_source_claims[0],
+    ) == (True, None, 1, True)
