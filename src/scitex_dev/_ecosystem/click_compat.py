@@ -20,7 +20,9 @@ Implements the doctrine in
 
 Every alias carries ``cmd._deprecated_alias = {"target", "remove_in",
 "phase"}`` so the CLI auditor (slice 4) can verify the ladder statically
-instead of probing behaviorally.
+instead of probing behaviorally. Private ``_deprecated_alias_binding`` also
+records actual helper inputs and phase; display text is not a forwarding route.
+Auditors resolve that evidence only in their effective command snapshot.
 
 Usage::
 
@@ -42,6 +44,7 @@ from __future__ import annotations
 
 import getpass
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
 import click
@@ -57,6 +60,15 @@ _FORWARD_CONTEXT_SETTINGS = {
     "ignore_unknown_options": True,
     "allow_extra_args": True,
 }
+
+
+@dataclass(frozen=True)
+class _AliasBinding:
+    """Actual helper inputs; only warn phase forwards, error phase redirects."""
+
+    group: click.Group
+    target: click.Command | str | tuple[str, ...]
+    phase: str
 
 
 def _marker_path(old_name: str) -> Path:
@@ -260,5 +272,6 @@ def deprecated_alias(
         "remove_in": remove_in,
         "phase": phase,
     }
+    cmd._deprecated_alias_binding = _AliasBinding(group, target, phase)
     group.add_command(cmd, old_name)
     return cmd

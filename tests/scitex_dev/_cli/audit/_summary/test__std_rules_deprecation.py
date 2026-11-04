@@ -72,7 +72,7 @@ class TestDeprecatedAliasStaticMetadata:
         deprecated_alias(
             root,
             "show-status",
-            target="status",
+            target=card_status_cmd,
             remove_in="0.30",
             target_name="card status",
         )

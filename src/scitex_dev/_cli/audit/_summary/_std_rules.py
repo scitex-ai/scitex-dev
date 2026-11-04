@@ -319,9 +319,11 @@ def check_deprecated_alias_metadata(
     ``scitex_dev.ecosystem.deprecated_alias``):
 
     - ``remove_in`` is set (the ladder always names the deadline).
-    - ``target`` resolves to a command in the tree: as a path from the
-      alias's parent group, as a path from the root, or (single-word
-      targets) as ANY command name at any depth.
+    - Warn-phase shared-helper aliases resolve their actual captured route
+      against the effective snapshot, independently of display text.
+    - Other aliases (including error-phase redirects) name a valid reference:
+      a command path with supported fixed scalar options, or a legacy
+      single command name at any depth. This does not prove forwarding.
     """
     from ._audit import Violation
 
@@ -347,7 +349,7 @@ def check_deprecated_alias_metadata(
                         "deprecated alias metadata lacks `target`",
                     )
                 )
-            elif not _target_exists(root, parent, target):
+            elif not _alias_reference_exists(root, parent, cmd, target):
                 out.append(
                     Violation(
                         full,
@@ -361,6 +363,23 @@ def check_deprecated_alias_metadata(
                 _walk_aliases(sub, path + [name], cmd)
 
     _walk_aliases(root, [], None)
+
+
+def _alias_reference_exists(root, parent, command, target):
+    """Helper routes prove forwarding; other metadata only names a reference."""
+    from ...._ecosystem.click_compat import _AliasBinding
+    from ._alias_binding import resolve_binding
+
+    binding = getattr(command, "_deprecated_alias_binding", None)
+    if type(binding) is _AliasBinding and binding.phase == "error":
+        # Error-phase helpers redirect; their display is a reference, not
+        # forwarding input (the legacy helper need not have a live route).
+        return _target_exists(root, parent, target)
+    if binding is not None:
+        return isinstance(binding, _AliasBinding) and resolve_binding(
+            root, command, parent, require_warn=False
+        ) is not None
+    return _target_exists(root, parent, target)
 
 
 def _resolve_path(start: click.BaseCommand | None, parts: list[str]) -> bool:
@@ -390,14 +409,10 @@ def _target_exists(
     parent: click.BaseCommand | None,
     target: str,
 ) -> bool:
-    parts = target.split()
-    if parent is not None and _resolve_path(parent, parts):
-        return True
-    if _resolve_path(root, parts):
-        return True
-    if len(parts) == 1:
-        return _any_command_named(root, parts[0])
-    return False
+    from ._alias_binding import reference_exists
+
+    return reference_exists(root, parent, target)
+
 
 
 # ----------------------------------------------------------------------- #
