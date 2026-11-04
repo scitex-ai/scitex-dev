@@ -44,49 +44,89 @@ def _documented_yaml():
 def test_documented_opt_out_preserves_registered_package_metadata(
     isolated_skill_config,
 ):
+    # Arrange
     path = isolated_skill_config / "config.yaml"
     path.write_text("")
     original = next(p for p in load_config().packages if p.name == "scitex-writer")
     path.write_text(_documented_yaml())
+    # Act
     updated = next(p for p in load_config().packages if p.name == "scitex-writer")
-    assert not updated.skills_enabled and updated.mcp_enabled
-    for field in ("local_path", "pypi_name", "github_repo", "import_name"):
-        assert getattr(updated, field) == getattr(original, field), field
+    fields = ("local_path", "pypi_name", "github_repo", "import_name")
+    # Assert
+    assert {f: getattr(updated, f) for f in fields} == {
+        f: getattr(original, f) for f in fields
+    }
 
 
-def test_documented_switches_match_cli_and_cli_overrides_preserve_yaml(
-    isolated_skill_config,
-):
+@pytest.mark.parametrize(
+    "args,expected",
+    [
+        (["dev", "skills", "status", "--json"], False),
+        (["mcp", "status", "--json"], True),
+    ],
+)
+def test_documented_switches_match_cli(isolated_skill_config, args, expected):
+    # Arrange
     from scitex_dev._cli._root import main
 
     path = isolated_skill_config / "config.yaml"
     path.write_text(_documented_yaml())
-    original = path.read_bytes()
-    runner = CliRunner()
-    for args, expected in [
-        (["dev", "skills", "status", "--json"], False),
-        (["mcp", "status", "--json"], True),
-    ]:
-        result = runner.invoke(main, args)
-        assert result.exit_code == 0, result.output
-        assert json.loads(result.output)["scitex-writer"] is expected
+    # Act
+    result = CliRunner().invoke(main, args)
+    actual = (result.exit_code, json.loads(result.output)["scitex-writer"])
+    # Assert
+    assert actual == (0, expected)
+
+
+def test_cli_managed_switches_override_yaml_preferences(isolated_skill_config):
+    # Arrange
+    from scitex_dev._cli._root import main
+
+    (isolated_skill_config / "config.yaml").write_text(_documented_yaml())
+    runner, outcomes = CliRunner(), []
+    # Act
     for args in [
         ["dev", "skills", "enable", "scitex-writer", "--yes"],
         ["mcp", "disable", "scitex-writer", "--yes"],
     ]:
         result = runner.invoke(main, args)
-        assert result.exit_code == 0, result.output
+        outcomes.append(result.exit_code)
     package = next(p for p in load_config().packages if p.name == "scitex-writer")
-    assert package.skills_enabled and not package.mcp_enabled
-    assert path.read_bytes() == original
+    # Assert
+    assert (outcomes, package.skills_enabled, package.mcp_enabled) == (
+        [0, 0],
+        True,
+        False,
+    )
+
+
+def test_cli_switch_does_not_rewrite_hand_authored_yaml(isolated_skill_config):
+    # Arrange
+    from scitex_dev._cli._root import main
+
+    path = isolated_skill_config / "config.yaml"
+    path.write_text(_documented_yaml())
+    original = path.read_bytes()
+    # Act
+    result = CliRunner().invoke(
+        main, ["dev", "skills", "enable", "scitex-writer", "--yes"]
+    )
+    # Assert
+    assert (result.exit_code, path.read_bytes()) == (0, original)
 
 
 def test_configuration_skill_python_examples_execute_in_isolated_environment(
     isolated_skill_config,
 ):
+    # Arrange
     (isolated_skill_config / "config.yaml").write_text(_documented_yaml())
     blocks = re.findall(r"```python\n(.*?)```", _GUIDE.read_text(), re.DOTALL)
-    assert blocks, "The configuration skill must retain an executable Python example"
+    if not blocks:
+        raise ValueError(
+            "The configuration skill contains no Python example to exercise"
+        )
+    # Act
+    observations = []
     for block in blocks:
         result = subprocess.run(
             [
@@ -100,12 +140,14 @@ def test_configuration_skill_python_examples_execute_in_isolated_environment(
             text=True,
             timeout=20,
         )
-        actual = json.loads(result.stdout)
-        assert actual == {
-            "path": str(isolated_skill_config / "config.yaml"),
-            "skills": False,
-            "mcp": True,
-        }
+        observations.append(json.loads(result.stdout))
+    expected = {
+        "path": str(isolated_skill_config / "config.yaml"),
+        "skills": False,
+        "mcp": True,
+    }
+    # Assert
+    assert observations == [expected] * len(blocks)
 
 
 def test_dev_config_defaults_to_three_freshness_days():
