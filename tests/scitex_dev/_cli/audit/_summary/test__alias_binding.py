@@ -7,6 +7,7 @@ import pytest
 from click.testing import CliRunner
 
 from scitex_dev._cli.audit._summary._alias_binding import (
+    helper_binding,
     reference_exists,
     resolve_binding,
 )
@@ -475,3 +476,23 @@ def test_unverifiable_reference_message_does_not_invent_forwarding(mode):
         "unresolved or unverifiable" in out[0].message,
         "forwards nowhere" in out[0].message,
     ) == (1, "§5", True, False)
+
+
+@pytest.mark.parametrize("origin", [None, "not-a-command", object()])
+def test_malformed_original_marker_refuses_valid_binding_without_crashing(origin):
+    # Arrange
+    root, _dev, _leaf, alias = _tree()
+    alias._audit_original_command = origin
+    callback_is_issued = alias.callback is alias._deprecated_alias_binding.callback
+    out = []
+    # Act
+    binding = helper_binding(alias)
+    findings = _json_findings(root)
+    check_deprecated_alias_metadata(root, "fixture", out)
+    # Assert
+    assert (
+        callback_is_issued,
+        binding,
+        len(findings),
+        any(v.command == "fixture list-python-apis" and v.rule == "§5" for v in out),
+    ) == (True, None, 1, True)

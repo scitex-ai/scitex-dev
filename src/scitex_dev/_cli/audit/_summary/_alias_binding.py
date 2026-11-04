@@ -23,11 +23,17 @@ def helper_binding(command):
     Identity associates the record with the actual factory callback only; it
     is not cryptographic provenance or isolation from hostile in-process code.
     """
-    binding = getattr(command, "_deprecated_alias_binding", None)
+    if not isinstance(command, click.Command):
+        return None
+    data = vars(command)
+    binding = data.get("_deprecated_alias_binding")
+    original = data.get("_audit_original_command", command)
+    if not isinstance(original, click.Command):
+        return None
     if (
         type(binding) is _AliasBinding
-        and binding.callback is vars(command).get("callback")
-        and binding.callback is vars(_original(command)).get("callback")
+        and binding.callback is data.get("callback")
+        and binding.callback is vars(original).get("callback")
     ):
         return binding
     return None
