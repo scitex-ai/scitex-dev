@@ -36,7 +36,10 @@ COMMAND_CATEGORIES = [
     # `gui` renders under Service per §4a 10a_command-categories.md.
     ("Service", ["gui", "mcp", "service", "cron"]),
     ("Diagnostics", ["doctor"]),
-    ("Introspection", ["docs", "skills", "list-python-apis", "show-config"]),
+    (
+        "Introspection",
+        ["docs", "skills", "list-python-apis", "show-config", "context"],
+    ),
     ("Shell", ["install-shell-completion", "print-shell-completion"]),
 ]
 
@@ -192,6 +195,10 @@ def main(
 from ._doctor import register_doctor_command
 
 register_doctor_command(main)
+
+from ._context import register_context_commands
+
+register_context_commands(main)
 
 from ._icons import register_icons_command
 

@@ -74,6 +74,8 @@ interfaces:
 
 - [41_agent-setup.md](41_agent-setup.md) — Leaf-owned MCP setup, metadata discovery and skill projection verification
 
+- [42_context-discovery.md](42_context-discovery.md) — Upstream selective MCP discovery and metadata-only context accounting
+
 ## Quick Reference
 
 ```bash
