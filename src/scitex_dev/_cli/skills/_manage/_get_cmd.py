@@ -34,7 +34,8 @@ def register(skills):
     @click.option(
         "--json", "as_json", is_flag=True, help="Emit skill as JSON envelope."
     )
-    def skills_get(package, name, as_json):
+    @click.option("--owner", default=None, help="Owning distribution; retain listed skill identity.")
+    def skills_get(package, name, as_json, owner):
         from ...._ecosystem._skills.skills import (
             drift_warning,
             get_skill,
@@ -42,6 +43,8 @@ def register(skills):
         )
 
         if package == "all":
+            if owner is not None:
+                raise click.UsageError("--owner requires a single skill namespace")
             all_skills = list_skills()
             if not all_skills:
                 click.echo("No skills found.", err=True)
@@ -51,6 +54,7 @@ def register(skills):
                     content = get_skill(
                         package=pkg_name,
                         name=entry["name"] if entry["name"] != "SKILL" else None,
+                        owner=entry["owner"],
                     )
                     if content:
                         click.echo(f"\n{'=' * 60}")
@@ -59,7 +63,7 @@ def register(skills):
                         click.echo(content)
             return
 
-        content = get_skill(package=package, name=name)
+        content = get_skill(package=package, name=name, owner=owner)
         if content:
             if as_json:
                 import json as _json
@@ -71,7 +75,7 @@ def register(skills):
                 click.echo(content)
             # Non-blocking drift signal: cached skill older than installed.
             # Stderr only; never prompts.
-            w = drift_warning(package)
+            w = drift_warning(owner or package)
             if w:
                 click.echo(w, err=True)
         else:

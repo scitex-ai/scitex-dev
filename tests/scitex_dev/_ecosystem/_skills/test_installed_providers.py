@@ -356,3 +356,188 @@ def test_same_entrypoint_namespace_from_distinct_owners_is_refused(installed_pro
     # Assert
     with pytest.raises(SkillRegistryError, match="ambiguous skill namespace"):
         discover_skill_packages(path=[site])
+
+
+@pytest.fixture
+def shared_namespace_owners(installed_provider):
+    site, owner, root, marker, dist = installed_provider
+    namespace = "scitex-audit-shared"
+    first = root / "_skills" / namespace
+    first.mkdir()
+    (first / "SKILL.md").write_text("# First owner\n")
+    (dist / "entry_points.txt").write_text(
+        f"[scitex_dev.skills]\n{namespace} = unrelated_module.nested\n"
+    )
+    second_root = site / "second_owner_module"
+    second = second_root / "_skills" / namespace
+    second.mkdir(parents=True)
+    (second_root / "__init__.py").write_text(
+        f"from pathlib import Path\nPath({str(marker)!r}).touch()\n"
+        "raise RuntimeError('consumer must never import')\n"
+    )
+    (second / "SKILL.md").write_text("# Second owner\n")
+    second_dist = site / "scitex_audit_second-1.0.dist-info"
+    second_dist.mkdir()
+    (second_dist / "METADATA").write_text(
+        "Metadata-Version: 2.1\nName: scitex-audit-second\nVersion: 1.0\n"
+    )
+    (second_dist / "entry_points.txt").write_text(
+        f"[scitex_dev.skills]\n{namespace} = second_owner_module\n"
+    )
+    return namespace, owner, first, second, marker
+
+
+def test_default_read_refuses_ambiguous_owners(shared_namespace_owners):
+    # Arrange
+    from scitex_dev.ecosystem import get_skill
+
+    namespace, _, _, _, _ = shared_namespace_owners
+    # Act
+    # Assert
+    with pytest.raises(SkillRegistryError, match="ambiguous skill namespace"):
+        get_skill(namespace)
+
+
+def test_owner_scoped_read_keeps_selected_identity_without_import(shared_namespace_owners):
+    # Arrange
+    from scitex_dev.ecosystem import get_skill
+
+    namespace, owner, _, _, marker = shared_namespace_owners
+    # Act
+    contents = (get_skill(namespace, owner=owner),
+                get_skill(namespace, owner="Scitex_Audit_Second"))
+    # Assert
+    assert (contents, marker.exists()) == (("# First owner\n", "# Second owner\n"), False)
+
+
+def test_owner_scoped_directory_retains_namespace(shared_namespace_owners):
+    # Arrange
+    from scitex_dev._ecosystem._skills.skills import get_skill_dir
+
+    namespace, owner, first, _, _ = shared_namespace_owners
+    # Act
+    directory = get_skill_dir(namespace, owner=owner)
+    # Assert
+    assert directory == first
+
+
+def test_wrong_owner_read_has_no_fallback(shared_namespace_owners):
+    # Arrange
+    from scitex_dev.ecosystem import get_skill
+
+    namespace, _, _, _, marker = shared_namespace_owners
+    # Act
+    result = get_skill(namespace, owner="scitex-audit-absent")
+    # Assert
+    assert (result, marker.exists()) == (None, False)
+
+
+def test_disabled_owner_does_not_fall_back(shared_namespace_owners):
+    # Arrange
+    from scitex_dev.ecosystem import get_skill
+
+    namespace, owner, _, _, _ = shared_namespace_owners
+    set_package_knob(owner, "skills", False)
+    # Act
+    result = get_skill(namespace, owner=owner)
+    # Assert
+    assert result is None
+
+
+@pytest.mark.parametrize("name", ["../outside", "/etc/passwd", "..\\outside"])
+def test_owner_scope_preserves_read_containment(shared_namespace_owners, name):
+    # Arrange
+    from scitex_dev.ecosystem import get_skill
+
+    namespace, owner, _, _, _ = shared_namespace_owners
+    # Act
+    # Assert
+    with pytest.raises(SkillRegistryError, match="inside its declared resource tree"):
+        get_skill(namespace, name, owner=owner)
+
+
+def test_owner_cannot_read_undeclared_namespace_despite_physical_resources(
+    shared_namespace_owners, isolated_metadata_environment
+):
+    # Arrange
+    from scitex_dev.ecosystem import get_skill
+
+    namespace, _, _, _, _ = shared_namespace_owners
+    dist = isolated_metadata_environment / "scitex_audit_second-1.0.dist-info"
+    (dist / "entry_points.txt").write_text(
+        "[scitex_dev.skills]\naudit-different = second_owner_module\n"
+    )
+    # Act
+    result = get_skill(namespace, owner="scitex-audit-second")
+    # Assert
+    assert result is None
+
+
+def test_cli_owner_option_reads_selected_namespace(shared_namespace_owners):
+    # Arrange
+    import json
+    from click.testing import CliRunner
+    from scitex_dev._cli import main
+
+    namespace, owner, _, _, _ = shared_namespace_owners
+    # Act
+    result = CliRunner().invoke(
+        main, ["dev", "skills", "get", namespace, "--owner", owner, "--json"]
+    )
+    # Assert
+    assert (result.exit_code, json.loads(result.stdout)["content"]) == (
+        0, "# First owner\n"
+    )
+
+
+def test_mcp_owner_argument_reads_selected_namespace(shared_namespace_owners):
+    # Arrange
+    import asyncio
+    import json
+    from scitex_dev.dev_mcp.handlers import skills_get_handler
+
+    namespace, owner, _, _, _ = shared_namespace_owners
+    # Act
+    result = json.loads(asyncio.run(skills_get_handler(namespace, "SKILL", owner=owner)))
+    # Assert
+    assert (result["success"], result["data"]) == (True, "# First owner\n")
+
+
+def test_public_facade_preserves_get_skill_identity():
+    # Arrange
+    from scitex_dev.ecosystem import get_skill
+    from scitex_dev._ecosystem._skills.skills import get_skill as implementation
+
+    # Act
+    identical = get_skill is implementation
+    # Assert
+    assert identical
+
+
+def test_mcp_tool_schema_keeps_owner_optional():
+    # Arrange
+    import asyncio
+    from scitex_dev._mcp._server import mcp
+
+    # Act
+    tool = next(
+        item for item in asyncio.run(mcp.list_tools()) if item.name == "dev_skills_get"
+    )
+    # Assert
+    assert (tool.parameters["required"], tool.parameters["properties"]["owner"]) == (
+        ["package", "name"],
+        {"anyOf": [{"type": "string"}, {"type": "null"}], "default": None},
+    )
+
+
+def test_listed_owner_round_trips_to_its_content(shared_namespace_owners):
+    # Arrange
+    from scitex_dev.ecosystem import get_skill
+
+    namespace, owner, _, _, _ = shared_namespace_owners
+    listing = list_skills(package=owner)
+    entry = listing[namespace][0]
+    # Act
+    content = get_skill(namespace, entry["name"], owner=entry["owner"])
+    # Assert
+    assert content == "# First owner\n"
