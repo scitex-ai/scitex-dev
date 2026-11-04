@@ -1,8 +1,8 @@
 ---
 description: |
   [TOPIC] Environment-local discovery and configuration
-  [DETAILS] Configure installed skill and MCP provider opt-outs, inspect effective settings, and choose skill destinations. Dev dispatches leaf providers from its own Python environment; YAML preferences and CLI-managed overrides have explicit precedence.
-tags: [scitex-dev-config, skills, mcp, discovery]
+  [DETAILS] Configure installed CLI, skill and MCP provider preferences, inspect effective settings, and choose skill destinations. Dev dispatches leaf providers from its own Python environment; YAML preferences and CLI-managed overrides have explicit precedence.
+tags: [scitex-dev-config, cli, skills, mcp, discovery]
 ---
 
 # Configuration and installed-provider discovery
@@ -36,7 +36,11 @@ A default path can exist as a convention without the file having been created.
 
 Effective per-package switches resolve as:
 
-1. Ecosystem defaults (`skills_enabled` and `mcp_enabled` default to true).
+An existing project-local `.scitex/dev/config.yaml` wins over the user default
+through the shared config path resolver; explicit paths and `SCITEX_DEV_CONFIG`
+still take priority over that default selection.
+
+1. Ecosystem defaults (`cli_enabled`, `skills_enabled` and `mcp_enabled` default to true).
 2. Matching `packages` entries in the selected YAML file.
 3. CLI-managed entries in `knob-state.json`, which take precedence over YAML.
 
@@ -51,10 +55,13 @@ packages:
   - name: scitex-writer
     skills_enabled: false
     mcp_enabled: true
+    cli_enabled: false
 ```
 
 Use unquoted YAML booleans. The example disables Writer skill discovery while
-leaving its MCP switch enabled. Omitted switches retain their current defaults.
+leaving its MCP switch enabled and declining CLI aggregation. These fields are
+independent; CLI off does not disable Python APIs, standalone executables or Web
+routes. It is a selection preference, not authorization or proof of readiness. Omitted switches retain their current defaults.
 A skill namespace can differ from its owner: SDK owns `scitex-app` and `scitex-ui`,
 so their owner-level switch is `scitex-sdk`. Package selection does not authorize
 a conflicting or undeclared namespace.
@@ -68,6 +75,11 @@ selected_file = get_config_path()
 resolved = load_config()
 skill_switches = {package.name: package.skills_enabled for package in resolved.packages}
 mcp_switches = {package.name: package.mcp_enabled for package in resolved.packages}
+
+from scitex_dev.exposure import load_exposure_policy
+policy = load_exposure_policy()  # resolve selected config/state once
+cli_switch = policy.is_enabled("scitex-writer", "cli")
+unknown_mcp_preference = policy.is_enabled("unregistered-installed-owner", "mcp")
 ```
 
 For installed umbrella versions exposing Dev's CLI passthrough:
@@ -126,3 +138,55 @@ See [36_skill-registry.md](36_skill-registry.md) for ownership/projection checks
 [41_agent-setup.md](41_agent-setup.md) for setup and protocol qualification, and
 [42_context-discovery.md](42_context-discovery.md) for selective MCP exposure and
 honest metadata accounting.
+
+
+## Shared immutable exposure snapshot
+
+The Python example above constructs the public snapshot once.
+
+The same files and precedence apply even when an installed owner is absent from
+ECOSYSTEM. Unconfigured owners default to enabled independently for CLI, MCP and
+skills. `preferences` contains frozen configured-owner rows, not an installed
+capability inventory. Subsequent file changes do not alter an existing snapshot;
+construct a new view to refresh it. The query never rereads files or loads providers.
+
+Use these umbrella forms only when both the installed Dev and umbrella versions
+ship the CLI controls and policy adapter; check their actual help first.
+Consumers must explicitly apply the snapshot, so writing a preference cannot
+change an older host that does not consume it.
+
+```bash
+scitex dev cli list --json       # raw installed declarations, not effective policy
+scitex dev cli status --json     # configured preferences, not callable providers
+scitex dev cli status --paths --json  # actual selected config/state locations
+scitex dev cli disable scitex-writer --yes
+scitex dev cli enable scitex-writer --yes
+```
+
+If the umbrella is absent or its Dev namespace is disabled, use standalone
+`scitex-dev cli ...` as the bootstrap/recovery alternative. For example,
+`scitex-dev cli enable scitex-dev --yes` restores that owner's aggregation
+preference without requiring the hidden umbrella namespace.
+
+CLI YAML/state values must be real booleans: quoted `"false"`, null, numbers and
+lists refuse rather than silently becoming true. The shared snapshot also refuses
+malformed/unreadable state, invalid owner identities, conflicting canonical owners
+and nonboolean state values for every surface. Missing files retain defaults and
+are not created by reading. Existing supported skills/MCP YAML parsing is unchanged.
+The CLI setter refuses malformed state before writing; it never repairs a corrupt
+file by overwriting it. Use canonical distribution names, not command nicknames.
+
+Installed CLI declaration `none`, invalid/ambiguous ownership and host admission
+still deny mounting even when the preference is enabled. `list_cli_providers()`
+remains an inert metadata reader and does not apply operator configuration. A
+wrapper must retain its declared owner and aliases must resolve through the same
+effective host view; preferences do not invent absent commands or enable endpoints.
+
+`status --paths --json` returns `config_path`, `knob_state_path` and
+`preferences`; ordinary `status --json` retains its owner-to-boolean mapping.
+Only locations and selected booleans are shown, never raw configuration values.
+The snapshot exposes the same frozen paths, so a project-local file shadowing a
+home default is visible without adding another provenance registry.
+
+These local package toggles are non-interactive. `--yes` is retained as a
+compatibility flag; it does not add consent enforcement or authorization.

@@ -49,6 +49,9 @@ _LAZY_ATTRS: dict[str, str] = {
     "normalize_distribution_name": "_core.names",
     "build_mcp_install_manifest": "mcp_setup",
     "install_mcp_client_config": "mcp_setup",
+    "ExposurePolicy": "exposure",
+    "ExposurePreference": "exposure",
+    "load_exposure_policy": "exposure",
     "CliProvider": "cli_providers",
     "list_cli_providers": "cli_providers",
     "DocProvider": "doc_providers",
@@ -238,6 +241,9 @@ def __dir__() -> list[str]:
 
 
 __all__ = [
+    "ExposurePolicy",
+    "ExposurePreference",
+    "load_exposure_policy",
     "CliProvider",
     "list_cli_providers",
     # Version

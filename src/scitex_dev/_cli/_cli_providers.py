@@ -54,4 +54,7 @@ def register_cli_provider_commands(main):
                     f"{row.name or '-'}: {row.distribution or '?'} [{row.status}] {row.reason}"
                 )
 
+    from ._knob_commands import add_knob_commands
+
+    add_knob_commands(cli, "cli")
     return cli
