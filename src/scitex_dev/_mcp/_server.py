@@ -7,6 +7,8 @@ Start with: scitex-dev mcp start
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastmcp import FastMCP
 
 from .._ecosystem._mcp._core import register_docs_tools
@@ -25,6 +27,26 @@ mcp = FastMCP(
 
 # Register docs tools (docs_list, docs_get, docs_build, docs_search)
 register_docs_tools(mcp)
+
+
+@mcp.tool()
+async def dev_context_measure(
+    tools: list[dict[str, Any]] | None = None,
+    skill_headers: list[dict[str, Any]] | None = None,
+    instructions: str = "",
+    tool_owners: dict[str, str] | None = None,
+    skill_owners: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Measure supplied advertised metadata; tokens/client total remain unknown."""
+    from ..context import measure_context
+
+    return measure_context(
+        tools=tools if tools is not None else [],
+        skill_headers=skill_headers if skill_headers is not None else [],
+        instructions=instructions,
+        tool_owners=tool_owners,
+        skill_owners=skill_owners,
+    )
 
 
 # Register dev tools from dev_mcp handlers

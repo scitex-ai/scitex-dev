@@ -44,6 +44,8 @@ from __future__ import annotations
 # at module top — that re-introduces eager loading and slows every CLI call.
 # See `_skills/general/03_interface/01_python-api/04_lazy-imports-and-optional-deps.md`.
 _LAZY_ATTRS: dict[str, str] = {
+    "configure_mcp_discovery": "context",
+    "measure_context": "context",
     "normalize_distribution_name": "_core.names",
     "build_mcp_install_manifest": "mcp_setup",
     "install_mcp_client_config": "mcp_setup",

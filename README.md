@@ -151,6 +151,17 @@ See [`examples/`](examples/) for runnable demos that exercise
 `scitex-dev`'s own commands (search, version-management, docs
 aggregation).
 
+## Selective discovery and context accounting
+
+`scitex-dev context measure --input selected-snapshot.json --json` measures
+caller-selected advertised MCP definitions and skill headers. The same pure
+API is `scitex_dev.measure_context` and the MCP tool is `dev_context_measure`.
+`configure_mcp_discovery` reuses FastMCP search after host policy; no custom
+search engine or tokenizer is introduced. Reports show JSON bytes/code points,
+explicit owner attribution and unknown client context, without echoing tool
+descriptions. See [scope, schema and client limits](docs/context-discovery.md).
+The umbrella route is `scitex dev context measure` when Dev is installed.
+
 ## Five Interfaces
 
 <details>

@@ -190,3 +190,11 @@ refuses missing providers and failed checks. Discovery is not activation, and
 harness command approval remains separate. Post-tool checks cannot reverse
 an operation that already ran. Source: `hooks/_dispatch.py`,
 `hooks/_install_provider.py`, `_cli/_hooks_cli/_install.py`.
+
+## Context metadata
+
+`scitex-dev context measure --input selected-snapshot.json --json` reads a
+caller-selected JSON snapshot and writes metadata sizes to stdout; stdin is the
+default. The umbrella route is `scitex dev context measure`. See
+[42_context-discovery.md](42_context-discovery.md): bytes/code points are not
+tokens, ownership is explicit and client total context remains unobserved.
