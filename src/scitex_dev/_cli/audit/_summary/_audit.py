@@ -869,6 +869,8 @@ def _check_introspection(
     Both must accept --json. Verbosity ladder (-v/-vv/-vvv) is checked
     behaviorally elsewhere; here we only assert presence and --json.
     """
+    from ._alias_binding import effective_flags
+
     if not isinstance(cmd, click.Group):
         return
 
@@ -882,7 +884,7 @@ def _check_introspection(
             )
         )
     else:
-        if "--json" not in _flag_names(sub):
+        if "--json" not in effective_flags(cmd, sub, cmd):
             out.append(
                 Violation(
                     f"{package} list-python-apis",
@@ -910,7 +912,7 @@ def _check_introspection(
                 "missing required 'list-tools' subcommand under 'mcp'",
             )
         )
-    elif "--json" not in _flag_names(list_tools):
+    elif "--json" not in effective_flags(cmd, list_tools, mcp):
         out.append(
             Violation(
                 f"{package} mcp list-tools",
