@@ -150,19 +150,23 @@ skills. `preferences` contains frozen configured-owner rows, not an installed
 capability inventory. Subsequent file changes do not alter an existing snapshot;
 construct a new view to refresh it. The query never rereads files or loads providers.
 
+Use these umbrella forms only when both the installed Dev and umbrella versions
+ship the CLI controls and policy adapter; check their actual help first.
+Consumers must explicitly apply the snapshot, so writing a preference cannot
+change an older host that does not consume it.
+
 ```bash
-scitex-dev cli list --json       # raw installed declarations, not effective policy
-scitex-dev cli status --json     # configured preferences, not callable providers
-scitex-dev cli status --paths --json  # actual selected config/state locations
-scitex-dev cli disable scitex-writer --yes
-scitex-dev cli enable scitex-writer --yes
+scitex dev cli list --json       # raw installed declarations, not effective policy
+scitex dev cli status --json     # configured preferences, not callable providers
+scitex dev cli status --paths --json  # actual selected config/state locations
+scitex dev cli disable scitex-writer --yes
+scitex dev cli enable scitex-writer --yes
 ```
 
-A compatible umbrella delegates these as `scitex dev cli ...`. Check actual
-installed help: these new CLI controls and snapshot API require a version that
-ships them. Consumers must explicitly apply the snapshot; writing a preference
-cannot change an older host that does not consume it. Keep using standalone Dev
-to restore a preference if a host hides its Dev aggregation namespace.
+If the umbrella is absent or its Dev namespace is disabled, use standalone
+`scitex-dev cli ...` as the bootstrap/recovery alternative. For example,
+`scitex-dev cli enable scitex-dev --yes` restores that owner's aggregation
+preference without requiring the hidden umbrella namespace.
 
 CLI YAML/state values must be real booleans: quoted `"false"`, null, numbers and
 lists refuse rather than silently becoming true. The shared snapshot also refuses

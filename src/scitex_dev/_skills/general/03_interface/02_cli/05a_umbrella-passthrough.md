@@ -13,7 +13,13 @@ This is distinct from §1c (tool pass-through to upstream binaries). §1c forwar
 
 ## The rule
 
-When a `scitex-<pkg>` package declares an eligible CLI and operator policy enables it, the umbrella can expose its canonical command. A CLI declaration is not automatic mounting: explicit `none`, ambiguity and independent CLI preferences remain deny gates. For a Click provider, preserve the re-exported command/group object. The umbrella adds exactly two things: the subcommand **name** and the install-fallback message. Every other byte of help text, examples, sub-tree, deprecation alias, and shell completion lives in the standalone CLI module.
+When a `scitex-<pkg>` package declares an eligible CLI and operator policy enables it, the umbrella can expose its canonical command. A CLI declaration is not automatic mounting: explicit `none`, ambiguity and independent CLI preferences remain deny gates. For a direct Click provider, preserve the re-exported command/group object:
+its leaf help, examples, sub-tree and completion remain owned by the standalone.
+The umbrella owns namespace selection, install guidance and deliberate shared
+workflow/developer composition; these are not universal byte-for-byte Group
+mounts. A metadata-qualified ordinary console launcher can use the owned adapter
+rather than a Click re-export. Keep each adaptation explicit and preserve leaf
+arguments, output and exit semantics without cloning the leaf's command catalog.
 
 ### Canonical shim
 
