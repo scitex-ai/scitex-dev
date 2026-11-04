@@ -10,6 +10,16 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.62.14] - 2026-11-04
+
+- Discover installed CLI exposure through independent metadata declarations,
+  explicit opt-outs and owned wheel/editable evidence without importing leaves.
+  Retain genuine ambiguity, collapse proven same-install metadata shadows, and
+  expose the same decisions through the public API and `cli list` diagnostics.
+- Forward hidden nested aliases through native parsed Click contexts, preserving
+  arguments, help and exit codes. Keep hidden compatibility routes out of public
+  and recursive help while leaving their canonical commands discoverable.
+
 ## [0.62.13] - 2026-11-04
 
 - Preserve registered package metadata when YAML skill opt-outs override a
