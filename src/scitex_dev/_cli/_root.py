@@ -38,7 +38,7 @@ COMMAND_CATEGORIES = [
     ("Diagnostics", ["doctor"]),
     (
         "Introspection",
-        ["docs", "skills", "list-python-apis", "show-config", "context"],
+        ["docs", "skills", "list-python-apis", "show-config", "context", "cli"],
     ),
     ("Shell", ["install-shell-completion", "print-shell-completion"]),
 ]
@@ -195,6 +195,10 @@ def main(
 from ._doctor import register_doctor_command
 
 register_doctor_command(main)
+
+from ._cli_providers import register_cli_provider_commands
+
+register_cli_provider_commands(main)
 
 from ._context import register_context_commands
 

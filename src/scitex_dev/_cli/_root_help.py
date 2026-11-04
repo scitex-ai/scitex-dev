@@ -45,7 +45,7 @@ def _command_to_dict(
         commands: dict = {}
         for sub in sorted(cmd.list_commands(sub_ctx)):
             sub_cmd = cmd.get_command(sub_ctx, sub)
-            if sub_cmd is None:
+            if sub_cmd is None or sub_cmd.hidden:
                 continue
             commands[sub] = _command_to_dict(sub_cmd, sub_ctx, sub)
         out["commands"] = commands
@@ -69,6 +69,8 @@ def _show_recursive_help(ctx: click.Context) -> None:
     if isinstance(group, click.Group):
         for name in sorted(group.list_commands(ctx)):
             cmd = group.get_command(ctx, name)
+            if cmd is None or cmd.hidden:
+                continue
             sub_ctx = click.Context(cmd, parent=ctx, info_name=name)
             click.echo(f"{'=' * 60}")
             click.echo(f"Command: {name}")
@@ -78,6 +80,8 @@ def _show_recursive_help(ctx: click.Context) -> None:
             if isinstance(cmd, click.Group):
                 for sub_name in sorted(cmd.list_commands(sub_ctx)):
                     sub_cmd = cmd.get_command(sub_ctx, sub_name)
+                    if sub_cmd is None or sub_cmd.hidden:
+                        continue
                     sub_sub_ctx = click.Context(
                         sub_cmd, parent=sub_ctx, info_name=sub_name
                     )
