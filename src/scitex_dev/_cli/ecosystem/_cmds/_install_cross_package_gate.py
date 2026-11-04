@@ -350,9 +350,12 @@ def register(ecosystem):
                 err=True,
             )
 
-        content = render_cross_package_gate(
-            distribution, imports, tail=tail, header_imports=split.header_imports
-        )
+        try:
+            content = render_cross_package_gate(
+                distribution, imports, tail=tail, header_imports=split.header_imports
+            )
+        except ValueError as exc:
+            raise click.ClickException(str(exc)) from exc
         init = target.parent / "__init__.py"
 
         # Show WHAT was computed, not just where it will go. The reported

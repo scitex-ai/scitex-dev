@@ -214,3 +214,47 @@ def test_force_preserves_actual_crlf_tail_bytes(tmp_path):
         0,
         True,
     ), result.output
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "import pathlib as pytest",
+        "from pathlib import Path as importlib",
+        "import importlib.util as importlib",
+        "import pytest as importlib",
+        "from pathlib import *",
+    ],
+)
+def test_reserved_or_ambiguous_bindings_refuse_before_any_write(tmp_path, statement):
+    # Arrange
+    repo, gate = _fixture(tmp_path, PREFIX + statement + "\n")
+    before = gate.read_bytes()
+    # Act
+    result = _install(repo)
+    # Assert
+    assert (
+        result.exit_code,
+        "binding" in result.output,
+        gate.read_bytes() == before,
+        (gate.parent / "__init__.py").exists(),
+    ) == (1, True, True, False), result.output
+
+
+def test_canonical_self_alias_and_submodule_root_remain_real_modules():
+    # Arrange
+    imports = ("import importlib.util", "import pytest as pytest")
+    namespace = {}
+    # Act
+    source = render_header_imports(imports)
+    exec(compile(source, "<owned canonical header>", "exec"), namespace)
+    # Assert
+    assert (
+        namespace["importlib"].__name__,
+        namespace["pytest"].__name__,
+        source.splitlines(),
+    ) == (
+        "importlib",
+        "pytest",
+        ["import importlib.util", "import pytest as pytest", ""],
+    )

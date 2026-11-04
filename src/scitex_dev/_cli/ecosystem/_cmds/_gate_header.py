@@ -5,6 +5,29 @@ from __future__ import annotations
 import ast
 
 
+def _canonical_bindings(node: ast.Import | ast.ImportFrom) -> set[str]:
+    """Prove reserved names bind canonical modules, without executing imports."""
+    canonical = set()
+    for alias in node.names:
+        if alias.name == "*":
+            raise ValueError(
+                "Wildcard header imports have ambiguous generated bindings"
+            )
+        bound = alias.asname or alias.name.split(".")[0]
+        if bound not in {"importlib", "pytest"}:
+            continue
+        if isinstance(node, ast.Import) and (
+            alias.name == bound or alias.asname is None
+        ):
+            canonical.add(bound)
+        else:
+            raise ValueError(
+                f"Header import changes reserved generated binding {bound!r}; "
+                "use a different alias"
+            )
+    return canonical
+
+
 def read_header_imports(prefix: str) -> tuple[str, ...]:
     """Admit only a module docstring, imports and comments before BEGIN."""
     try:
@@ -23,6 +46,7 @@ def read_header_imports(prefix: str) -> tuple[str, ...]:
             raise ValueError(
                 "Gate header supports only a docstring, imports and comments"
             )
+        _canonical_bindings(node)
         source = ast.get_source_segment(prefix, node)
         assert source is not None
         imports.append(source)
@@ -42,10 +66,7 @@ def render_header_imports(imports: tuple[str, ...]) -> str:
             future.append(source)
         else:
             ordinary.append(source)
-        if isinstance(node, ast.Import):
-            baseline.update(
-                alias.name for alias in node.names if alias.asname in (None, alias.name)
-            )
+        baseline.update(_canonical_bindings(node))
     ordinary.extend(
         "import " + name for name in ("importlib", "pytest") if name not in baseline
     )
