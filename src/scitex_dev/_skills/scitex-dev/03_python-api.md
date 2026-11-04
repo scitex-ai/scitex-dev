@@ -73,3 +73,11 @@ their own host config. See [24_host-registry.md](24_host-registry.md).
 scitex-dev list-python-apis              # tree of public callables
 python -c "import scitex_dev; help(scitex_dev)"
 ```
+
+## Selected context metadata
+
+`dev.measure_context` measures supplied advertised tools and selected skill
+headers with explicit owner maps. `dev.configure_mcp_discovery` delegates
+optional host discovery to FastMCP RegexSearchTransform. See
+[42_context-discovery.md](42_context-discovery.md) for the schema, null token
+counts and limits; these helpers do not inspect a client conversation.

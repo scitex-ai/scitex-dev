@@ -151,6 +151,17 @@ See [`examples/`](examples/) for runnable demos that exercise
 `scitex-dev`'s own commands (search, version-management, docs
 aggregation).
 
+## Selective discovery and context accounting
+
+`scitex-dev context measure --input selected-snapshot.json --json` measures
+caller-selected advertised MCP definitions and skill headers. The same pure
+API is `scitex_dev.measure_context` and the MCP tool is `dev_context_measure`.
+`configure_mcp_discovery` reuses FastMCP search after host policy; no custom
+search engine or tokenizer is introduced. Reports show JSON bytes/code points,
+explicit owner attribution and unknown client context, without echoing tool
+descriptions. See [scope, schema and client limits](docs/context-discovery.md).
+The umbrella route is `scitex dev context measure` when Dev is installed.
+
 ## Five Interfaces
 
 <details>
@@ -179,6 +190,12 @@ from scitex_dev import Result, ErrorCode, supports_return_as
 from scitex_dev.project import resolve_project
 resolve_project(explicit="synthetic/owned")
 ```
+
+`verify_docs_and_skills(package_path, documents=[...])` checks selected
+Markdown Python fences against local source without exporting skills or
+executing examples. Inspect its `checked_scope`, `unverified` and `limitations`;
+it does not prove complete documentation drift coverage. See
+[scoped documentation verification](docs/documentation-verification.md).
 
 > Discover and install skills through `scitex-dev dev skills list/get/install`.
 > Python discovery/export helpers are public in `scitex_dev.ecosystem`:

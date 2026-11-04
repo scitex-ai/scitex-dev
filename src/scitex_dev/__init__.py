@@ -44,6 +44,8 @@ from __future__ import annotations
 # at module top — that re-introduces eager loading and slows every CLI call.
 # See `_skills/general/03_interface/01_python-api/04_lazy-imports-and-optional-deps.md`.
 _LAZY_ATTRS: dict[str, str] = {
+    "configure_mcp_discovery": "context",
+    "measure_context": "context",
     "normalize_distribution_name": "_core.names",
     "build_mcp_install_manifest": "mcp_setup",
     "install_mcp_client_config": "mcp_setup",
@@ -170,7 +172,7 @@ _LAZY_ATTRS: dict[str, str] = {
     "deploy_scitex_hub": "_release.deploy",
     "verify_production": "_release.deploy",
     # skills
-    "verify_docs_and_skills": "_docs.skills",
+    "verify_docs_and_skills": "_ecosystem._skills.skills_verify",
     # test_runner
     "TestConfig": "test_runner",
     "fetch_hpc_result": "test_runner",
