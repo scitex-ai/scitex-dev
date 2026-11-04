@@ -52,7 +52,11 @@ a missing, disabled or undeclared namespace returns no content. There is no
 fallback to another owner, including when its resource directory exists on disk.
 Without `owner`, ambiguous namespaces still raise `SkillRegistryError`.
 `--owner` applies to a single namespace; the CLI's `all` mode retains its global
-ambiguity refusal. Ownership selection does not relax resource containment.
+ambiguity refusal. Shared `scitex_dev.cli` Click/argparse skill factories expose
+the same option on their namespace-bound `skills get` commands. These shared
+commands keep their existing no-name listing when no owner is supplied; with an
+explicit owner and no name they read that namespace's SKILL index. Ownership
+selection does not relax resource containment.
 
 ## MCP setup
 

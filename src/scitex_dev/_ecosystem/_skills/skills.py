@@ -290,7 +290,7 @@ def get_skill(
     """Get the content of a skill file.
 
     Args:
-        package: Package name (e.g. "scitex-stats")
+        package: Registered skill namespace (e.g. "scitex-app"), not its owner.
         name: Skill name (e.g. "test-selection"). If None, returns SKILL.md.
         owner: Owning distribution from list_skills entries. No cross-owner fallback.
 

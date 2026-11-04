@@ -81,6 +81,9 @@ def register_skills_subcommand(
         help="Skill name (see 'skills list')",
     )
     get_p.add_argument("--json", action="store_true", dest="as_json")
+    get_p.add_argument(
+        "--owner", default=None, help="Owning distribution from skill discovery"
+    )
     get_p.set_defaults(func=lambda args: _skills_get(args, package))
 
     # skills export
@@ -217,13 +220,15 @@ def _skills_get(args: argparse.Namespace, package: str) -> None:
     slogging.getLogger("scitex_dev._core.discovery").setLevel(logging.ERROR)
 
     # No name given → show available names
-    if args.name is None:
+    if args.name is None and getattr(args, "owner", None) is None:
         _skills_list(argparse.Namespace(as_json=False), package)
         return
 
     from ..._ecosystem._skills.skills import get_skill
 
-    content = get_skill(package=package, name=args.name)
+    content = get_skill(
+        package=package, name=args.name, owner=getattr(args, "owner", None)
+    )
     if content:
         if args.as_json:
             slogging.getPlainConsole(__name__).emit(
