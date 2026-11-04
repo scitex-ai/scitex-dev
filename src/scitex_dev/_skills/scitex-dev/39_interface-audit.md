@@ -76,6 +76,11 @@ Five interfaces are the default target; document an explicit reason where one
 is inapplicable. An unimplemented interface is not an exception by default.
 
 Validate documented imports and signatures against the same source revision.
+The public `verify_docs_and_skills(package_path, documents=[...])` helper can
+statically check selected Markdown Python fences without exports or source
+execution. Inspect `checked_scope`, `unverified`, `issues` and `limitations`;
+dynamic/re-exported names, signatures, runtime results and other interfaces
+require separate checks. `incomplete` must not be reported as a complete pass.
 Check help/JSON discovery without invoking destructive operations. Use owned
 fixtures for meaningful execution tests; never infer success from `--help`, a
 catalog or a static audit alone. Report audited files/providers and skipped

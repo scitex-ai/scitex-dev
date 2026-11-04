@@ -180,6 +180,12 @@ from scitex_dev.project import resolve_project
 resolve_project(explicit="synthetic/owned")
 ```
 
+`verify_docs_and_skills(package_path, documents=[...])` checks selected
+Markdown Python fences against local source without exporting skills or
+executing examples. Inspect its `checked_scope`, `unverified` and `limitations`;
+it does not prove complete documentation drift coverage. See
+[scoped documentation verification](docs/documentation-verification.md).
+
 > Discover and install skills through `scitex-dev dev skills list/get/install`.
 > Python discovery/export helpers are public in `scitex_dev.ecosystem`:
 > `list_skills`, `get_skill` and `export_skills`; the root module does not
