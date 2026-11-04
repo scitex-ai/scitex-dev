@@ -32,7 +32,9 @@ from pathlib import (
 )
 import tomllib as toml
 '''
-TAIL = END_SENTINEL + """
+TAIL = (
+    END_SENTINEL
+    + """
 
 class AnnotationProbe:
     value: NotImportedType
@@ -43,6 +45,7 @@ def test_handwritten_header_dependencies():
     assert loader.import_module('pathlib').Path is OwnedPath
     assert AnnotationProbe.__annotations__ == {'value': 'NotImportedType'}
 """
+)
 
 
 def _fixture(tmp_path, header=PREFIX, tail=TAIL):
@@ -97,6 +100,7 @@ def test_normal_force_twice_preserves_imports_and_executes_actual_gate(tmp_path)
                 "-q",
             ],
             cwd=repo,
+            check=False,
             capture_output=True,
             text=True,
             timeout=30,
@@ -244,17 +248,25 @@ def test_reserved_or_ambiguous_bindings_refuse_before_any_write(tmp_path, statem
 def test_canonical_self_alias_and_submodule_root_remain_real_modules():
     # Arrange
     imports = ("import importlib.util", "import pytest as pytest")
-    namespace = {}
     # Act
     source = render_header_imports(imports)
-    exec(compile(source, "<owned canonical header>", "exec"), namespace)
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-c",
+            source + "\nprint(importlib.__name__ + ':' + pytest.__name__)",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
     # Assert
     assert (
-        namespace["importlib"].__name__,
-        namespace["pytest"].__name__,
+        completed.stdout.strip(),
         source.splitlines(),
     ) == (
-        "importlib",
-        "pytest",
+        "importlib:pytest",
         ["import importlib.util", "import pytest as pytest", ""],
     )

@@ -318,7 +318,7 @@ def register(ecosystem):
 
         try:
             split = split_at_sentinel(existing)
-        except ValueError as exc:
+        except (ValueError, TypeError) as exc:
             raise click.ClickException(str(exc)) from exc
         if existing is not None and not split.has_sentinel:
             raise click.ClickException(
@@ -354,7 +354,7 @@ def register(ecosystem):
             content = render_cross_package_gate(
                 distribution, imports, tail=tail, header_imports=split.header_imports
             )
-        except ValueError as exc:
+        except (ValueError, TypeError) as exc:
             raise click.ClickException(str(exc)) from exc
         init = target.parent / "__init__.py"
 
@@ -437,7 +437,7 @@ def register(ecosystem):
         else:
             preserved = ""
         click.echo(
-            f"wrote {target} ({len(imports)} cross-package import(s)" f"{preserved})"
+            f"wrote {target} ({len(imports)} cross-package import(s){preserved})"
         )
 
         if not init.exists():

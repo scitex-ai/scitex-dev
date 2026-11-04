@@ -37,13 +37,15 @@ def read_header_imports(prefix: str) -> tuple[str, ...]:
         raise ValueError("Cannot regenerate an unparseable gate header") from exc
     imports = []
     for index, node in enumerate(tree.body):
-        if index == 0 and isinstance(node, ast.Expr):
-            if isinstance(node.value, ast.Constant) and isinstance(
-                node.value.value, str
-            ):
-                continue
+        if (
+            index == 0
+            and isinstance(node, ast.Expr)
+            and isinstance(node.value, ast.Constant)
+            and isinstance(node.value.value, str)
+        ):
+            continue
         if not isinstance(node, (ast.Import, ast.ImportFrom)):
-            raise ValueError(
+            raise TypeError(
                 "Gate header supports only a docstring, imports and comments"
             )
         _canonical_bindings(node)
