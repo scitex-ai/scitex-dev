@@ -18,6 +18,7 @@ from .._ecosystem.freshness_gc import (
     DEFAULT_ORGANIZATION,
 )
 from ._default_config import create_default_config as _write_default_config
+from ._yaml_config import load_yaml as _load_yaml
 
 # Knob-state layer (skills / mcp / test-execution). Re-exported here so the
 # historical ``from scitex_dev._core.config import set_package_knob`` (and the
@@ -25,6 +26,7 @@ from ._default_config import create_default_config as _write_default_config
 from ._knobs import (  # noqa: F401
     _KNOB_KINDS,
     _apply_knob_state,
+    _cli_bool,
     _knob_state_path,
     _load_knob_state,
     set_package_knob,
@@ -93,6 +95,7 @@ class PackageConfig:
     # knob-state.json. The rich recipe (host + submit template + marker env)
     # lives in the package's own config-layout — see _core.test_execution.
     test_execution: str = "local"
+    cli_enabled: bool = True
 
 
 @dataclass
@@ -135,50 +138,6 @@ def _get_default_config_path() -> Path:
     if not preferred.exists() and legacy.exists():
         return legacy
     return preferred
-
-
-def _load_yaml(path: Path) -> dict[str, Any]:
-    """Load YAML file."""
-    if not path.exists():
-        return {}
-
-    try:
-        import yaml
-
-        with open(path) as f:
-            return yaml.safe_load(f) or {}
-    except ImportError:
-        # Fallback: basic YAML parsing for simple configs
-        content = path.read_text()
-        # Very basic parsing - handles simple key: value pairs
-        result: dict[str, Any] = {}
-        current_key = None
-        current_list: list[Any] = []
-
-        for line in content.split("\n"):
-            line = line.rstrip()
-            if not line or line.startswith("#"):
-                continue
-            if line.startswith("  - "):
-                # List item
-                current_list.append(line[4:].strip())
-            elif line.startswith("  "):
-                # Nested dict item - skip for basic parsing
-                continue
-            elif ":" in line:
-                if current_key and current_list:
-                    result[current_key] = current_list
-                    current_list = []
-                key, val = line.split(":", 1)
-                current_key = key.strip()
-                val = val.strip()
-                if val:
-                    result[current_key] = val
-        if current_key and current_list:
-            result[current_key] = current_list
-        return result
-    except Exception:
-        return {}
 
 
 def _parse_host_config(data: dict[str, Any]) -> HostConfig:
@@ -246,24 +205,18 @@ def _parse_package_config(data: dict[str, Any]) -> PackageConfig:
         import_name=data.get("import_name"),
         skills_enabled=bool(data.get("skills_enabled", True)),
         mcp_enabled=bool(data.get("mcp_enabled", True)),
+        cli_enabled=_cli_bool(data.get("cli_enabled", True)),
         test_execution=str(data.get("test_execution", _DEFAULT_TEST_EXECUTION_MODE)),
     )
 
 
 def load_config(config_path: str | Path | None = None) -> DevConfig:
-    """Load config from YAML with environment variable overrides.
+    """Resolve defaults, selected YAML and machine-managed overrides."""
+    return _load_config(config_path, _load_knob_state())
 
-    Parameters
-    ----------
-    config_path : str | Path | None
-        Path to config file. If None, uses SCITEX_DEV_CONFIG env var
-        or ~/.scitex/dev_config.yaml
 
-    Returns
-    -------
-    DevConfig
-        Loaded configuration.
-    """
+def _load_config(config_path, knob_state, *, strict=False) -> DevConfig:
+    """Internal resolver using one caller-owned state snapshot."""
     # Determine config path
     if config_path is None:
         config_path = os.getenv("SCITEX_DEV_CONFIG")
@@ -273,7 +226,7 @@ def load_config(config_path: str | Path | None = None) -> DevConfig:
         config_path = Path(config_path).expanduser()
 
     # Load YAML
-    data = _load_yaml(config_path)
+    data = _load_yaml(config_path, strict=strict)
 
     # Parse packages: ECOSYSTEM is single source of truth, config overrides
     from .._ecosystem import ECOSYSTEM
@@ -289,6 +242,7 @@ def load_config(config_path: str | Path | None = None) -> DevConfig:
             import_name=info.get("import_name"),
             skills_enabled=bool(info.get("skills_enabled", True)),
             mcp_enabled=bool(info.get("mcp_enabled", True)),
+            cli_enabled=_cli_bool(info.get("cli_enabled", True)),
             test_execution=str(
                 info.get("test_execution", _DEFAULT_TEST_EXECUTION_MODE)
             ),
@@ -306,7 +260,7 @@ def load_config(config_path: str | Path | None = None) -> DevConfig:
     packages = list(pkg_map.values())
 
     # Overlay machine-managed knob-state (CLI toggles) at highest precedence.
-    _apply_knob_state(packages)
+    _apply_knob_state(packages, state=knob_state)
 
     # Parse hosts
     hosts = []
@@ -462,6 +416,7 @@ def config_to_dict(config: DevConfig, config_path: Path | None = None) -> dict:
                 "github_repo": p.github_repo,
                 "skills_enabled": p.skills_enabled,
                 "mcp_enabled": p.mcp_enabled,
+                "cli_enabled": p.cli_enabled,
                 "test_execution": p.test_execution,
             }
             for p in config.packages

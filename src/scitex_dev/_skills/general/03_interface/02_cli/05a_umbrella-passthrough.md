@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] Interface Cli Umbrella Passthrough
-  [DETAILS] Umbrella `scitex` re-exports each standalone CLI as a single click.Group — never duplicates help, never forwards via subprocess. Branded packages (e.g. socialia → `scitex social`) rewrite the program name on mount.
+  [DETAILS] Umbrella `scitex` projects eligible, operator-enabled CLI providers: Click commands retain owner identity; an exact metadata-qualified ordinary console launcher uses the owned adapter. Branded packages (e.g. socialia → `scitex social`) rewrite the program name on mount.
 tags: [scitex-general-interface-cli-umbrella-passthrough]
 ---
 
@@ -13,7 +13,7 @@ This is distinct from §1c (tool pass-through to upstream binaries). §1c forwar
 
 ## The rule
 
-When a `scitex-<pkg>` package ships a CLI, the umbrella `scitex` MUST expose it as a single re-exported `click.Group`. The umbrella adds exactly two things: the subcommand **name** and the install-fallback message. Every other byte of help text, examples, sub-tree, deprecation alias, and shell completion lives in the standalone CLI module.
+When a `scitex-<pkg>` package declares an eligible CLI and operator policy enables it, the umbrella can expose its canonical command. A CLI declaration is not automatic mounting: explicit `none`, ambiguity and independent CLI preferences remain deny gates. For a Click provider, preserve the re-exported command/group object. The umbrella adds exactly two things: the subcommand **name** and the install-fallback message. Every other byte of help text, examples, sub-tree, deprecation alias, and shell completion lives in the standalone CLI module.
 
 ### Canonical shim
 
@@ -118,3 +118,7 @@ Use `deprecated_alias(..., target=("dev", "skills"), ...)` for a nested hidden
 alias. Tuple paths resolve lazily through effective `get_command` policy and
 forward target help; do not create a second alias dispatcher or split arbitrary
 space-containing strings into command paths.
+
+The exact metadata-qualified ordinary-console adapter is distinct from guessing
+a binary or cloning a leaf CLI. CLI preferences govern aggregation only, not
+standalone execution, Python imports, MCP, skills or Web admission.

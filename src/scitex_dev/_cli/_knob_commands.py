@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """Shared `status` / `enable` / `disable` knob subcommands.
 
-Attached to BOTH the `skills` and `mcp` command groups so scitex-dev can
+Attached to the `skills`, `mcp` and `cli` command groups so scitex-dev can
 centrally toggle each package's progressive-disclosure knob (operator
 2026-07-20). The verbs are `status` (not `list` — the skills group already
 has `list` for the corpus, mcp has `list-tools`), `enable <package>`, and
@@ -20,18 +19,19 @@ from .._ecosystem.help_spec import CliHelp, Example, SpecCommand
 def add_knob_commands(group: click.Group, kind: str) -> click.Group:
     """Attach `status` / `enable` / `disable` for the ``kind`` knob to *group*.
 
-    ``kind`` is ``"skills"`` or ``"mcp"``.
+    ``kind`` is ``"skills"``, ``"mcp"`` or ``"cli"``.
     """
-    from .._core.config import load_config, set_package_knob
+    from .._core.config import set_package_knob
+    from ..exposure import load_exposure_policy
 
-    def _is_enabled(pkg) -> bool:
-        return pkg.skills_enabled if kind == "skills" else pkg.mcp_enabled
+    if kind not in {"skills", "mcp", "cli"}:
+        raise ValueError("unsupported exposure surface")
 
     @group.command(
         "status",
         cls=SpecCommand,
         help_spec=CliHelp(
-            summary=f"Show each package's {kind}-enabled knob state.",
+            summary=f"Show configured owners' {kind} preferences (not provider availability).",
             examples=(
                 Example("{prog} " + f"{kind} status", f"Per-package {kind} on/off."),
                 Example("{prog} " + f"{kind} status --json", "Structured JSON."),
@@ -39,13 +39,32 @@ def add_knob_commands(group: click.Group, kind: str) -> click.Group:
         ),
     )
     @click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
-    def knob_status(as_json):
-        rows = sorted((p.name, _is_enabled(p)) for p in load_config().packages)
+    @click.option(
+        "--paths",
+        "show_paths",
+        is_flag=True,
+        help="Include selected config/state file locations.",
+    )
+    def knob_status(as_json, show_paths):
+        try:
+            policy = load_exposure_policy()
+            rows = [(p.distribution, p.is_enabled(kind)) for p in policy.preferences]
+        except (TypeError, ValueError) as exc:
+            raise click.ClickException(str(exc)) from exc
         if as_json:
             import json as _json
 
-            click.echo(_json.dumps(dict(rows), indent=2, sort_keys=True))
+            result = dict(rows)
+            if show_paths:
+                result = {
+                    "config_path": str(policy.config_path),
+                    "knob_state_path": str(policy.knob_state_path),
+                    "preferences": result,
+                }
+            click.echo(_json.dumps(result, indent=2, sort_keys=True))
             return
+        if show_paths:
+            click.echo(f"Config: {policy.config_path}\nState: {policy.knob_state_path}")
         for name, enabled in rows:
             click.echo(f"  [{'on ' if enabled else 'OFF'}] {name}")
 
@@ -53,7 +72,7 @@ def add_knob_commands(group: click.Group, kind: str) -> click.Group:
         "enable",
         cls=SpecCommand,
         help_spec=CliHelp(
-            summary=f"Enable a package's {kind} (surface it into context).",
+            summary=f"Enable a package's {kind} aggregation preference.",
             examples=(
                 Example(
                     "{prog} " + f"{kind} enable scitex-io",
@@ -72,14 +91,17 @@ def add_knob_commands(group: click.Group, kind: str) -> click.Group:
         if dry_run:
             click.echo(f"would enable {kind} for {package}")
             return
-        path = set_package_knob(package, kind, True)
+        try:
+            path = set_package_knob(package, kind, True)
+        except (TypeError, ValueError) as exc:
+            raise click.ClickException(str(exc)) from exc
         click.echo(f"{kind} enabled for {package} ({path})")
 
     @group.command(
         "disable",
         cls=SpecCommand,
         help_spec=CliHelp(
-            summary=f"Disable a package's {kind} (stop surfacing it into context).",
+            summary=f"Disable a package's {kind} aggregation preference.",
             examples=(
                 Example(
                     "{prog} " + f"{kind} disable scitex-io",
@@ -98,7 +120,10 @@ def add_knob_commands(group: click.Group, kind: str) -> click.Group:
         if dry_run:
             click.echo(f"would disable {kind} for {package}")
             return
-        path = set_package_knob(package, kind, False)
+        try:
+            path = set_package_knob(package, kind, False)
+        except (TypeError, ValueError) as exc:
+            raise click.ClickException(str(exc)) from exc
         click.echo(f"{kind} disabled for {package} ({path})")
 
     return group
