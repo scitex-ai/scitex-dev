@@ -170,9 +170,14 @@ preference without requiring the hidden umbrella namespace.
 
 CLI YAML/state values must be real booleans: quoted `"false"`, null, numbers and
 lists refuse rather than silently becoming true. The shared snapshot also refuses
+`packages` unless it is a list of objects with valid `name` fields.
+Scalars, mappings, null and unnamed/non-object entries refuse. Omit it or use
+`packages: []` for defaults. Legacy `load_config()` parsing is unchanged.
+The snapshot refuses
 malformed/unreadable state, invalid owner identities, conflicting canonical owners
-and nonboolean state values for every surface. Missing files retain defaults and
-are not created by reading. Existing supported skills/MCP YAML parsing is unchanged.
+and nonboolean state values for every surface. Missing configuration/state files
+retain defaults without creation or rewriting; dependency/logging bootstrap is
+separate. Existing supported skills/MCP YAML parsing is unchanged.
 The CLI setter refuses malformed state before writing; it never repairs a corrupt
 file by overwriting it. Use canonical distribution names, not command nicknames.
 
