@@ -13,7 +13,7 @@ import base64
 import hashlib
 import importlib.metadata as im
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import click
@@ -25,12 +25,15 @@ RESOURCE_NAME = "_cli_audit_dict.yaml"
 class MountedOwner:
     """Exact distribution identity and its verified dictionary resource."""
 
-    identity: tuple[str, str, str]
+    identity: tuple[str, str, str, str, str]
     distribution: str
     resource: Path | None
     reason: str
     ambiguous: bool = False
     payload: bytes | None = None
+    # Membership/path evidence only, not a source digest or behavior attestation.
+    source_record_owned: bool = False
+    unowned_source_claims: tuple[str, ...] = ()
 
     def provenance(self, full: str) -> str:
         resource = str(self.resource) if self.resource else self.reason
@@ -38,6 +41,23 @@ class MountedOwner:
             f"{full}: cli-audit owner {self.distribution}; "
             f"dictionary {resource} (via installed RECORD)"
         )
+
+
+def _metadata_origin(dist) -> Path | None:
+    """Read PathDistribution's private on-disk origin, or refuse attribution.
+
+    ``Distribution`` has no public metadata-origin API. Only an actual Path
+    stored in the standard implementation's instance dictionary is supported;
+    custom/zip origins are not inferred from names or callable path adapters.
+    """
+    try:
+        origin = vars(dist).get("_path")
+        if not isinstance(origin, Path):
+            return None
+        origin = origin.resolve(strict=True)
+        return origin if origin.is_dir() else None
+    except (OSError, RuntimeError, TypeError):
+        return None
 
 
 def _loaded_command(ep):
@@ -62,15 +82,34 @@ def _loaded_command(ep):
 def _recorded_owner(ep, module, dist) -> MountedOwner:
     """Validate the entry-point source and exact packaged dictionary."""
     name = dist.metadata["Name"] or "<unnamed>"
+    version = dist.metadata["Version"] or ""
     namespace = ep.module.split(".")[0]
     install_root = Path(dist.locate_file("")).resolve()
     package_root = Path(dist.locate_file(namespace)).resolve()
-    identity = (name.lower().replace("_", "-"), str(install_root), namespace)
+    origin = _metadata_origin(dist)
+    # Unknown origins never grant a dictionary or collapse distinct objects.
+    origin_key = str(origin) if origin is not None else f"unavailable:{id(dist)}"
+    identity = (
+        name.lower().replace("_", "-"),
+        str(install_root),
+        namespace,
+        version,
+        origin_key,
+    )
     resource_rel = f"{namespace}/{RESOURCE_NAME}"
+    source_record_owned = False
 
     def rejected(reason):
-        return MountedOwner(identity, name, None, f"{resource_rel}: {reason}")
+        return MountedOwner(
+            identity,
+            name,
+            None,
+            f"{resource_rel}: {reason}",
+            source_record_owned=source_record_owned,
+        )
 
+    if origin is None:
+        return rejected("distribution metadata origin unavailable")
     if not package_root.is_relative_to(install_root):
         return rejected("package escapes distribution root")
     if dist.read_text("RECORD") is None:
@@ -89,6 +128,7 @@ def _recorded_owner(ep, module, dist) -> MountedOwner:
         for member in source_members
     ):
         return rejected("entry-point source is not owned by distribution RECORD")
+    source_record_owned = True
     member = files.get(resource_rel)
     if member is None:
         return rejected("absent from distribution RECORD")
@@ -107,7 +147,14 @@ def _recorded_owner(ep, module, dist) -> MountedOwner:
     )
     if actual != digest.value:
         return rejected("resource does not match RECORD sha256")
-    return MountedOwner(identity, name, resource, "verified", payload=payload)
+    return MountedOwner(
+        identity,
+        name,
+        resource,
+        "verified",
+        payload=payload,
+        source_record_owned=True,
+    )
 
 
 class MountedOwners:
@@ -117,7 +164,7 @@ class MountedOwners:
         self._entries: dict[int, list] = {}
         self._owners: dict[int, MountedOwner | None] = {}
         self.sources: list[str] = []
-        self._reported: set[tuple[str, tuple[str, str, str]]] = set()
+        self._reported: set[tuple[str, tuple[str, str, str, str, str]]] = set()
         # Keep the distribution alongside its own entry points. This also
         # supports Python 3.9, whose EntryPoint lacks the newer .dist API.
         for dist in im.distributions():
@@ -134,19 +181,43 @@ class MountedOwners:
         key = id(vars(cmd).get("callback"))
         if key in self._owners:
             return self._owners[key]
-        owners = {}
-        for ep, module, dist in self._entries.get(key, ()):
-            owner = _recorded_owner(ep, module, dist)
-            owners[owner.identity] = owner
+        claims = [
+            _recorded_owner(ep, module, dist)
+            for ep, module, dist in self._entries.get(key, ())
+        ]
+        recorded = {
+            owner.identity: owner for owner in claims if owner.source_record_owned
+        }
+        rejected = tuple(
+            f"{claim.distribution}: {claim.reason}"
+            for claim in claims
+            if not claim.source_record_owned
+        )
+        # No proven source retains a blocked context, never the parent dictionary.
+        # Distinct entry points from one origin cannot overwrite proven ownership.
+        owners = recorded or {owner.identity: owner for owner in claims}
         if len(owners) == 1:
-            self._owners[key] = next(iter(owners.values()))
+            selected = next(iter(owners.values()))
+            self._owners[key] = replace(selected, unowned_source_claims=rejected)
             return self._owners[key]
         if not owners:
             self._owners[key] = None
             return None
         names = ", ".join(sorted(owner.distribution for owner in owners.values()))
+        reason = "ambiguous distribution ownership"
+        if len({owner.distribution for owner in owners.values()}) < len(owners):
+            origins = "; ".join(
+                f"{identity[0]}=={identity[3]} at {identity[4]}"
+                for identity in sorted(owners)
+            )
+            reason += f" (distinct metadata: {origins})"
         self._owners[key] = MountedOwner(
-            (names, "", ""), names, None, "ambiguous distribution ownership", True
+            (names, "", "", "", ""),
+            names,
+            None,
+            reason,
+            True,
+            unowned_source_claims=rejected,
         )
         return self._owners[key]
 
@@ -155,3 +226,7 @@ class MountedOwners:
         if key not in self._reported:
             self._reported.add(key)
             self.sources.append(owner.provenance(full))
+            self.sources.extend(
+                f"{full}: unowned entry-point source claim {claim}"
+                for claim in owner.unowned_source_claims
+            )
