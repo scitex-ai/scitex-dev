@@ -90,11 +90,13 @@ def _warn_once(old_name: str, message: str) -> None:
 
 
 def _display_name(
-    target: click.Command | str, target_name: str | None
+    target: click.Command | str | tuple[str, ...], target_name: str | None
 ) -> str:
     """The new-command name shown in warnings / redirects."""
     if target_name is not None:
         return target_name
+    if isinstance(target, tuple):
+        return " ".join(target)
     if isinstance(target, str):
         return target
     return target.name or ""
@@ -103,7 +105,7 @@ def _display_name(
 def _resolve_target(
     ctx: click.Context,
     group: click.Group,
-    target: click.Command | str,
+    target: click.Command | str | tuple[str, ...],
     display: str,
 ) -> click.Command:
     """Resolve ``target`` to a command object at dispatch time.
@@ -114,30 +116,30 @@ def _resolve_target(
     """
     if isinstance(target, click.Command):
         return target
-    resolved = group.get_command(ctx, target)
+    name = target[0] if isinstance(target, tuple) else target
+    resolved = group.get_command(ctx.parent or ctx, name)
     if resolved is None:
         ctx.fail(
-            f"deprecated alias misconfigured: target command "
-            f"{display!r} is not registered"
+            f"deprecated alias misconfigured: target command {display!r} is not registered"
         )
     return resolved
 
 
-def _targets_a_group(target: click.Command | str) -> bool:
+def _targets_a_group(target: click.Command | str | tuple[str, ...]) -> bool:
     """Is *target* a group we can classify at registration time?
 
     A string target resolves lazily at dispatch, so it cannot be
     classified here; treat it as a leaf, which preserves the behaviour
     every existing string alias already has.
     """
-    return isinstance(target, click.Group)
+    return isinstance(target, (click.Group, tuple))
 
 
 def deprecated_alias(
     group: click.Group,
     old_name: str,
     *,
-    target: click.Command | str,
+    target: click.Command | str | tuple[str, ...],
     remove_in: str,
     phase: str = "warn",
     target_name: str | None = None,
@@ -149,7 +151,9 @@ def deprecated_alias(
         old_name: the deprecated command name.
         target: the new command — a ``click.Command`` object (may live
             on a *different* group) or a name resolved on ``group`` at
-            dispatch time.
+            dispatch time. A tuple resolves a nested command path lazily through
+            native Click contexts and effective get_command policy; its help is forwarded.
+            Tuple tokens are a trusted canonical argv prefix, not shell text.
         remove_in: the version the alias disappears in (``"0.20"`` or
             ``"v0.20"`` — normalized to ``v0.20`` in messages).
         phase: ``"warn"`` (hidden alias forwards + once-per-shell stderr
@@ -168,6 +172,16 @@ def deprecated_alias(
             f"(expected one of {_PHASES}; Phase R means: delete the alias)"
         )
 
+    if isinstance(target, tuple) and (
+        not target
+        or any(
+            not isinstance(part, str) or not part or any(c.isspace() for c in part)
+            for part in target
+        )
+    ):
+        raise ValueError(
+            "deprecated_alias: target path must contain nonempty command tokens"
+        )
     display = _display_name(target, target_name)
     version = f"v{str(remove_in).lstrip('vV')}"
 
@@ -184,9 +198,12 @@ def deprecated_alias(
             # Re-parse the raw argv through the target so its own
             # options/arguments apply (ctx.invoke(target, *ctx.args)
             # would pass raw tokens positionally and drop options).
-            sub_ctx = target_cmd.make_context(
-                display, list(ctx.args), parent=ctx.parent
-            )
+            args = list(ctx.args)
+            if isinstance(target, tuple):
+                # Invoke from the first real group so its callbacks/context run.
+                args = [*target[1:], *args]
+            info_name = target[0] if isinstance(target, tuple) else display
+            sub_ctx = target_cmd.make_context(info_name, args, parent=ctx.parent)
             with sub_ctx:
                 target_cmd.invoke(sub_ctx)
 
@@ -196,10 +213,7 @@ def deprecated_alias(
             params=[],
             hidden=True,
             short_help=f"(deprecated) Use '{display}'.",
-            help=(
-                f"(deprecated) Forwards to '{display}'. "
-                f"Removed in {version}."
-            ),
+            help=(f"(deprecated) Forwards to '{display}'. " f"Removed in {version}."),
             # A GROUP alias must hand `--help` to the target, or the old
             # spelling stops being usable the moment anyone asks it what
             # it can do. Click's own help option fires during PARSING, so
@@ -212,9 +226,8 @@ def deprecated_alias(
             # option drops `--help` into ctx.args, which _forward re-parses
             # through the target.
             #
-            # Scoped to registration-time GROUP objects: a leaf alias has
-            # no subcommands to hide, and a string target cannot be
-            # classified here at all (it resolves at dispatch).
+            # Tuple paths also forward help; their first real group resolves
+            # the remaining path with native Click contexts and policy.
             add_help_option=not _targets_a_group(target),
             context_settings=dict(_FORWARD_CONTEXT_SETTINGS),
         )
