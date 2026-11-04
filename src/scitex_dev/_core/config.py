@@ -18,7 +18,6 @@ from .._ecosystem.freshness_gc import (
     DEFAULT_ORGANIZATION,
 )
 from ._default_config import create_default_config as _write_default_config
-from ._yaml_config import load_yaml as _load_yaml
 
 # Knob-state layer (skills / mcp / test-execution). Re-exported here so the
 # historical ``from scitex_dev._core.config import set_package_knob`` (and the
@@ -32,6 +31,8 @@ from ._knobs import (  # noqa: F401
     set_package_knob,
     set_package_test_execution,
 )
+from ._yaml_config import load_yaml as _load_yaml
+from ._yaml_config import validate_packages as _validate_packages
 from .test_execution import DEFAULT_MODE as _DEFAULT_TEST_EXECUTION_MODE
 
 
@@ -227,6 +228,8 @@ def _load_config(config_path, knob_state, *, strict=False) -> DevConfig:
 
     # Load YAML
     data = _load_yaml(config_path, strict=strict)
+    if strict:
+        _validate_packages(data)
 
     # Parse packages: ECOSYSTEM is single source of truth, config overrides
     from .._ecosystem import ECOSYSTEM
