@@ -17,10 +17,10 @@ mcp = FastMCP(
     name="scitex-dev",
     instructions=(
         "Shared developer utilities for the SciTeX ecosystem. "
-        "Use dev_docs_list to browse package documentation, "
-        "dev_docs_search to search across docs, "
+        "Use mcp_docs_list to browse package documentation, "
+        "mcp_docs_search to search across docs, "
         "dev_ecosystem_list to check ecosystem versions, "
-        "dev_config to view configuration, "
+        "dev_config_show to view configuration, "
         "dev_bulk_rename for bulk renaming with cross-reference updates."
     ),
 )
