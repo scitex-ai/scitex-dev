@@ -7,9 +7,7 @@ from scitex_dev._cli import main
 
 
 @pytest.mark.parametrize("shell", ["bash", "zsh", "fish"])
-def test_completion_uses_current_click_without_running_path_executable(
-    tmp_path, monkeypatch, shell
-):
+def test_completion_uses_current_click_without_running_path_executable(tmp_path, shell):
     # Arrange
     marker = tmp_path / "foreign-executable-ran"
     foreign = tmp_path / "scitex-dev"
@@ -17,9 +15,10 @@ def test_completion_uses_current_click_without_running_path_executable(
         f"#!/bin/sh\nprintf foreign > '{marker}'\nprintf FOREIGN_SCRIPT\n"
     )
     foreign.chmod(0o700)
-    monkeypatch.setenv("PATH", str(tmp_path))
     # Act
-    result = CliRunner().invoke(main, ["print-shell-completion", "--shell", shell])
+    result = CliRunner().invoke(
+        main, ["print-shell-completion", "--shell", shell], env={"PATH": str(tmp_path)}
+    )
     # Assert
     assert (
         result.exit_code,
@@ -29,13 +28,13 @@ def test_completion_uses_current_click_without_running_path_executable(
     ) == (0, True, False, False)
 
 
-def test_completion_is_available_without_installed_executables_on_path(
-    tmp_path, monkeypatch
-):
+def test_completion_is_available_without_installed_executables_on_path(tmp_path):
     # Arrange
-    monkeypatch.setenv("PATH", str(tmp_path))
+    runner = CliRunner()
     # Act
-    result = CliRunner().invoke(main, ["print-shell-completion", "--shell", "bash"])
+    result = runner.invoke(
+        main, ["print-shell-completion", "--shell", "bash"], env={"PATH": str(tmp_path)}
+    )
     # Assert
     assert (
         result.exit_code,
