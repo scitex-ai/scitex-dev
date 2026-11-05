@@ -18,4 +18,5 @@ class _BuildCliData(build_py):
         super().run()
         source = Path(__file__).resolve().parents[3] / ".scitex/dev/cli-audit-dict.yaml"
         target = Path(self.build_lib) / "scitex_dev/_cli_audit_dict.yaml"
+        self.mkpath(str(target.parent))
         self.copy_file(str(source), str(target))
