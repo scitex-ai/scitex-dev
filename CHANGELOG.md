@@ -10,6 +10,22 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.62.16] - 2026-11-05
+
+- Add scoped static documentation checks through `docs validate`, with explicit
+  incomplete outcomes and source-owned guidance for pull-request, daily and
+  release drift reviews. Keep build/link checks separate from content validity
+  and successful review checkpoints separate from partial coverage.
+- Correct MCP setup instructions to name the registered documentation and
+  configuration tools, with real registry controls for the advertised names.
+- Distinguish mounted CLI source owners from foreign entry-point claims using
+  RECORD membership and physical metadata identity. Keep invalid dictionaries,
+  unknown origins and genuine multiple owners blocked without parent fallback.
+- Qualify deprecated-alias flags through callback-associated helper routes in
+  the effective command snapshot. Validate supported fixed-argument redirect
+  references without invoking callbacks, defaults or custom parsing; retain
+  error-phase advisory semantics and explicit unresolved evidence.
+
 ## [0.62.15] - 2026-11-05
 
 - Resolve independent CLI, MCP and skills aggregation preferences through one
