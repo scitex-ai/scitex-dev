@@ -10,6 +10,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Generate shared shell-completion scripts with the current interpreter's Click
+  instead of executing a same-named program from PATH. This avoids foreign
+  environment scripts and works when the console executable is not on PATH.
+
 ## [0.62.16] - 2026-11-05
 
 - Add scoped static documentation checks through `docs validate`, with explicit

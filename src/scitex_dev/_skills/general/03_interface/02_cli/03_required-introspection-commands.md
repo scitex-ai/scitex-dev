@@ -168,6 +168,11 @@ severity `W` during bake-in).
 The upstream helper `scitex_dev._cli._completion.attach_shell_completion`
 already implements the cache pattern — every CLI that uses
 `attach_shell_completion(group, prog_name=...)` inherits it for free.
+
+Script generation uses the current interpreter's Click shell-completion API
+against the registered group. It does not execute a console program from
+`PATH`; a different environment's same-named executable must not supply the
+cached script. Shell activation still requires the intended CLI on `PATH`.
 Packages still tripping `PS-147` are the ones that ship their own
 completion-install body; the fix is to delete the local
 implementation and call `attach_shell_completion` instead.
