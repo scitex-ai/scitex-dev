@@ -13,6 +13,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 - Generate shared shell-completion scripts with the current interpreter's Click
   instead of executing a same-named program from PATH. This avoids foreign
   environment scripts and works when the console executable is not on PATH.
+- Quote cached completion paths in shell rc lines so activation works with
+  spaces and apostrophes in the home or relocated state directory.
 
 ## [0.62.16] - 2026-11-05
 

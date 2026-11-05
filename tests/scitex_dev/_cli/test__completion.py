@@ -1,5 +1,8 @@
 """Completion generation must not execute a foreign executable from PATH."""
 
+import shutil
+import subprocess
+
 import pytest
 from click.testing import CliRunner
 
@@ -39,7 +42,42 @@ def test_completion_is_available_without_installed_executables_on_path(tmp_path)
     assert (
         result.exit_code,
         "_SCITEX_DEV_COMPLETE=bash_complete" in result.stdout,
-    ) == (
+    ) == (0, True)
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="requires real Bash")
+def test_installed_completion_can_be_sourced_with_spaces_and_quotes_in_state_path(
+    tmp_path,
+):
+    # Arrange
+    home = tmp_path / "owned home"
+    home.mkdir()
+    state = tmp_path / "state's directory"
+    bash = shutil.which("bash")
+    # Act
+    install = CliRunner().invoke(
+        main,
+        ["install-shell-completion", "--shell", "bash", "--yes"],
+        env={"HOME": str(home), "SCITEX_DIR": str(state)},
+    )
+    loaded = subprocess.run(
+        [
+            bash,
+            "--noprofile",
+            "--norc",
+            "-c",
+            'source "$1" && declare -F _scitex_dev_completion',
+            "owned-check",
+            str(home / ".bashrc"),
+        ],
+        env={"PATH": "/usr/bin:/bin", "HOME": str(home)},
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    # Assert
+    assert (install.exit_code, loaded.returncode, loaded.stdout.strip()) == (
         0,
-        True,
+        0,
+        "_scitex_dev_completion",
     )

@@ -26,6 +26,7 @@ That single call registers four leaves on `cli`:
 from __future__ import annotations
 
 import os
+import shlex
 from pathlib import Path
 
 import click
@@ -92,7 +93,8 @@ def _xdg_symlink(prog_name: str) -> Path:
 
 
 def _source_line(cache_path: Path, prog_name: str) -> str:
-    return f"[ -f {cache_path} ] && source {cache_path}  {_marker(prog_name)}"
+    quoted_path = shlex.quote(str(cache_path))
+    return f"[ -f {quoted_path} ] && source {quoted_path}  {_marker(prog_name)}"
 
 
 def _generate_script(shell: str, prog_name: str, command: click.Command) -> str:
