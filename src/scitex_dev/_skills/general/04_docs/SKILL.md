@@ -25,3 +25,11 @@ Builds on the package layout ([../02_package/SKILL.md](../02_package/SKILL.md)).
 11. [03_rtd.md](03_rtd.md) — Read the Docs onboarding, `.readthedocs.yaml`, build config
 12. [04_robust-ci.md](04_robust-ci.md) — Robust docs-CI: keep `sphinx-build -W` strict while defending the 4 benign failure modes
 13. [05_adr.md](05_adr.md) — Architecture Decision Records: what an ADR is, when to write one, where it lives, and the copy/paste template
+
+## Content validity and drift
+
+Use [documentation drift](../05_development/22_documentation-drift.md) for
+PR-impact, daily agent and release checks of README, agent instructions, skills,
+examples and served docs. Generated HTML/build/link success is separate from
+source binding and behavioral validity. That skill identifies public tools,
+source-only additions and explicit unchecked/manual scope.

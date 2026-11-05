@@ -1,61 +1,118 @@
 ---
 description: |
-  [TOPIC] Documentation drift — the loosely-coupled sibling of version drift
-  [DETAILS] Version drift is about which code runs where; documentation drift is
-  the parallel axis — does the doc still match the code it describes? It is
-  harder because docs are only loosely coupled to code, so they drift silently
-  and become confidently wrong. Where it hides (README, `_skills/`, CLI help vs
-  reference, docstrings, demos, cross-package refs), the existing scitex-dev
-  detectors, and the three durable moves in preference order (generate from
-  code; put under an audit rule; fix at the point of notice). Companion to
-  13_version-drift-management.md.
-tags: [scitex-general-development-version-drift]
+  [TOPIC] Documentation drift
+  [DETAILS] Check README, agent instructions, skills, reference docs and examples
+  against declared source and behavioral evidence. Use for impacted PR checks,
+  daily agent reviews and release qualification. Distinguish scoped static
+  checks, intended contracts, observed behavior and generated-artifact delivery;
+  unavailable or manual evidence is not a pass. Reuse leaf-owned checks and
+  Dev dispatch rather than maintaining another ecosystem inventory.
+tags: [scitex-general-development-documentation-drift]
 ---
 
-# Documentation drift — the loosely-coupled sibling
+# Documentation drift
 
-## 7. Documentation drift — the loosely-coupled sibling
+Documentation can disagree with source, the installed distribution or the
+artifact actually served. Record which of these was checked. Source describes
+observed behavior; an intended contract may reveal a code bug. Do not rewrite
+an intended contract merely to match a broken implementation.
 
-Version drift is about *which code runs where*. **Documentation drift**
-is the parallel axis: does the doc still match the code it describes?
-It is in some ways harder, because docs are only **loosely coupled** to
-code — nothing forces a README, skill, CLI-reference, docstring, or
-example to update when the code under it changes, so it drifts silently
-and becomes *confidently wrong* (worse than absent — a reader trusts
-it). The constitution's Principle 1 is the governing rule:
-**documents and skills are never the source of truth; verify against
-the code.**
+## Evidence near the claim
 
-Where it hides (drift layers, doc edition): `README.md` (sections,
-badges, install/usage snippets), the `_skills/<pkg>/` tree, CLI
-`--help` vs the hand-written CLI-reference, docstrings vs signatures,
-`_demo_*.py`/examples vs the current API, and cross-package references
-(one package's doc naming another's moved symbol).
+Cover `README.md`, existing `AGENTS.md`/`CLAUDE.md`, shipped skills, docstrings,
+CLI/MCP descriptions, reference pages and examples when relevant. Keep agent
+instructions linked to their authoritative skill instead of copying its body.
+For a checkable claim, name the owning source symbol/file and its existing test
+or other evidence beside the claim or in the leaf's normal test documentation.
+A source link alone does not establish correctness.
 
-Detectors that already exist in scitex-dev — use them, don't reinvent:
+Use the leaf's real tests to exercise documented behavior in owned temporary
+fixtures: expected values/schema, error cases and observable side effects.
+Compilation, import success, a passing link check or Sphinx build is not a
+behavior assertion. Never discover and execute arbitrary documentation fences;
+network, models, messages, installers and live data require their own authorized
+fixtures. If no safe executable check exists, report manual/unverified scope.
 
-```bash
-scitex-dev ecosystem audit-all <pkg>        # includes the doc-surface rules below
-scitex-dev ecosystem audit-skills <pkg>     # _skills/<pkg>/ §1–§FM structure
+## Select checks by cadence
+
+- **PR:** follow the changed source's declared documentation references and
+  public callers; check the affected claims and corresponding leaf-owned tests.
+  Include agent instructions and skill references, not only edited Markdown.
+- **Daily:** one authorized agent job on a selected host reviews the current
+  source/environment and reports drift plus unchecked scope. Advance a repo's
+  successful-review checkpoint only after its selected coverage completes;
+  preserve partial/failed attempts and the changes still needing review. Discover installed declarations and available tools in that environment;
+  do not maintain a second package list or enable every federated job. Preserve
+  previous evidence and identify source SHAs, versions and actual commands.
+- **Release:** broaden to the shipped wheel/sdist, installed help/metadata,
+  packaged skills and generated docs. Verify their source/version binding and
+  applicable behavioral controls; check the actually served artifact separately.
+
+A daily schedule is not evidence that the first review ran. Follow the job's
+explicit scope; cadence does not authorize package installs, publication or
+service changes. Use the existing scheduler or `scitex_dev.jobs` federation when
+appropriate; creating this check does not require a new scheduling framework.
+
+## Existing tools and their limits
+
+Available in **public Dev 0.62.15**:
+
+```python
+from pathlib import Path
+from scitex_dev import verify_docs_and_skills
+
+report = verify_docs_and_skills(
+    Path("."), documents=[Path("README.md")]
+)
+print(report["status"], report["checked_scope"], report["unverified"])
 ```
 
-- README structure / sections / badge rules (PS-1xx) — see
-  `_cli/audit/_project/_check_readme_*.py`.
-- Skills structure + self-explain quality —
-  [04_skills-self-explain.md](04_skills-self-explain.md).
-- Doc-surface precedence (which surface wins when two disagree) —
-  [05_doc-surfaces.md](05_doc-surfaces.md).
+This is a read-only static check of closed Markdown Python/py fences and local
+src-layout imports/direct definitions. Explicit `documents` can select existing
+agent Markdown or guides. Defaults cover README and source skills. It does not
+execute examples, check signatures/results, validate prose or other interfaces,
+or compare installed/exported skills. Inspect `limitations`; `ok` is scoped,
+`incomplete` is not a complete pass, and `needs_update` reports a detected issue.
 
-Three durable moves, in preference order (mirror the version-drift
-strategy: one SSoT + a cheap detector):
+The CLI wrapper was added alongside this skill update; older installs,
+including 0.62.15, lack this route. Check `scitex dev docs --help` (or
+`scitex-dev docs --help`) before using it: a source checkout alone does not
+establish installed availability. Prefer the umbrella route when available;
+standalone `scitex-dev` is the bootstrap route:
 
-1. **Generate the doc from the code** so it *cannot* drift — CLI
-   reference from `--help`, the API tree from introspection
-   (`list-python-apis`), config docs from the schema. Generated docs
-   are always in sync by construction.
-2. **Put the assertion under an audit rule** where prose is
-   unavoidable, so a drifted doc becomes a *red check* (the same
-   feedback-loop principle as §4) instead of a silent lie.
-3. **Fix at the point of notice** — a doc that contradicts the code is
-   a bug in the doc; correct it then and there (constitution §3,
-   keep-it-tidy), never treat it as "someone else's cleanup."
+```bash
+scitex dev docs validate --path /owned/package --document README.md --json
+scitex-dev docs validate --path /owned/package --document AGENTS.md --json
+```
+
+It calls that same helper. Exit codes: 0 = scoped `ok`, 1 = `needs_update`,
+2 = `incomplete`. It never turns missing/manual evidence into success.
+
+Existing broader checks remain separate:
+
+```bash
+scitex dev ecosystem audit-all PACKAGE --path /owned/package
+scitex dev ecosystem audit-skills PACKAGE --path /owned/package
+scitex dev docs list-providers --json
+```
+
+Audit rules check their declared scope, not all prose semantics. Provider rows
+are metadata declarations, not proof of callable/live interfaces. Cached-skill
+version warnings are not byte/content checks or proof of agent discovery.
+Prefer the owning leaf's audit/test primitives; Dev dispatches them. SDK owns
+Web contract validation ports, leaves own endpoint semantics, and the host owns
+rendering/admission. A registered GUI, HTTP 200 or docs link proves none of those
+other contracts by itself.
+
+## Generated documents still need evidence
+
+Generate repetitive reference material from qualified source where practical,
+but retain the source identity, generator/config inputs and output binding.
+Generation can use the wrong installed package, miss a page, reuse stale output
+or faithfully document a bug. A successful build does not prove content valid,
+and an exact bundle does not prove the live host serves it. Report those checks
+separately; fix the owning source/generator or document a genuine limitation.
+
+Report each outcome as verified-with-scope, drift/failure, unverified/manual or
+not-applicable-with-reason. Never flatten a skip, unavailable tool, failed read
+or unexecuted check into a green ecosystem summary.
