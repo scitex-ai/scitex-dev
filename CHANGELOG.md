@@ -12,6 +12,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [0.62.16] - 2026-11-05
 
+- Add scoped static documentation checks through `docs validate`, with explicit
+  incomplete outcomes and source-owned guidance for pull-request, daily and
+  release drift reviews. Keep build/link checks separate from content validity
+  and successful review checkpoints separate from partial coverage.
 - Correct MCP setup instructions to name the registered documentation and
   configuration tools, with real registry controls for the advertised names.
 - Distinguish mounted CLI source owners from foreign entry-point claims using
