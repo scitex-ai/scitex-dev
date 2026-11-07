@@ -1,187 +1,60 @@
 ---
 description: |
-  [TOPIC] Full Update
-  [DETAILS] Full ecosystem release workflow — pre-flight checks, version bump, PyPI publish, local sync, NAS deploy (including scitex-cloud special handling), and verification. Use via /update-scitex-full command.
+  [TOPIC] Release preparation and publication
+  [DETAILS] Source-owned Dev release contract: exact-head checks, setuptools-scm versions, immutable tag validation, and protected-main manual OIDC publication. Leaves own their release procedures.
 tags: [scitex-dev-full-update]
 ---
 
-# Full Ecosystem Update
+# Release preparation and publication
 
-End-to-end release pipeline for all SciTeX packages. Follow phases strictly in order;
-steps within a phase may run in parallel via subagents.
+Use the package being released as the source of truth. Dev dispatches checks;
+its release workflow does not define publication for every leaf. Host rollout
+is a separate step: [19_release-deploy.md](19_release-deploy.md).
 
-## Packages
+## Current Dev workflow
 
-Retrieved programmatically from the ecosystem config — never hard-code the list.
+Inspect `.github/workflows/pypi-publish-and-github-release-on-tag.yml` in the
+source under review. Despite its historical filename, its current behavior is:
 
-```python
-from scitex_dev import load_config
-config = load_config()
-packages = list(config.ecosystem.keys())  # canonical list
-```
+| Event | Behavior |
+|---|---|
+| Push a `v*` tag | Validate immutable source through the `dev-release` native test/build profile; no PyPI upload or GitHub release |
+| Dispatch the workflow on `main`, with an existing `version` tag | Repeat test/build qualification, then publish through the admitted `pypi` environment; create the GitHub release only after publication succeeds |
 
-Or via MCP: `mcp__scitex__dev_ecosystem_list` returns all registered packages.
+Organization admission, source/runtime/image closure, wheel/sdist identity and
+RECORD checks remain mandatory. A green ordinary PR is not a release-profile
+or installed-artifact qualification.
 
-Skip alpha/beta packages (e.g., scitex-cloud) unless explicitly requested.
+## Prepare the candidate
 
-## Full Update Levels (1–5)
+1. Confirm the user's release scope and inspect clean/dirty source, current
+   tags and published versions. Preserve unrelated work; use an owned worktree.
+2. Review changes since the last release and write accurate changelog entries.
+   Dev derives its version from release tags using `setuptools-scm`; do not
+   assume a static version field in `pyproject.toml` or overwrite `__init__.py`.
+3. Check README, docs and skills against source and actual command help. Keep
+   static, behavioral, artifact and served-document evidence separate. Use the
+   [documentation-drift skill](../general/05_development/22_documentation-drift.md).
+4. Integrate accepted source and qualify the combined tree. Review every PR
+   check at the exact head, including optional consent/security failures.
+   Merge normally with the reviewed head guard; do not enable auto-merge or
+   bypass a failed check.
+5. Promote through the ordinary release PR to `main`. After all checks pass,
+   choose an unused canonical version tag on the accepted main commit. Push
+   only that tag, never a blanket `--tags` push. Published tags are immutable.
 
-Each level includes ALL steps from the previous level.
+## Publish only the qualified tag
 
-| Level | Scope | Steps |
-|-------|-------|-------|
-| 1 | **Local** | diff check -> bump `pyproject.toml` + `__init__.py` -> commit -> `git tag vX.Y.Z` -> `git push origin develop --tags` |
-| 2 | **GitHub Release** | Level 1 + `gh release create vX.Y.Z --generate-notes` |
-| 3 | **PyPI** | Level 2 + verify `publish-pypi.yml` triggered (or manual `twine upload` for first publish) + confirm version on PyPI |
-| 4 | **Hosts** | Level 3 + `pip install -e .` locally + `mcp__scitex__dev_ecosystem_sync` (NAS, Spartan) + verify remote versions |
-| 5 | **Skills** | Level 4 + `scitex-dev dev skills install` (writes the projection registry; no MANIFEST.md) |
+After the tag-triggered validation completes, inspect its entire outcome.
+Publication, when authorized, uses this workflow's `workflow_dispatch` from
+`main` with `version` set to that existing tag. Do not replace that path with
+manual uploads, a different publisher, synthetic verdicts or relaxed checks.
 
-Pick the highest applicable level. Most packages need Level 4.
-Packages with `_skills/` directories need Level 5.
+The workflow owns GitHub release creation after PyPI succeeds. Verify the
+published wheel/sdist identities, normal installation with the declared
+extras, dependency consistency and documented interfaces separately. Do not
+infer success from a tag or GitHub release page alone.
 
----
-
-## Phase 1: Pre-flight
-
-**Goal:** Ensure every repo is in a releasable state before touching versions.
-
-### 1. check_ci — Verify GitHub Actions pass
-
-- **Python**: `from scitex_dev import check_ci, get_failing_packages`
-  - `check_ci(packages=None)` → `{pkg: CIStatus}`
-  - `get_failing_packages(packages=None)` → `list[str]`
-- **CLI**: `gh run list -R ywatanabe1989/PACKAGE --limit 3`
-- **MCP**: `mcp__scitex__dev_ecosystem_list` (includes CI-adjacent version checks)
-
-If any package is failing, fix CI before proceeding. Do not skip.
-
-### 2. detect_mismatches — Find version inconsistencies
-
-- **Python**: `from scitex_dev import detect_mismatches`
-  - `detect_mismatches(packages=None)` → `{pkg: {status, issues, local, git, remote}}`
-- **CLI**: `scitex-dev ecosystem validate-versions --dry-run`
-- **MCP**: `mcp__scitex__dev_ecosystem_fix_mismatches(confirm=False)`
-
-### 3. fix_init_version — Sync `__init__.py` with `pyproject.toml`
-
-- **Python**: `from scitex_dev import fix_init_version`
-  - `fix_init_version(package_path, confirm=False)` → `{toml_version, init_version, action, status}`
-- **CLI**: manual `sed` or editor
-- **MCP**: via `fix_init_version` Python API (planned as MCP tool)
-
-These block PyPI publish. Fix and commit before bumping.
-
-### 4. verify_pypi_config — Check trusted publisher setup
-
-- **Python**: `from scitex_dev import verify_pypi_config, verify_all_pypi_configs`
-  - `verify_pypi_config(repo)` → `{repo, workflow_exists, needs_first_publish}`
-  - `verify_all_pypi_configs(packages=None)` → `{pkg: {...}}`
-- **CLI**: `gh api repos/ywatanabe1989/PACKAGE/actions/workflows`
-- **MCP**: via `mcp__scitex__dev_ecosystem_list` (planned)
-
-First-publish packages need manual `twine upload` before OIDC works.
-
----
-
-## Phase 2: Version Bump + Release
-
-**Goal:** Bump, tag, release, and publish to PyPI. Independent packages run in parallel.
-
-### 5. determine_bump_type — Check diff and classify as minor/patch
-
-- **Python**: `from scitex_dev import determine_bump_type`
-  - `determine_bump_type(package_path)` → `{has_diff, commits_since_tag, has_feat, bump_type, current_version, suggested_version}`
-- **CLI**:
-  ```bash
-  git -C ~/proj/PACKAGE diff $(git -C ~/proj/PACKAGE describe --tags --abbrev=0)..HEAD --stat
-  git -C ~/proj/PACKAGE log $(git -C ~/proj/PACKAGE describe --tags --abbrev=0)..HEAD --oneline
-  ```
-- **MCP**: `mcp__scitex__dev_ecosystem_list` (includes `commits_since_tag` field)
-
-**Rule: If HEAD differs from the last tag, version MUST be incremented.**
-
-- Any `feat:` commit → **minor** bump
-- Otherwise (fix, chore, docs, refactor) → **patch** bump
-- Identical to last tag (no diff) → **skip** (only case where skipping is allowed)
-
-### 6. bump_version — Edit `pyproject.toml` and `__init__.py`
-
-- **Python**: `from scitex_dev import bump_version`
-  - `bump_version(package_path, new_version, confirm=False)` → `{old_version, new_version, toml_updated, init_updated, status}`
-- **CLI**: `sed -i 's/^version = "OLD"/version = "NEW"/' pyproject.toml`
-- **MCP**: via `mcp__scitex__dev_ecosystem_fix_mismatches` (planned)
-
-### 7. Verify documentation against the source under review
-
-Use [39_interface-audit.md](39_interface-audit.md) for source audits, actual
-CLI help and skill discovery. Verify documented imports and call signatures
-without executing release operations.
-
-`from scitex_dev import verify_docs_and_skills` provides a read-only static
-check of selected Markdown Python fences against local `src/` modules and
-direct definitions. It defaults to README plus packaged `_skills` Markdown;
-pass `documents=[Path("docs/guide.md")]` for an explicit documentation scope.
-Inspect `checked_scope`, `unverified`, `issues` and `limitations`: dynamic
-exports, signatures, runtime results and other interfaces remain unverified.
-It never exports skills, imports audited source or executes examples. An
-`incomplete` report is not a full drift pass; even `ok` covers only the stated
-static scope. See `docs/documentation-verification.md` in the source checkout.
-
-Check before pushing:
-- Skill files reference functions that actually exist
-- API examples in skills are runnable
-- CLI commands in skills match `--help` output
-
-If stale, update and commit before tagging.
-
-### 8. commit_and_tag — Commit version bump and tag
-
-- **Python**: `subprocess` (no convenience wrapper — git is the tool)
-- **CLI**:
-  ```bash
-  git -C ~/proj/PACKAGE add pyproject.toml src/
-  git -C ~/proj/PACKAGE commit -m "chore: bump version to X.Y.Z"
-  git -C ~/proj/PACKAGE tag -a vX.Y.Z -m "Release vX.Y.Z"
-  ```
-- **MCP**: not applicable
-
-### 9. check_ci_before_push — Last CI gate before push
-
-- **Python**: `from scitex_dev import check_ci`
-  - `check_ci(packages=["PACKAGE"])` → `{pkg: CIStatus}`
-- **CLI**: `gh run list -R ywatanabe1989/PACKAGE --limit 1`
-- **MCP**: `mcp__scitex__dev_ecosystem_list` (check status field)
-
-If failures found, fix now. This is the last opportunity before release.
-
-### 10. push — Push commit and tags
-
-- **Python**: `subprocess`
-- **CLI**: `git -C ~/proj/PACKAGE push origin develop --tags`
-- **MCP**: not applicable
-
-### 11. create_github_release — Create release on GitHub
-
-- **Python**: `from scitex_dev import create_github_release`
-  - `create_github_release(repo, tag, generate_notes=True, confirm=False)` → `{repo, tag, url, status}`
-- **CLI**: `gh release create vX.Y.Z --repo ywatanabe1989/PACKAGE --generate-notes`
-- **MCP**: via `mcp__scitex__dev_ecosystem_list` (planned)
-
-### 12. wait_for_pypi — Watch PyPI publish (background)
-
-- **Python**: `from scitex_dev import wait_for_workflow, check_pypi_publish`
-  - `wait_for_workflow(repo, workflow="publish-pypi.yml", timeout=600, poll_interval=30)` → `WorkflowRun | None`
-  - `check_pypi_publish(repo)` → `WorkflowRun | None`
-- **CLI**:
-  ```bash
-  run_id=$(gh run list -R ywatanabe1989/PACKAGE -w publish-pypi.yml --limit 1 --json databaseId -q '.[0].databaseId')
-  gh run watch "$run_id" -R ywatanabe1989/PACKAGE  # run_in_background=true
-  pip index versions PACKAGE 2>/dev/null | head -1  # verify after completion
-  ```
-- **MCP**: via `wait_for_workflow` Python API (planned as MCP tool)
-
-Launch as background task. Do not block.
-Failure: no workflow → `twine upload dist/*` | failed → `gh run view --log-failed` | timeout → check GitHub Actions page.
-
----
-
+Preserve failed-run evidence. Diagnose source or infrastructure failures before
+attempting the next normal qualification; this playbook does not request
+forced reruns, tag replacement or automatic host updates.

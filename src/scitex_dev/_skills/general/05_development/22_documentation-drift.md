@@ -113,6 +113,13 @@ or faithfully document a bug. A successful build does not prove content valid,
 and an exact bundle does not prove the live host serves it. Report those checks
 separately; fix the owning source/generator or document a genuine limitation.
 
+For Sphinx, check that authored guides and generated search/index pages have
+distinct output URLs. An authored `search.rst` can be overwritten by the
+built-in search page; use a distinct guide name such as `unified-search.rst`.
+Inspect both the guide content and the generated search form in the HTML,
+keeping strict build warnings enabled. This is a content check, not proof
+that an installed package or live host has adopted the new output.
+
 Report each outcome as verified-with-scope, drift/failure, unverified/manual or
 not-applicable-with-reason. Never flatten a skip, unavailable tool, failed read
 or unexecuted check into a green ecosystem summary.

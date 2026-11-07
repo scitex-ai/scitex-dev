@@ -299,7 +299,7 @@ def audit_cli(
     baseline_path: str | None = None,
     repo_root=None,
 ) -> int:
-    """Audit a package's installed CLI; return exit code (always 0 — warn-only).
+    """Audit a package's installed CLI; return its severity/coverage exit code.
 
     - `package` is required unless `audit_all=True`.
     - `audit_all=True` runs the audit across every entry in the registry

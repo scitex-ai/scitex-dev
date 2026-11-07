@@ -10,6 +10,13 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Keep the Unified Search guide at a distinct documentation URL instead of
+  colliding with Sphinx's generated search page and removing its built-in label.
+
+- Correct CLI/MCP audit help to describe the base installation and existing
+  severity-based failures instead of a removed extra and warn-only behavior.
+
+
 - Add vendor-neutral `skills install --directory`, preserving `--dest` and the
   canonical store default. Document explicit agent-readable destinations and
   package selection without making Claude projection part of the default flow.
