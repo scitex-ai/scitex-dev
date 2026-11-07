@@ -2,8 +2,8 @@
 description: |
   [TOPIC] End-to-end release flow (develop → PyPI) — opt-in only, per release
   [DETAILS] The authorization doctrine (default NEVER auto-release; per-release
-  explicit trigger; the trust boundary is `git push origin <v-tag>`, not the
-  local tag), the pre-flight checklist, the full release sequence `/loop until
+  explicit trigger; the publication boundary comes from the leaf workflow, not a
+  generic tag-push assumption), the pre-flight checklist, the full release sequence `/loop until
   pypi` exercises, the guards built into the flow (pre-push hook, branch
   protection, PEP 610 drift warning), and one-time PyPI Trusted Publisher setup
   per package. Companion to 03_release-automation.md.
@@ -36,16 +36,15 @@ tags: [scitex-general-development-release-automation]
 > - A standing `/loop` running in the background — re-confirm if the
 >   release window is more than ~1 hour from the original ask.
 >
-> If in doubt: stop after the GitHub release step and ask before
-> pushing the `v*` tag (that tag is the trigger that PyPI cannot
-> undo).
+> If authorization is unclear, finish a concrete, reviewable candidate
+> before external publication. Existing user instructions take precedence
+> over this skill; do not request permission already granted in the session.
 >
-> **Trust boundary: `git push origin <v-tag>`, not the tag itself.**
-> Local `git tag -a vX.Y.Z -m ...` is a free, reversible scratch
-> action — `git tag -d` cleans it up. Nothing on PyPI fires until
-> the tag is *pushed*: `publish-pypi.yml` triggers on the GitHub
-> `push` event filtered by `tags: [v*]`. So drafting a tag locally
-> for review is fine; the moment of authorization is the push.
+> **Inspect the leaf's actual publication boundary.** A local draft tag is
+> reversible. A pushed tag may trigger publication in one package and only
+> validation in another. Dev currently publishes only through protected-main
+> workflow dispatch; see its [release procedure](../../scitex-dev/18_full-update.md).
+> Do not infer PyPI behavior from the workflow filename or from a tag existing.
 
 **Pre-flight checklist before invoking the flow** (every box must be
 true; if any is false, ship a regular dev push instead):
@@ -65,68 +64,52 @@ true; if any is false, ship a regular dev push instead):
       release contained a regression. (If the answer involves
       "everyone's CI breaks", get a second pair of eyes first.)
 
-The full release sequence below is what `/loop until pypi` exercises
-once those preconditions hold:
+Once authorized, use the leaf-owned release sequence:
+
+1. Inspect its workflow triggers, native release profile, publisher admission
+   and artifact-identity requirements in the source being released.
+2. Integrate accepted source through an ordinary PR. Inspect **all** checks at
+   the exact head, including consent and security outcomes. Preserve failures;
+   required-check branch protection alone does not establish acceptance.
+3. Merge only after that review, using the reviewed head guard. Do not use
+   auto-merge, administrative bypasses or synthetic verdicts.
+4. Promote through the ordinary `main` release PR. Select an unused canonical
+   version tag on its accepted commit; push only the intended tag.
+5. Follow the actual tag-validation and publication stages. Where publication
+   is a separate workflow dispatch, wait for validation and use the declared
+   protected-main path. Do not substitute a manual uploader.
+6. Verify published artifacts, normal dependency-compatible installation and
+   installed interfaces before treating a host rollout as ready. The workflow
+   may already own GitHub release creation; do not duplicate it.
+
+Useful read-only review commands (replace placeholders):
 
 ```bash
-# 0. Confirm CI is green on develop.
-gh run list --repo ywatanabe1989/<pkg> --branch develop --limit 3
-
-# 1. Open release PR develop → main.
-#    The pre-push hook in .git/hooks/pre-push BLOCKS direct pushes to
-#    main, so always go via PR (do NOT use --no-verify).
-gh pr create --repo ywatanabe1989/<pkg> --base main --head develop \
-  --title "Release X.Y.Z — <one-line summary>" \
-  --body "<changelog body — bullet points + Test plan>"
-
-# 2. Auto-merge once required checks pass.
-gh pr merge <PR#> --repo ywatanabe1989/<pkg> --merge --auto
-
-# 3. After merge lands, tag origin/main and push the tag.
-#    The publish-pypi.yml workflow triggers on `v*` tags.
-git -C <repo> fetch origin main
-git -C <repo> tag -a vX.Y.Z origin/main -m "vX.Y.Z — <summary>"
-git -C <repo> push origin vX.Y.Z
-
-# 4. Create the GitHub release (release notes for humans).
-gh release create vX.Y.Z --repo ywatanabe1989/<pkg> \
-  --title "vX.Y.Z — <summary>" \
-  --notes "<release notes>"
-
-# 5. Watch the publish workflow run.
-gh run list --repo ywatanabe1989/<pkg> --workflow publish-pypi.yml --limit 1
+gh workflow list --repo scitex-ai/PACKAGE
+gh pr view PR_NUMBER --repo scitex-ai/PACKAGE --json headRefOid,statusCheckRollup
+gh pr checks PR_NUMBER --repo scitex-ai/PACKAGE
+gh run view RUN_ID --repo scitex-ai/PACKAGE
 ```
 
-Guards built into the flow:
-
-- **Pre-push hook** (`.git/hooks/pre-push`) refuses direct pushes to
-  `main`/`master`. Forces the PR path. Never bypass with `--no-verify`.
-- **Branch-protection** on `main` requires CI green before merge — the
-  PR-merge step waits for checks even with `--auto`.
-- **PEP 610 `direct_url.json`** is read by the editable-install drift
-  warning; if you forget to bump and re-tag, downstream editable
-  consumers see a one-line stderr nudge on next `import <pkg>`.
+A pushed release tag must not be moved or force-pushed. Correct source and
+qualify a new unused version when a published release needs replacement.
+Preserve unsuccessful qualification records; this flow does not authorize
+forced CI reruns or relaxed gates.
 
 ## PyPI Trusted Publisher Setup (one-time per package)
 
-First PyPI release must be a manual `twine upload` (trusted publishing cannot create a *new* project — it can only publish to an *existing* one). After that, configure the trusted publisher so tag-triggered GitHub Actions can publish without tokens.
+PyPI supports a pending Trusted Publisher that creates a new project on its
+first successful publication; a manual first `twine upload` is not required.
+A pending publisher does not reserve the project name. See the
+[official PyPI setup guide](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/).
 
-Per-package settings URL:
+For an existing project, inspect its publishing configuration at
+`https://pypi.org/manage/project/PACKAGE/settings/publishing/`.
+Match the actual repository owner/name, workflow filename and environment
+from the leaf's checked-in workflow. Do not copy a historical owner or
+`publish-pypi.yml` filename into a different package's configuration.
 
-```
-https://pypi.org/manage/project/<pkg-name>/settings/publishing/
-```
-
-Fill in:
-
-| Field | Value |
-|---|---|
-| PyPI project name | `<pkg-name>` (auto) |
-| Owner | `ywatanabe1989` |
-| Repository name | `<pkg-name>` |
-| Workflow filename | `publish-pypi.yml` |
-| Environment name | `pypi` |
-
-**Verify it saved.** After submit, the publisher must appear under **Manage current publishers**. If that list still says "No publishers are currently configured", the save silently failed — re-enter the form. This is the most common cause of `invalid-publisher: Publisher with matching claims was not found` errors on tag push, even when PyPI shows the package existing.
-
-If a tag already failed to publish because trusted-publishing was missing, just `gh run rerun <id>` after configuring — no retag needed.
+Verify that the expected publisher exists before the publication boundary.
+Do not replace it, introduce a different upload route or force a failed run
+through. Keep registration, source qualification and artifact publication as
+separate evidence.
