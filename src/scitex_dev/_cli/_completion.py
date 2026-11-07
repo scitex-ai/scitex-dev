@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """Shared CLI tab-completion helper for every scitex-* package.
 
 Per `_skills/general/03_interface/02_cli/03_required-introspection-commands.md`
@@ -27,10 +26,11 @@ That single call registers four leaves on `cli`:
 from __future__ import annotations
 
 import os
-import subprocess
+import shlex
 from pathlib import Path
 
 import click
+from click.shell_completion import get_completion_class
 
 from .._ecosystem.help_spec import CliHelp, Example, SpecCommand
 
@@ -93,14 +93,18 @@ def _xdg_symlink(prog_name: str) -> Path:
 
 
 def _source_line(cache_path: Path, prog_name: str) -> str:
-    return f"[ -f {cache_path} ] && source {cache_path}  {_marker(prog_name)}"
+    quoted_path = shlex.quote(str(cache_path))
+    return f"[ -f {quoted_path} ] && source {quoted_path}  {_marker(prog_name)}"
 
 
-def _generate_script(shell: str, prog_name: str) -> str:
-    env = os.environ.copy()
-    env[_env_var(prog_name)] = _SOURCE_MAP[shell]
-    result = subprocess.run([prog_name], capture_output=True, text=True, env=env)
-    script = result.stdout.strip()
+def _generate_script(shell: str, prog_name: str, command: click.Command) -> str:
+    """Generate with this interpreter's Click, without executing PATH entries."""
+    completion_class = get_completion_class(shell)
+    if completion_class is None:
+        raise click.ClickException(f"Unsupported completion shell: {shell}.")
+    script = (
+        completion_class(command, {}, prog_name, _env_var(prog_name)).source().strip()
+    )
     if not script:
         raise click.ClickException(
             f"Failed to generate {shell} completion script for {prog_name}."
@@ -139,7 +143,7 @@ def attach_shell_completion(main_group, *, prog_name: str) -> None:
         help="Target shell. Default: bash.",
     )
     def print_shell_completion(shell):
-        click.echo(_generate_script(shell, prog_name))
+        click.echo(_generate_script(shell, prog_name, main_group))
 
     @main_group.command(
         "install-shell-completion",
@@ -147,8 +151,7 @@ def attach_shell_completion(main_group, *, prog_name: str) -> None:
         help_spec=CliHelp(
             summary="Wire up TAB completion in the user's shell rc.",
             description=(
-                "Activate in the current shell after install: `source "
-                "~/.bashrc`.",
+                "Activate in the current shell after install: `source ~/.bashrc`.",
             ),
             examples=(
                 Example(
@@ -188,7 +191,7 @@ def attach_shell_completion(main_group, *, prog_name: str) -> None:
                 return
             os.makedirs(os.path.dirname(rc_path), exist_ok=True)
             with open(rc_path, "w") as f:
-                f.write(_generate_script(shell, prog_name))
+                f.write(_generate_script(shell, prog_name, main_group))
             click.echo(f"Tab completion installed at {rc_path}")
             click.echo(f"Run: source {rc_path}")
             return
@@ -214,7 +217,7 @@ def attach_shell_completion(main_group, *, prog_name: str) -> None:
             return
 
         cache.parent.mkdir(parents=True, exist_ok=True)
-        cache.write_text(_generate_script(shell, prog_name) + "\n")
+        cache.write_text(_generate_script(shell, prog_name, main_group) + "\n")
 
         xdg = _xdg_symlink(prog_name)
         try:

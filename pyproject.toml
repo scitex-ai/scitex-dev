@@ -109,6 +109,9 @@ dependencies = [
 # complied. PS-214 has been reporting both all along, into a `--new-only`
 # gate where a pre-existing finding is invisible by construction.
 dev = [
+    # Exercise the actual declared backend in offline package-data controls.
+    "setuptools>=68.0",
+    "setuptools-scm>=8.0",
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
     # pytest-timeout: per-test wall-clock cap (see [tool.pytest.ini_options]
@@ -382,11 +385,15 @@ tag_regex = '^v(?P<version>\d+\.\d+\.\d+.*)$'
 # otherwise hand setuptools-scm the archive tag to parse).
 git_describe_command = 'git describe --dirty --tags --long --match "v*"'
 
+[tool.setuptools.cmdclass]
+build_py = "scitex_dev._release._build_cli_data._BuildCliData"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
 scitex_dev = [
+    "_cli_audit_dict.yaml",
     "skills/*.md",
     "skills/references/*.md",
     "_skills/**/*",
