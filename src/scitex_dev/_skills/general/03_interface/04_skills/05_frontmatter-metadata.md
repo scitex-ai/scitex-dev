@@ -13,14 +13,24 @@ tags: [scitex-general-interface-skills-frontmatter-metadata]
 
 Every SciTeX skill file (the per-skill `SKILL.md` and every leaf `.md` under it) carries YAML frontmatter. Convention below locks a single `description:` field as the source of truth, with inline labels so authors and the auditor can both see the conceptual structure.
 
-## 0. Frontmatter must be the very first bytes — no header, no footer
+## 0. Start with frontmatter; omit generated banners and footers
 
-Claude Code parses YAML frontmatter only when the file **starts with `---` on line 1**. Any preceding content — auto-inserted timestamp blocks, license banners, even a blank line — pushes the frontmatter below the first byte and the loader treats the file as plain markdown with no metadata. The same applies to trailing markers like `<!-- EOF -->`.
+Dev's skill catalog reads an opening YAML block only when `---` starts the file.
+Preceding timestamp blocks, license banners or blank lines prevent that parser
+from discovering metadata. This describes Dev's implemented parser, not a
+guarantee about every external agent's loader.
 
-Banned at the **top**: HTML-comment banners, timestamp/author/license blocks, blank lines, or any byte before the opening `---`.
-Banned at the **bottom**: trailing `<!-- EOF -->` or similar end-of-file markers.
+Keep metadata at the start. The skill auditor reports a missing initial block
+with SK-701 and recognizes the legacy `<!-- ---` header banner with SK-210.
 
-Enforced at release-gate time — see [12_quality-checklist.md](12_quality-checklist.md) (SK-210, SK-211).
+Omit the trailing `<!-- EOF -->` marker. SK-211 rejects that marker at the end
+of the file, with optional trailing whitespace. It is a separate style check:
+a footer does not prevent Dev's catalog parser from reading valid opening
+metadata. Other comments are not automatically SK-211 violations.
+
+Implementation: `_ecosystem/_skills/_frontmatter.py` and
+`_cli/audit/_skills/_checks.py`. See the
+[quality checklist](12_quality-checklist.md) for the source-owned audit rules.
 
 ## 1. Required fields
 

@@ -10,6 +10,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Distinguish Dev's initial-frontmatter discovery from the independent SK-211
+  EOF-marker audit. Remove unsupported claims about external agent loaders;
+  describe the footer rule's exact implemented match.
+
 - Restrict exported skill version and origin stamps to the opening YAML
   frontmatter. Preserve instruction bodies, including YAML examples with their
   own `version` fields, and keep existing line endings and metadata spacing.
