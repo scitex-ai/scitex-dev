@@ -10,6 +10,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Commit each local Store put/hide/unhide operation and its materialized row
+  atomically. Rejected row writes no longer leave operations for peers to replay.
+  Preserve explicit nested batch transactions and sequence-allocation retries.
+
 ## [0.62.16] - 2026-11-05
 
 - Add scoped static documentation checks through `docs validate`, with explicit
