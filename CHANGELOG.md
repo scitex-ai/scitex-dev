@@ -13,6 +13,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 - Add vendor-neutral `skills install --directory`, preserving `--dest` and the
   canonical store default. Document explicit agent-readable destinations and
   package selection without making Claude projection part of the default flow.
+- Commit each local Store put/hide/unhide operation and its materialized row
+  atomically. Rejected row writes no longer leave operations for peers to replay.
+  Preserve explicit nested batch transactions and sequence-allocation retries.
 
 ## [0.62.16] - 2026-11-05
 
