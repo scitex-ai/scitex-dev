@@ -34,7 +34,7 @@
 | # | Problem | Solution |
 |---|---------|----------|
 | 1 | **~70 ecosystem packages drift apart** -- versions, READMEs, sphinx setups, CLI conventions diverge faster than humans can audit | **`scitex-dev ecosystem audit-*`** -- `audit-project`, `audit-cli`, `audit-mcp-tools`, `audit-python-apis`, `audit-skills`, `audit-summary` enforce ~130 numbered rules across the whole ecosystem |
-| 2 | **Skills scattered across ~70 source repos** -- AI agents can't discover them; humans can't review them | **`scitex-dev dev skills list / get / install`** -- discover installed leaf skills, install them into `~/.scitex/dev/skills/`, and optionally project them into Claude Code with `--claude-symlink` |
+| 2 | **Skills scattered across ~70 source repos** -- AI agents can't discover them; humans can't review them | **`scitex dev skills list / get / install`** -- discover installed leaf skills and install them into `~/.scitex/dev/skills/` or an explicit `--directory` for your agent |
 | 3 | **Coordinated releases need ten manual steps** -- bump version, push tag, watch CI, verify PyPI, deploy — done per-package, multiplied by 70 | **`scitex-dev ecosystem sync` + `validate-versions` + `gui open`** -- one-shot install/sync across hosts, version-mismatch detection, and a web dashboard with the live state |
 | 4 | **Bulk renames across 70 repos break cross-references** -- import paths, doc references, symlinks — `sed -i` corrupts something every time | **`scitex-dev rename-symbols`** -- atomic rename with cross-reference updates, regex support, dry-run preview, git-safety guards |
 | 5 | **Lint rules drift from the API they enforce** -- a renamed function in figrecipe leaves the rule pointing at a nonexistent symbol, and the bug only shows up months later | **`scitex-dev linter`** (engine, formerly `scitex-linter`) -- aggregates per-package rule plugins via the `scitex_dev.linter.plugins` entry point. Rules ship in the package whose API they enforce, so rename + rule + test land in one PR. Doc-block linting for `.py` / `.ipynb` / `.md` / `.rst`. `scitex-dev linter sweep` walks every package's README + docs in one shot |
@@ -280,11 +280,16 @@ that environment rather than relying on an undocumented `.src` loader.
 Skills provide workflow-oriented guides that AI agents query to discover capabilities and usage patterns.
 
 ```bash
-scitex-dev dev skills list --package scitex-dev --json
-scitex-dev dev skills get scitex-dev SKILL
-scitex-dev dev skills install --package scitex-dev --claude-symlink --dry-run --json
+scitex dev skills list --package scitex-dev --json
+scitex dev skills get scitex-dev SKILL
+scitex dev skills install --package scitex-dev --directory /tmp/scitex-skills --dry-run --json
 # Review the plan; omit --dry-run to install. Use --link for editable sources.
 ```
+
+The default store is `~/.scitex/dev/skills/`; `--directory` selects an explicit
+external destination, with `--dest` retained as an alias. The standalone
+bootstrap command is `scitex-dev dev skills install`. Client discovery and
+context selection remain separate from installing the files.
 
 > **[Full skills directory](https://github.com/scitex-ai/scitex-dev/tree/develop/src/scitex_dev/_skills)**
 

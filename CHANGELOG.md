@@ -10,6 +10,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Add vendor-neutral `skills install --directory`, preserving `--dest` and the
+  canonical store default. Document explicit agent-readable destinations and
+  package selection without making Claude projection part of the default flow.
+
 ## [0.62.16] - 2026-11-05
 
 - Add scoped static documentation checks through `docs validate`, with explicit

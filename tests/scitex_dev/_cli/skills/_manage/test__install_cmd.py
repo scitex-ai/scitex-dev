@@ -5,12 +5,16 @@ from __future__ import annotations
 import subprocess
 
 import click
+import pytest
 from click.testing import CliRunner
 
 from scitex_dev._cli.skills._manage._install_cmd import register
 
 
-def test_install_writes_manifest_and_returns_projection_envelope(tmp_path):
+@pytest.mark.parametrize("destination_option", ["--directory", "--dest"])
+def test_install_writes_manifest_and_returns_projection_envelope(
+    tmp_path, destination_option
+):
     # Arrange
     @click.group()
     def skills():
@@ -24,7 +28,7 @@ def test_install_writes_manifest_and_returns_projection_envelope(tmp_path):
         skills,
         [
             "install",
-            "--dest",
+            destination_option,
             str(destination),
             "--package",
             "scitex-dev",
@@ -147,7 +151,6 @@ class TestSkillsCollectCLI:
         combined = r.stdout + r.stderr
         # Click's usual error format
 
-
     def test_destination_is_required_missing_argument_in_combined(self):
         """Issue #6: `collect` must fail with a clear error when no
         destination argument is given."""
@@ -163,7 +166,6 @@ class TestSkillsCollectCLI:
         combined = r.stdout + r.stderr
         # Click's usual error format
         assert "Missing argument" in combined
-
 
     def test_destination_is_required_destination_in_combined(self):
         """Issue #6: `collect` must fail with a clear error when no
@@ -193,7 +195,6 @@ class TestSkillsCollectCLI:
         )
         assert r.returncode == 0
 
-
     def test_help_mentions_destination_destination_in_r_stdout(self):
         # Arrange
         # Act
@@ -212,7 +213,15 @@ class TestSkillsCollectCLI:
         # Assert
         dest = tmp_path / "skills-out"
         r = subprocess.run(
-            ["scitex-dev", "skills", "collect", str(dest), "--package", "scitex-dev", "--dry-run"],
+            [
+                "scitex-dev",
+                "skills",
+                "collect",
+                str(dest),
+                "--package",
+                "scitex-dev",
+                "--dry-run",
+            ],
             capture_output=True,
             text=True,
             timeout=60,
@@ -220,14 +229,23 @@ class TestSkillsCollectCLI:
         assert r.returncode == 0
         # Should mention the dest path in the preview
 
-
-    def test_dry_run_works_with_explicit_dest_str_dest_in_r_stdout_r_stderr(self, tmp_path):
+    def test_dry_run_works_with_explicit_dest_str_dest_in_r_stdout_r_stderr(
+        self, tmp_path
+    ):
         # Arrange
         # Act
         # Assert
         dest = tmp_path / "skills-out"
         r = subprocess.run(
-            ["scitex-dev", "skills", "collect", str(dest), "--package", "scitex-dev", "--dry-run"],
+            [
+                "scitex-dev",
+                "skills",
+                "collect",
+                str(dest),
+                "--package",
+                "scitex-dev",
+                "--dry-run",
+            ],
             capture_output=True,
             text=True,
             timeout=60,
