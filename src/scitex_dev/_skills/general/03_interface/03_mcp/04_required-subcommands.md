@@ -16,19 +16,18 @@ Every package CLI that registers any MCP tools **must** expose **all four** of t
 | `<cli> mcp list-tools`        | **yes**   | Enumerate registered MCP tools — `-v|-vv|-vvv` and `--json` mandated.    |
 | `<cli> mcp install` | **yes**   | Print the snippet to add to a Claude Code / MCP-host config.             |
 
-Reference shape — adding the four to a click `mcp` group (one canonical helper, drop into every standalone `_cli`):
+## Implementation status
 
-```python
-# scitex_<pkg>/_cli/_mcp.py
-from scitex_dev._mcp_cli import attach_mcp_subcommands
+The four commands above are the interface contract. The previously documented
+`scitex_dev._mcp_cli.attach_mcp_subcommands` helper does not exist in the current
+source or public Dev 0.62.16. Do not import it or copy its former example.
 
-@click.group()
-def mcp(): ...
-
-attach_mcp_subcommands(mcp, server_path="scitex_<pkg>._mcp_server:mcp", cli_name="scitex-<pkg>")
-```
-
-`attach_mcp_subcommands` registers `start`, `doctor`, `list-tools`, `install` in one call. Standalones MUST use this helper rather than rolling their own — packages that hand-roll the `mcp` group (scitex-scholar pre-fix) reliably ship only `list-tools` and forget the rest.
+Dev's own implementation is `scitex_dev/_cli/_mcp_cmds.py`, registered through
+`register_mcp_commands(main)`. It is specific to Dev's server and is not a
+published generic leaf adapter. A reusable adapter remains an implementation
+gap: leaves must provide and qualify the four behaviors without claiming that
+a shared helper already supplies them. Preserve the existing discovery and
+transport contracts when adding that adapter.
 
 ## `mcp start`
 
