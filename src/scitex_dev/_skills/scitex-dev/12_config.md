@@ -28,7 +28,7 @@ visible; do not silently substitute another package or checkout.
 |---|---|---|
 | Hand-authored preferences | `~/.scitex/dev/config.yaml` | `SCITEX_DEV_CONFIG` or explicit `load_config(config_path=...)` |
 | CLI-managed package switches | `~/.scitex/dev/runtime/knob-state.json` | `SCITEX_DEV_KNOB_STATE` |
-| Generated neutral skill store | `~/.scitex/dev/skills/` | `skills install --dest ...` |
+| Generated neutral skill store | `~/.scitex/dev/skills/` | `skills install --directory PATH` |
 
 `SCITEX_DIR` relocates the shared `.scitex` root. The legacy
 `~/.scitex/dev_config.yaml` is a fallback only when the preferred file is absent.

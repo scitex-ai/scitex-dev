@@ -10,6 +10,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Add vendor-neutral `skills install --directory`, preserving `--dest` and the
+  canonical store default. Document explicit agent-readable destinations and
+  package selection without making Claude projection part of the default flow.
+
 - Include the canonical CLI audit dictionary in installed packages, with one
   source copy shared by checkout audits and the package's build backend.
 
