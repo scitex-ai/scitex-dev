@@ -18,11 +18,11 @@ tags: [scitex-general-package-project-structure-examples]
 
 ## Canonical pattern: `@stx.session`-decorated `main()`
 
-The reference is `~/proj/figrecipe/examples/01_bundle_format.py` and
-`~/proj/scitex-python/examples/01_session.py`. Every `.py` example
-should follow this shape:
+Use the owning leaf's current verified example files as references. The
+following is an authoring template: replace package identifiers and the body
+before running it, then verify its actual session behavior in `tests/examples/`.
 
-```python
+```text
 #!/usr/bin/env python3
 """Example: <one-line>.
 

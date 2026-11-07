@@ -289,7 +289,11 @@ scitex dev skills install --package scitex-dev --directory /tmp/scitex-skills --
 The default store is `~/.scitex/dev/skills/`; `--directory` selects an explicit
 external destination, with `--dest` retained as an alias. The standalone
 bootstrap command is `scitex-dev dev skills install`. Client discovery and
-context selection remain separate from installing the files.
+context selection remain separate from installing the files. The resolved
+destination must be outside Git checkouts, including dotfile trees reached
+through symlinks. If the default store resolves inside Git, choose an external
+`--directory` and preserve the existing store; the installer does not relocate
+it or relax that guard.
 
 > **[Full skills directory](https://github.com/scitex-ai/scitex-dev/tree/develop/src/scitex_dev/_skills)**
 

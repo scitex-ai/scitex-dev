@@ -1,75 +1,69 @@
 ---
 description: |
-  [TOPIC] Interface Mcp Server Registration
-  [DETAILS] SciTeX MCP server registration — single FastMCP per package, mount pattern from the scitex umbrella, conventions A vs B for tool naming under namespace mount.
+  [TOPIC] MCP server registration
+  [DETAILS] Leaf-owned tool registration and dispatcher-selected exposure. Use actual installed provider declarations, preserve handler identity and distinguish server construction, client discovery and observed calls. Do not duplicate leaf tool catalogs or disguise broken imports as absent packages.
 tags: [scitex-general-interface-mcp-server-registration]
 ---
 
-# §1. Server registration — single source of truth + mount
+# MCP registration and ownership
 
-## Rule: one FastMCP instance per package
+Each public tool needs an authoritative registration path in its owning leaf.
+The leaf defines domain behavior, parameters, descriptions and error/side-effect
+contracts. A dispatcher selects installed providers and applies operator policy;
+it should not maintain a second hand-written copy of every leaf tool signature.
 
-Every standalone `scitex-*` package that ships MCP tools defines **one** `FastMCP` instance — typically:
+## A concrete leaf server
+
+With FastMCP installed, this defines a local server and registers one tool:
 
 ```python
-# src/scitex_<pkg>/_mcp_server.py
 from fastmcp import FastMCP
-mcp = FastMCP(name="scitex-<pkg>", instructions="…")
+
+mcp = FastMCP("owned-example", instructions="Deterministic example arithmetic.")
 
 @mcp.tool()
-async def some_tool(...) -> str: ...
+def doubled(n: int) -> int:
+    return n * 2
 ```
 
-Every tool the package exposes is registered on **that** `mcp` object via `@mcp.tool()`. The `scitex` umbrella does **not** redefine them; it imports the standalone's `mcp` and **mounts** it.
+The module path is owned by the leaf: `_mcp_server.py`, `_mcp/_server.py` and a
+factory are different possible layouts, not interchangeable import conventions.
+Inspect the actual installed declaration instead of guessing a filename.
 
-## Rule: scitex umbrella delegates via `safe_mount`
+## Dispatcher boundary
 
-The umbrella's per-package bridge file in `~/proj/scitex-python/src/scitex/_mcp_tools/<pkg>.py` is a ~30-line mount shim:
+Use the installed dispatcher's provider discovery and configuration. A provider
+can be installed yet disabled, ambiguous, unsupported or unreachable. Do not
+silently replace it with another checkout or advertise every installed handler
+without applying the selected exposure policy.
 
-```python
-# src/scitex/_mcp_tools/<pkg>.py
-def register_<pkg>_tools(mcp) -> None:
-    """Mount scitex-<pkg> MCP server."""
-    try:
-        from scitex_<pkg>._mcp_server import mcp as sub_mcp
-        from ._compat import safe_mount
+For the umbrella, inspect the current command surfaces first:
 
-        safe_mount(mcp, sub_mcp, namespace="<pkg>")
-    except ImportError:
-        @mcp.tool()
-        async def <pkg>_not_available() -> str:
-            return "scitex-<pkg> required. Install with: pip install scitex-<pkg>"
+```bash
+scitex mcp --help
+scitex dev mcp --help
 ```
 
-**Consequences:**
+Module paths, namespace composition and mounting adapters vary by installed
+version. Existing Root bridges use their `_mcp_tools/_compat.py` helper where
+applicable; that private helper is not a universal API every leaf must import.
+A configured upstream transport/proxy can preserve leaf ownership without
+importing its handlers into the dispatcher.
 
-- New tools added to the standalone appear automatically in the umbrella — no per-tool maintenance.
-- New parameters on existing tools propagate automatically — no signature-drift bugs.
-- The umbrella's bridge file never has to know how many tools the standalone has.
+Handle missing providers and broken providers distinctly. A declared package
+whose internal import fails is not necessarily absent. Surface the actual
+failure or typed availability result; do not catch every `ImportError` and
+replace a broken installation with a misleading install stub.
 
-Reference implementations to copy: `_mcp_tools/cloud.py`, `_mcp_tools/stats.py`, `_mcp_tools/dev.py`, `_mcp_tools/clew.py`.
+## Verify the observed surface
 
-## Hand-wrapping is an anti-pattern
+- Inspect actual client tool discovery, including names and schemas.
+- Check namespace composition for accidental double prefixes or collisions.
+- Exercise admitted handlers with owned fixtures and verify their outcomes.
+- Check disabled/unavailable providers and permission refusals explicitly.
 
-A bridge file that hand-wraps each tool with `@mcp.tool() async def <pkg>_<name>(...)` and forwards parameters by name is the **legacy** pattern. It was the cause of the 2026-04-30 `auto_stash` / `summary_only` drift incident — see [08_lessons-and-pitfalls.md](09_lessons-and-pitfalls.md). Files still using this pattern at the time of writing are tracked in [TODO.md](TODO.md).
-
-## `safe_mount` is the **only** canonical mount call
-
-Every bridge file uses `safe_mount` from `scitex._mcp_tools._compat`. Direct `mcp.mount(...)` calls are deprecated in bridges — they break on FastMCP version drift (2.x `prefix=` vs 3.x `namespace=`) which `safe_mount` papers over via signature inspection.
-
-Two acceptable shapes — both go through `safe_mount`:
-
-| Shape                   | Standalone tool names        | `safe_mount` call                              | Resulting umbrella names |
-|-------------------------|------------------------------|------------------------------------------------|--------------------------|
-| **With namespace** (recommended) | bare (`run_test`)     | `safe_mount(mcp, sub, namespace="<pkg>")`      | `<pkg>_run_test`         |
-| **Without namespace**   | already-prefixed (`io_save`) | `safe_mount(mcp, sub)`                         | `io_save`                |
-
-**Pick "with namespace" by default.** Bare names inside the standalone source are cleaner; the prefix is added at mount time. The "without namespace" shape exists for legacy packages whose source already prefixes (`scitex-io`); new packages should use the namespace form to avoid double-prefix surprises.
-
-The `scitex-dev ecosystem audit-mcp-tools` linter ([08_audit-mcp-tools.md](08_audit-mcp-tools.md)) flags any bridge that calls `mcp.mount(...)` directly instead of `safe_mount(...)`.
-
-## Failure surface
-
-If the standalone is missing, the umbrella bridge installs a single `<pkg>_not_available` tool that returns a clear "install with `pip install scitex[<pkg>]`" message. **Never** silently no-op or raise an obscure `ImportError` — the LLM agent has no recovery path.
-
-See `_mcp_tools/cloud.py` for the canonical fallback shape.
+Source registration alone proves neither client visibility nor execution.
+Tool-search transforms reduce advertised metadata; they do not grant permissions.
+The runnable local client example in
+[32_agentic-test-mcp.md](../../../scitex-dev/32_agentic-test-mcp.md) illustrates
+protocol checks without a paid model call.

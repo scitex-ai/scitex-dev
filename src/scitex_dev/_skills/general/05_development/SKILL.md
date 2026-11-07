@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] Development Version Control And Release
-  [DETAILS] How a `scitex-*` package is versioned, audited, and shipped — branch/tag/release-wave workflow and release gates, running `audit-all` continuously while editing (cron / tmux / agent loops + JSON contract), release automation + ecosystem sync CLI/MCP/Python API, skills self-explain quality measure, the doc-surface precedence map, subprocess coverage wiring, the demo smoke-test harness, the 30%→90% coverage-push playbook, the per-peer no-mocks + test-quality migration playbook, the package-maintenance prompt, and dependency tiers. Use when cutting a release, setting up audit loops, or pushing coverage.
+  [DETAILS] How a `scitex-*` package is versioned, audited, and shipped — branch/tag/release-wave workflow and release gates, running `audit-all` continuously while editing (cron / tmux / agent loops + JSON contract), release automation + ecosystem sync CLI/MCP/Python API, agent-generated skill explanation limits, the doc-surface precedence map, subprocess coverage wiring, the demo smoke-test harness, the 30%→90% coverage-push playbook, test-quality migration and fixture isolation, the package-maintenance prompt, and dependency tiers. Use when cutting a release, setting up audit loops, or pushing coverage.
 tags: [scitex-general-development-index]
 ---
 
@@ -20,12 +20,12 @@ ecosystem maintainers. Sits atop the docs tier
 3. [03_release-automation.md](03_release-automation.md) — Automation commands, ecosystem sync CLI, MCP tools, Python API
    - [18_end-to-end-release-flow.md](18_end-to-end-release-flow.md) — Authorization-aware release flow, exact-head checks and leaf-owned publication boundaries
    - [19_release-pipeline-gotchas.md](19_release-pipeline-gotchas.md) — Exact-head CI, consent, immutable artifacts, packaging and bounded recovery
-4. [04_skills-self-explain.md](04_skills-self-explain.md) — Quality measure for skill content
+4. [04_skills-self-explain.md](04_skills-self-explain.md) — Agent-generated explanations, installed newb delegation and validation limits
 5. [05_doc-surfaces.md](05_doc-surfaces.md) — Which documentation surface beats which
 6. [06_subprocess-coverage.md](06_subprocess-coverage.md) — Subprocess coverage wiring (parallel + COVERAGE_PROCESS_START + `.pth` shim)
 7. [07_demo-smoke-tests.md](07_demo-smoke-tests.md) — Parametrised smoke test over every `_demo_*.py` and `__main__`-bearing module
 8. [08_coverage-push-playbook.md](08_coverage-push-playbook.md) — End-to-end playbook for taking a package 30% → 90% Codecov without `omit` shortcuts
-9. [09_ecosystem-tq-migration.md](09_ecosystem-tq-migration.md) — Per-peer migration playbook for the no-mocks + test-quality rules; four-pass sequence, dispatch template, rollback contract
+9. [09_ecosystem-tq-migration.md](09_ecosystem-tq-migration.md) — Preserve cases and observations, use real boundaries, own fixture teardown and report full validation honestly
 10. [10_package-maintenance-prompt.md](10_package-maintenance-prompt.md) — Reusable package-maintenance prompt
 11. [11_dependency-tiers.md](11_dependency-tiers.md) — Dependency tier model
     - [20_optional-import-helper.md](20_optional-import-helper.md) — Optional imports must use `try_import_optional`; promotion from `[all]` to hard deletes the helper

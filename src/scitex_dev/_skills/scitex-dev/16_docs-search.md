@@ -13,23 +13,18 @@ Get documentation for one, several, or all installed SciTeX packages.
 
 ```python
 from scitex_dev import get_docs
+```
 
-# All installed packages (manifest overview)
-get_docs()
+Signature reference (internal injection hooks omitted; not an invocation):
 
-# Single package — returns unwrapped result
-get_docs(
-    package: str | None = None,         # single package name
-    packages: list[str] | None = None,  # list of packages
-    format: str | None = None,          # None (manifest) | "json" | "html"
-    page: str | None = None,            # specific page (with format="html"/"json")
-) -> Any
+```text
+get_docs(package: 'Optional[str]' = None, packages: 'Optional[list[str]]' = None, format: 'Optional[str]' = None, page: 'Optional[str]' = None) -> 'Any'
 ```
 
 Resolution chain per package (fastest to slowest):
 1. Pre-built `_sphinx_html/` in installed package (production)
 2. Sphinx `_build/` available (existing build)
-3. Introspect from docstrings + signatures (always works)
+3. Introspect from available docstrings/signatures (can still fail for unavailable dependencies or providers)
 
 ```python
 # Manifest overview of all packages
@@ -58,12 +53,12 @@ Build docs from Sphinx source for one or all packages.
 
 ```python
 from scitex_dev import build_docs
+```
 
-result = build_docs(
-    package: str | None = None,            # None = all discovered packages
-    output_dir: Path | None = None,        # override output dir
-    formats: list[str] | None = None,      # ["html"] default
-) -> dict[str, dict]  # {pkg_name: {format: path_or_error}}
+Signature reference (internal injection hooks omitted; not an invocation):
+
+```text
+build_docs(package: 'Optional[str]' = None, output_dir: 'Optional[Path]' = None, formats: 'Optional[list[str]]' = None) -> 'dict[str, Any]'
 ```
 
 Requires `sphinx` (`pip install scitex-dev[docs]`).
@@ -83,14 +78,12 @@ Simple keyword search over package page titles and introspected content.
 
 ```python
 from scitex_dev import search_docs
+```
 
-results = search_docs(
-    query: str,
-    package: str | None = None,        # limit to single package
-    packages: list[str] | None = None, # limit to specific packages
-    max_results: int = 10,
-) -> list[dict]
-# [{"package", "name", "title", "score", "match_type"}, ...]
+Signature reference (internal injection hooks omitted; not an invocation):
+
+```text
+search_docs(query: 'str', package: 'Optional[str]' = None, packages: 'Optional[list[str]]' = None, max_results: 'int' = 10) -> 'list[dict[str, Any]]'
 ```
 
 ```python
@@ -106,16 +99,12 @@ Supports Google-like query syntax.
 
 ```python
 from scitex_dev import search
+```
 
-results = search(
-    query: str,                        # see syntax below
-    scope: str = "all",                # "all" | "api" | "cli" | "mcp" | "docs"
-    package: str | None = None,
-    packages: list[str] | None = None,
-    max_results: int = 10,
-    fuzzy: bool = True,                # difflib fuzzy matching
-) -> list[dict]
-# [{"package", "name", "title", "score", "scope", "match_type"}, ...]
+Signature reference (internal injection hooks omitted; not an invocation):
+
+```text
+search(query: 'str', scope: 'Scope' = 'all', package: 'Optional[str]' = None, packages: 'Optional[list[str]]' = None, max_results: 'int' = 10, fuzzy: 'bool' = True) -> 'list[dict[str, Any]]'
 ```
 
 ### Query syntax

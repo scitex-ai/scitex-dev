@@ -41,22 +41,23 @@ def _stamp_frontmatter_field(content: str, key: str, value: str) -> str:
     runtime drift check (``skills get`` / ``skills list``) reads these
     stamps to compare against ``importlib.metadata.version()``.
     """
-    import re
+    block = re.match(
+        r"\A---[ \t]*(?P<newline>\r?\n)(?P<header>.*?)"
+        r"(?P<closing>^---[ \t]*(?:\r?\n|\Z))",
+        content,
+        re.DOTALL | re.MULTILINE,
+    )
+    if block is None:
+        return f"---\n{key}: {value}\n---\n\n" + content
 
-    if re.search(rf"^{key}:", content, re.MULTILINE):
-        return re.sub(
-            rf"^({key}:\s*).*$",
-            rf"\g<1>{value}",
-            content,
-            count=1,
-            flags=re.MULTILINE,
-        )
-    # Insert before the closing ``---`` of the frontmatter block. If the
-    # file has no frontmatter (legacy), prepend a minimal block.
-    if content.startswith("---\n"):
-        # Find the second ``---\n`` and insert before it.
-        end = content.find("\n---\n", 4)
-        if end != -1:
-            return content[: end + 1] + f"{key}: {value}\n" + content[end + 1 :]
-    # No frontmatter at all — prepend a minimal one.
-    return f"---\n{key}: {value}\n---\n\n" + content
+    # Scope replacements to metadata: body examples can contain the same key.
+    header, replaced = re.subn(
+        rf"^({re.escape(key)}:[ \t]*)[^\r\n]*",
+        lambda field: f"{field[1]}{value}",
+        block["header"],
+        count=1,
+        flags=re.MULTILINE,
+    )
+    if not replaced:
+        header += f"{key}: {value}{block['newline']}"
+    return content[: block.start("header")] + header + content[block.start("closing") :]

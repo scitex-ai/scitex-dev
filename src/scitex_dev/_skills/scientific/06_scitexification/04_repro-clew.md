@@ -136,7 +136,9 @@ a dropped question is indistinguishable from "tried, failed, and hid it".
 
 ## Worked example
 
-```python
+Side-by-side comparison (illustrative text, not a runnable script):
+
+```text
 # BEFORE                                  # AFTER (stage 4)
 results = {"accuracy": 0.91}              clew.add_claim(file_path=claims_json,
 json.dump(results, open("out.json","w"))      claim_type="value", line_number=1,

@@ -175,8 +175,8 @@ def register(main_group):
                     "Errors only, plain output.",
                 ),
                 Example(
-                    "{prog} linter validate-files my_script.py --new-only --baseline HEAD",
-                    "Block only on NEWLY-introduced findings.",
+                    "{prog} linter validate-files tests/ --json",
+                    "Inspect test findings as structured JSON.",
                 ),
             ),
         ),

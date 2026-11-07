@@ -127,7 +127,9 @@ If unavailable, do Stage-1 I/O with `Path.write_text`/`read_text` +
 
 ## Worked example
 
-```python
+Side-by-side comparison (illustrative text, not a runnable script):
+
+```text
 # BEFORE                                   # AFTER (stage 1 only)
 import pandas as pd, pickle                import scitex as stx
 df = pd.read_csv("raw.csv")                df = stx.io.load("raw.csv")

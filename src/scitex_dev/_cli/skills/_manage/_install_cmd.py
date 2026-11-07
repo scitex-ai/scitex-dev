@@ -39,8 +39,10 @@ def register(skills):
             description=(
                 (
                     "Default DEST is ~/.scitex/dev/skills/ — the canonical "
-                    "store. Use --directory to select any agent-readable "
-                    "destination; --package limits the owning distribution."
+                    "store. Its resolved destination must be outside Git "
+                    "checkouts, including symlinked dotfile trees. Use "
+                    "--directory for an external agent-readable destination; "
+                    "--package limits the owning distribution."
                 ),
             ),
             examples=(
@@ -70,7 +72,8 @@ def register(skills):
         help=(
             "Target directory. Default: ~/.scitex/dev/skills/ — the "
             "canonical store. --dest remains a compatible alias. "
-            "Choose a destination readable by your agent or tools."
+            "Its real path must be outside Git checkouts and readable "
+            "by your agent or tools."
         ),
     )
     @click.option("--package", default=None, help="Install only this package.")

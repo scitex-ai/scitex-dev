@@ -1,28 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""scitex-dev wrapper around ``newb.self_explain``.
+"""Resolve authored SciTeX skill directories and delegate evaluation to newb.
 
-The implementation lives upstream in the standalone ``newb`` package
-(https://pypi.org/project/newb/). scitex-dev's value-add is just the
-ecosystem-aware distribution-name → ``_skills/<dist>/`` resolver.
-
-See ``general/05_development/04_skills-self-explain.md`` for the concept.
-
-Lazy-import discipline (PS-213 LAZY-EXTRA-PATTERN-OK)
-----------------------------------------------------
-``newb`` lives in the ``[skills]`` optional-dependencies group (NOT core)
-so the import stays lazy. The ``[skills]`` extra that once gated it is
-gone: PS-225 restricts extra names to ``{all, dev, docs}``, so ``newb``
-moved into ``[project.dependencies]`` and every install now carries it —
-INCLUDING its heavy ``claude-agent-sdk`` transitive, which the old extra
-existed to keep out of a bare install. That trade was made deliberately
-when the per-feature menu was retired; it is recorded here because the
-lazy import alone no longer implies the dependency is optional.
-
-Every reference to newb still goes through :func:`_require_newb`, which
-now reports a BROKEN INSTALL rather than a missing extra. Module-level
-``render_markdown`` is still importable from older callers via
-``__getattr__`` (PEP 562) so the public symbol survives.
+The installed standalone newb package owns prompts, execution, rendering and
+result semantics. Dev adds ecosystem distribution-to-checkout resolution.
+Newb is a declared base dependency; lazy import avoids loading its runtime for
+metadata/help inspection and a missing dependency is a broken installation.
+The module-level render_markdown attribute remains a lazy compatibility export.
+See general/05_development/04_skills-self-explain.md for acceptance boundaries.
 """
 
 from __future__ import annotations
@@ -32,20 +17,14 @@ from typing import Any, Dict, Optional
 
 
 def _require_newb():
-    """Lazy-import ``newb`` with a structured install hint on failure.
-
-    Returns the imported ``newb`` module. Raises ``SystemExit`` with the
-    documented install-hint string referencing the ``[skills]`` extra,
-    so PS-213 LAZY-EXTRA-PATTERN-OK recognises this as a permitted
-    lazy-extra pattern. The hint string is INLINE (not a module-level
-    constant) so the auditor's static AST walk can see it without
-    resolving Name references.
-    """
+    """Import the declared base dependency or report a broken installation."""
     try:
         import newb as _newb
-    except ImportError as exc:  # pragma: no cover — tested with monkeypatched sys.modules
+    except (
+        ImportError
+    ) as exc:  # pragma: no cover — tested with monkeypatched sys.modules
         raise SystemExit(
-            "scitex-dev: `skills self-explain` requires `newb`, which is a "
+            "scitex-dev: `skills explain-self` requires `newb`, which is a "
             "BASE dependency — so this is a broken or partial install, not "
             "a missing extra. Reinstall into this interpreter:\n"
             "    python -m pip install --force-reinstall scitex-dev"
@@ -54,18 +33,15 @@ def _require_newb():
 
 
 def _newb_run_callable(_newb):
-    """Return ``newb.test`` (>=0.18) or fall back to ``newb.run`` (<0.18).
-
-    newb 0.18+ renamed ``run`` → ``test`` (mental model: "newbie tries").
-    Older newbs still expose ``run``; new newbs may drop it.
-    """
+    """Prefer newb's test entrypoint when present, otherwise use run."""
     fn = getattr(_newb, "test", None)
     if fn is None:
         fn = getattr(_newb, "run", None)
     if fn is None:
         raise SystemExit(
             "scitex-dev: installed `newb` exposes neither `test` nor `run`; "
-            'upgrade with `pip install -U "scitex-dev[skills]"`.'
+            "Repair the declared dependencies in this interpreter; "
+            "there is no scitex-dev[skills] extra."
         )
     return fn
 
@@ -136,8 +112,8 @@ def self_explain(
 ) -> Dict[str, Any]:
     """Have an agent (mounted with only this package's skills) self-explain.
 
-    Thin wrapper: resolves a SciTeX ecosystem distribution name to its
-    ``_skills/<dist>/`` directory and delegates to :func:`newb.self_explain`.
+    Resolve the ecosystem distribution's authored skills directory and pass
+    it to the installed newb entrypoint. Result semantics belong to newb.
 
     Parameters
     ----------
@@ -155,10 +131,8 @@ def self_explain(
     Returns
     -------
     dict
-        ``{"package", "what_for", "problems_solved", "quick_start",
-        "when_not_to_use"[, "red_tests"]}``. The ``"package"`` field is
-        populated from ``skills_dir.name``, which is the distribution
-        name in the SciTeX layout (``_skills/<dist>/``).
+        The installed newb entrypoint's result, without normalizing or
+        verifying its generated claims. Inspect that version's contract.
     """
     _newb = _require_newb()
     _newb_run = _newb_run_callable(_newb)

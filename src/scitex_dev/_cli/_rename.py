@@ -11,8 +11,8 @@ Two ergonomic flags worth knowing:
 
 - ``--allow-dirty`` skips the uncommitted-changes guard. Lets you chain
   multiple regex passes within one logical rename without committing
-  between each pass. The reverse-rename safety contract still holds:
-  every rename is invertible by re-running with old/new swapped.
+  between each pass. Restore from reviewed Git state or a verified backup;
+  swapping search and replacement is not a general undo operation.
 - ``--quiet`` (``-q``) emits a one-line ``N files / M matches /
   K collisions`` summary instead of the full ``RenameResult`` repr.
   Useful for chained renames and CI logs.
@@ -56,10 +56,10 @@ def register(main: click.Group) -> None:
             description=(
                 "--allow-dirty skips the uncommitted-changes guard, "
                 "letting you chain multiple regex passes within one "
-                "logical rename without committing between each pass — "
-                "the reverse-rename safety contract still holds (every "
-                "rename is invertible by re-running with old/new "
-                "swapped). --quiet/-q emits a one-line 'N files / M "
+                "logical rename without committing between each pass. "
+                "Restore from reviewed Git state or a verified backup; "
+                "swapping search and replacement is not general undo. "
+                "--quiet/-q emits a one-line 'N files / M "
                 "matches / K collisions' summary instead of the full "
                 "RenameResult repr.",
             ),
@@ -101,9 +101,9 @@ def register(main: click.Group) -> None:
         help=(
             "Skip the uncommitted-changes check. Lets you chain "
             "multiple regex passes within one logical rename without "
-            "committing between each pass. The reverse-rename safety "
-            "contract still holds — every rename is invertible by "
-            "re-running with old/new swapped."
+            "committing between each pass. Restore from reviewed Git "
+            "state or a verified backup; swapping search and replacement "
+            "is not a general undo operation."
         ),
     )
     @click.option(

@@ -1,21 +1,24 @@
 ---
 description: |
   [TOPIC] Skills Skill Md As Index
-  [DETAILS] SKILL.md is an index file only — frontmatter (name, description, tags, allowed-tools, primary_interface, interfaces), one-line interface header, prose intro, "Installation & import" snippet, and grouped links to numbered leaves. Substantive content goes in focused leaf files. Includes the converged template (>70% adoption across the ecosystem) and per-leaf authoring rules.
+  [DETAILS] SKILL.md is an index file only — frontmatter (name, description, tags, allowed-tools, primary_interface, interfaces), one-line interface header, prose intro, "Installation & import" snippet, and grouped links to numbered leaves. Substantive content goes in focused leaf files. Includes an illustrative template and per-leaf authoring rules.
 tags: [scitex-general-interface-skills-skill-md-as-index]
 ---
 
 # SKILL.md as Index, Sub-skills as Leaves
 
-SKILL.md is an **index file only**. Content goes in focused sub-skill files. The shape below was extracted from the 12-package audit — every block matches a pattern adopted by ≥10 packages.
+SKILL.md is an **index file only**. Content goes in focused sub-skill files. The templates below illustrate the index/leaf split. Replace placeholders and verify the actual leaf APIs before publishing them; frontmatter follows [the metadata convention](05_frontmatter-metadata.md).
 
 ## Converged SKILL.md template
 
-```markdown
+````markdown
 ---
 name: scitex-io
-description: Universal scientific file I/O supporting 30+ formats. Use when loading or saving data.
-tags: [scitex-io, scitex-package]
+description: |
+  [WHAT] Scientific file I/O with a format registry.
+  [WHEN] Reading or writing scientific data.
+  [HOW] Use the installed leaf's documented Python API.
+tags: [scitex-io]
 allowed-tools: mcp__scitex__io_*
 primary_interface: python
 interfaces:
@@ -57,7 +60,7 @@ import scitex_io as sio
 
 ### Meta (20+)
 - [20_env-vars.md](20_env-vars.md) — `SCITEX_IO_*` environment variables
-```
+````
 
 (See [04_numbered-prefix-convention.md](04_numbered-prefix-convention.md) for the standard-5 leaf set every package should ship.)
 
@@ -65,20 +68,20 @@ import scitex_io as sio
 
 Each leaf covers one feature with actual code examples:
 
-```markdown
+````markdown
 ---
-name: save-and-load
-description: Core save/load API with two-tier format registry.
-tags: [scitex-io, scitex-package]
+description: |
+  [TOPIC] Save and load
+  [DETAILS] Describe the actual installed leaf API and its behavior.
+tags: [scitex-io-save-and-load]
 ---
 
 # Save and Load
 
 ## save()
 
-```python
-def save(obj, path, makedirs=True, ...):
-    ...
+```text
+save(obj, path, ...): replace with the actual signature reference
 ```
 
 [Actual function signature, parameters, behavior]
@@ -94,7 +97,7 @@ def save(obj, path, makedirs=True, ...):
 ## load()
 
 [Same pattern — signature, examples, edge cases]
-```
+````
 
 **Rules for sub-skill files:**
 1. Cover main features of that topic

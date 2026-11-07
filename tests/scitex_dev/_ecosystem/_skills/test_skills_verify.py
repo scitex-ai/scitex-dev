@@ -261,3 +261,45 @@ def test_empty_explicit_selection_cannot_pass(tmp_path):
         report["status"] == "needs_update"
         and "No documents selected" in report["issues"]
     )
+
+
+@pytest.mark.parametrize("indent", [0, 1, 2, 3])
+@pytest.mark.parametrize("marker", ["```", "~~~"])
+def test_fence_indentation_does_not_become_python_indentation(tmp_path, indent, marker):
+    # Arrange
+    prefix = " " * indent
+    content = (
+        f"{prefix}{marker}python\n"
+        f"{prefix}from owned import public\n"
+        f"{prefix}def example():\n"
+        f"{prefix}    return public()\n"
+        f"{prefix}{marker}\n"
+    )
+    root = _project(tmp_path, readme=content)
+    # Act
+    report = verify_docs_and_skills(root)
+    # Assert
+    assert (report["status"], report["issues"]) == ("ok", [])
+
+
+def test_fence_removes_at_most_its_own_indent_from_each_line(tmp_path):
+    # Arrange
+    root = _project(
+        tmp_path,
+        readme="   ```python\n  from owned import public\nvalue = 3\n   ```\n",
+    )
+    # Act
+    report = verify_docs_and_skills(root)
+    # Assert
+    assert (report["status"], report["issues"]) == ("ok", [])
+
+
+def test_unindented_fence_does_not_hide_invalid_python_indentation(tmp_path):
+    # Arrange
+    root = _project(tmp_path, readme="```python\n    from owned import public\n```\n")
+    # Act
+    report = verify_docs_and_skills(root)
+    # Assert
+    assert report["status"] == "needs_update" and any(
+        "IndentationError" in issue for issue in report["issues"]
+    )

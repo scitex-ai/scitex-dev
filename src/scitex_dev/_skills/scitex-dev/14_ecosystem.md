@@ -9,18 +9,13 @@ tags: [scitex-dev-ecosystem]
 
 ## ECOSYSTEM
 
-Canonical dict of all SciTeX packages.
+Bundled package roster. It is not an inventory of callable installed providers;
+installed discovery and operator configuration are separate.
 
 ```python
 from scitex_dev import ECOSYSTEM
 
-# Each entry:
-ECOSYSTEM["scitex-io"] == {
-    "local_path": "~/proj/scitex-io",
-    "pypi_name": "scitex-io",
-    "github_repo": "ywatanabe1989/scitex-io",
-    "import_name": "scitex_io",
-}
+print(ECOSYSTEM["scitex-io"])  # Inspect current metadata rather than a copied snapshot.
 ```
 
 ## get_all_packages / get_local_path
@@ -38,13 +33,12 @@ Reinstall local packages via `pip install -e .`
 
 ```python
 from scitex_dev import sync_local
+```
 
-result = sync_local(
-    packages: list[str] | None = None,  # None = all configured packages
-    confirm: bool = False,              # False = dry-run (default)
-    config=None,
-) -> dict[str, dict]
-# {pkg_name: {"status": "ok"|"dry_run"|"error"|"skipped", ...}}
+Signature reference (internal injection hooks omitted; not an invocation):
+
+```text
+sync_local(packages: 'list[str] | None' = None, confirm: 'bool' = False, config: 'DevConfig | None' = None, jobs: 'int' = 1, on_progress=None) -> 'dict[str, Any]'
 ```
 
 ```python
@@ -62,16 +56,12 @@ Sync packages to a remote SSH host (git stash, git pull, pip install -e .).
 ```python
 from scitex_dev import sync_host
 from scitex_dev import HostConfig
+```
 
-result = sync_host(
-    host: HostConfig,
-    packages: list[str] | None = None,
-    stash: bool = True,      # git stash before pull
-    install: bool = True,    # pip install -e . after pull
-    confirm: bool = False,   # False = dry-run (default)
-    config=None,
-) -> dict[str, dict]
-# {pkg_name: {"status": "ok"|"dry_run"|"error"|"timeout", ...}}
+Signature reference (internal injection hooks omitted; not an invocation):
+
+```text
+sync_host(host: 'HostConfig', packages: 'list[str] | None' = None, stash: 'bool' = True, install: 'bool' = True, safe: 'bool' = True, confirm: 'bool' = False, config: 'DevConfig | None' = None) -> 'dict[str, Any]'
 ```
 
 ## sync_all
@@ -80,16 +70,12 @@ Sync packages across all enabled hosts in parallel.
 
 ```python
 from scitex_dev import sync_all
+```
 
-result = sync_all(
-    hosts: list[str] | None = None,    # None = all enabled hosts
-    packages: list[str] | None = None,
-    stash: bool = True,
-    install: bool = True,
-    confirm: bool = False,             # False = dry-run (default)
-    config=None,
-) -> dict[str, dict]
-# {host_name: {pkg_name: result}}
+Signature reference (internal injection hooks omitted; not an invocation):
+
+```text
+sync_all(hosts: 'list[str] | None' = None, packages: 'list[str] | None' = None, stash: 'bool' = True, install: 'bool' = True, safe: 'bool' = True, confirm: 'bool' = False, config: 'DevConfig | None' = None) -> 'dict[str, Any]'
 ```
 
 ```python
@@ -109,13 +95,12 @@ Push local git tags to origin for all packages.
 
 ```python
 from scitex_dev import sync_tags
+```
 
-result = sync_tags(
-    packages: list[str] | None = None,
-    confirm: bool = False,    # False = dry-run (default)
-    config=None,
-) -> dict[str, dict]
-# {pkg_name: {"status": "ok"|"dry_run", "tag": "v0.3.2", ...}}
+Signature reference (internal injection hooks omitted; not an invocation):
+
+```text
+sync_tags(packages: 'list[str] | None' = None, confirm: 'bool' = False, config: 'DevConfig | None' = None) -> 'dict[str, Any]'
 ```
 
 ## pull_local
@@ -124,14 +109,12 @@ Pull latest from origin to local repos.
 
 ```python
 from scitex_dev import pull_local
+```
 
-result = pull_local(
-    packages: list[str] | None = None,
-    confirm: bool = False,   # False = dry-run (default)
-    stash: bool = True,      # stash before pull, pop after
-    config=None,
-) -> dict[str, dict]
-# {pkg_name: {"status": "ok"|"dry_run"|"stash_conflict", "stashed": bool, ...}}
+Signature reference (internal injection hooks omitted; not an invocation):
+
+```text
+pull_local(packages: 'list[str] | None' = None, confirm: 'bool' = False, stash: 'bool' = True, config: 'DevConfig | None' = None) -> 'dict[str, Any]'
 ```
 
 ## remote_diff
@@ -140,13 +123,12 @@ Show uncommitted changes on remote SSH hosts (read-only).
 
 ```python
 from scitex_dev import remote_diff
+```
 
-result = remote_diff(
-    host: str | None = None,           # None = first enabled host
-    packages: list[str] | None = None,
-    config=None,
-) -> dict[str, dict]
-# {host_name: {pkg_name: {"status": "dirty"|"clean", "files": ..., "diff": ...}}}
+Signature reference (internal injection hooks omitted; not an invocation):
+
+```text
+remote_diff(host: 'str | None' = None, packages: 'list[str] | None' = None, config: 'DevConfig | None' = None) -> 'dict[str, Any]'
 ```
 
 ## remote_commit
@@ -155,16 +137,12 @@ Commit dirty changes on remote host and push to origin.
 
 ```python
 from scitex_dev import remote_commit
+```
 
-result = remote_commit(
-    host: str,                          # required
-    packages: list[str] | None = None,
-    message: str | None = None,         # auto-generated if None
-    push: bool = True,
-    confirm: bool = False,              # False = dry-run (default)
-    config=None,
-) -> dict[str, dict]
-# {pkg_name: {"status": "ok"|"dry_run"|"clean", ...}}
+Signature reference (internal injection hooks omitted; not an invocation):
+
+```text
+remote_commit(host: 'str', packages: 'list[str] | None' = None, message: 'str | None' = None, push: 'bool' = True, confirm: 'bool' = False, config: 'DevConfig | None' = None) -> 'dict[str, Any]'
 ```
 
 ## CLI

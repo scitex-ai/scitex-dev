@@ -10,7 +10,24 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Restrict exported skill version and origin stamps to the opening YAML
+  frontmatter. Preserve instruction bodies, including YAML examples with their
+  own `version` fields, and keep existing line endings and metadata spacing.
+
 ## [0.62.17] - 2026-11-07
+
+- Remove a linter help example advertising forbidden `--new-only` use. Update
+  test-quality guidance to preserve real observations, own fixture teardown,
+  isolate runtime preferences and retain mandatory audit/CI failures.
+- Align skill-explanation guidance and dependency-error text with the installed
+  newb delegate instead of the retired Dev harness and removed skills extra.
+
+- Respect opening-fence indentation when checking Python documentation blocks,
+  preserving nested Python indentation and rejecting genuinely invalid code.
+- Correct skill examples against public API signatures and owned behavior checks;
+  distinguish signature references and templates from runnable Python. Remove
+  retired test-harness factories and unregistered test CLI routes, document the
+  rename undo limitation, and explain Git-boundary checks for skill destinations.
 
 - Decode YAML skill descriptions in discovery catalogs, including multiline
   blocks and quoted text, instead of advertising block markers or quotes.
