@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] Test Runner
-  [DETAILS] Run pytest locally or on HPC via Slurm. TestConfig configures test execution. run_local runs pytest in-process. sync_to_hpc rsyncs the project. run_hpc_srun/sbatch submit jobs. poll_hpc_job and fetch_hpc_result retrieve status and output.
+  [DETAILS] Run pytest locally or on HPC via Slurm. TestConfig configures test execution. run_local launches pytest as a subprocess. sync_to_hpc rsyncs the project. run_hpc_srun/sbatch submit jobs. poll_hpc_job and fetch_hpc_result retrieve status and output.
 tags: [scitex-dev-test-runner]
 ---
 
@@ -13,30 +13,18 @@ Dataclass for test execution configuration.
 
 ```python
 from scitex_dev import TestConfig
+```
 
-config = TestConfig(
-    module: str = "",          # test subdir under tests/ (e.g. "io")
-    parallel: str = "auto",    # "-n" value for pytest-xdist; "0" = no parallel
-    fast: bool = False,        # -m "not slow"
-    coverage: bool = False,    # --cov --cov-report=term-missing
-    exitfirst: bool = False,   # -x (stop on first failure)
-    pattern: str = "",         # -k pattern
-    changed: bool = False,     # --testmon (only changed tests)
-    last_failed: bool = False, # --lf
-    # HPC (None = resolve via SCITEX_DEV_TEST_* env or defaults)
-    hpc_host: str | None = None,       # default: "spartan"
-    hpc_cpus: int | None = None,       # default: 16
-    hpc_partition: str | None = None,  # default: "sapphire"
-    hpc_time: str | None = None,       # default: "00:20:00"
-    hpc_mem: str | None = None,        # default: "128G"
-    remote_base: str | None = None,    # default: "~/proj"
-)
+Signature reference (internal injection hooks omitted; not an invocation):
+
+```text
+TestConfig(module: 'str' = '', parallel: 'str' = 'auto', fast: 'bool' = False, coverage: 'bool' = False, exitfirst: 'bool' = False, pattern: 'str' = '', changed: 'bool' = False, last_failed: 'bool' = False, hpc_host: 'str | None' = None, hpc_cpus: 'int | None' = None, hpc_partition: 'str | None' = None, hpc_time: 'str | None' = None, hpc_mem: 'str | None' = None, remote_base: 'str | None' = None) -> None
 ```
 
 HPC defaults resolve via `PriorityConfig`:
 1. Direct parameter on `TestConfig`
 2. `SCITEX_DEV_TEST_*` environment variables
-3. Built-in defaults above
+3. Built-in defaults in the table below
 
 ## run_local
 
@@ -44,10 +32,12 @@ Run pytest locally via subprocess.
 
 ```python
 from scitex_dev import run_local, TestConfig
+```
 
-exit_code = run_local(
-    config: TestConfig,
-) -> int   # pytest exit code
+Signature reference (internal injection hooks omitted; not an invocation):
+
+```text
+run_local(config: 'TestConfig') -> 'int'
 ```
 
 ```python
@@ -71,11 +61,17 @@ Rsync project to HPC host (excludes .git, __pycache__, dist, build, etc.).
 
 ```python
 from scitex_dev import sync_to_hpc, TestConfig
-
-success = sync_to_hpc(config: TestConfig) -> bool
 ```
 
-Auto-detects git root and project name. Target: `{hpc_host}:{remote_base}/{project}/`
+Signature reference (internal injection hooks omitted; not an invocation):
+
+```text
+sync_to_hpc(config: 'TestConfig') -> 'bool'
+```
+
+Auto-detects Git root and project name. Target: `{hpc_host}:{remote_base}/{project}/`.
+The implementation uses `rsync --delete`: unmatched destination files outside
+its exclusion list can be removed. Inspect the destination before using it.
 
 ## run_hpc_srun
 
@@ -83,14 +79,18 @@ Blocking srun on HPC — waits for completion.
 
 ```python
 from scitex_dev import run_hpc_srun, TestConfig
-
-exit_code = run_hpc_srun(config: TestConfig) -> int
 ```
 
-Steps:
+Signature reference (internal injection hooks omitted; not an invocation):
+
+```text
+run_hpc_srun(config: 'TestConfig') -> 'int'
+```
+
+Current implementation (not a dependency-resolution or cluster-readiness check):
 1. SSH to `hpc_host`
 2. `srun --partition=... --cpus-per-task=... --time=... --mem=...`
-3. `cd {remote_base}/{project} && pip install -e .[dev] -q --no-deps`
+3. Install the editable project with `--no-deps`; dependencies must already exist.
 4. `python -m pytest {test_path} -n {cpus} --dist loadfile -x --tb=short`
 
 ## run_hpc_sbatch
@@ -99,10 +99,12 @@ Async sbatch — submits job and returns job ID immediately.
 
 ```python
 from scitex_dev import run_hpc_sbatch, TestConfig
+```
 
-job_id = run_hpc_sbatch(config: TestConfig) -> str | None
-# Returns numeric job ID string, or None on failure
-# Persists job ID to .last-hpc-job in project root
+Signature reference (internal injection hooks omitted; not an invocation):
+
+```text
+run_hpc_sbatch(config: 'TestConfig') -> 'str | None'
 ```
 
 Output written to `{remote_base}/{project}/.pytest-hpc-output/{job_id}.out`
@@ -113,12 +115,12 @@ Check sacct status of an HPC job.
 
 ```python
 from scitex_dev import poll_hpc_job
+```
 
-result = poll_hpc_job(
-    job_id: str | None = None,    # None = reads from .last-hpc-job
-    hpc_host: str | None = None,  # None = SCITEX_DEV_TEST_HOST env or "spartan"
-) -> dict
-# {"state": "COMPLETED"|"FAILED"|"RUNNING"|"PENDING"|..., "output": str|None, "job_id": str}
+Signature reference (internal injection hooks omitted; not an invocation):
+
+```text
+poll_hpc_job(job_id: 'str | None' = None, hpc_host: 'str | None' = None) -> 'dict[str, Any]'
 ```
 
 ```python
@@ -155,18 +157,16 @@ result = watch_hpc_job(job_id=job_id, interval=30)
 print(result["state"], result["output"])
 ```
 
-## CLI
+## Interface availability
 
-```bash
-# Local tests
-scitex-dev test local
-scitex-dev test local --module io --fast --exitfirst
+The current CLI does not register `scitex-dev test local`, `test hpc`,
+`test hpc-poll` or `test hpc-result`. Use the public Python functions above;
+do not infer a CLI command from an exported Python name. The MCP server has
+separate `dev_test_*` tools. Inspect the installed tool catalog before use.
 
-# HPC tests
-scitex-dev test hpc --module io
-scitex-dev test hpc-poll <job-id>
-scitex-dev test hpc-result <job-id>
-```
+These are legacy Slurm-specific helpers, not the scheduler abstraction of
+`scitex-hpc`. The signatures and local source do not establish remote access,
+cluster policy, installed dependencies or successful job execution.
 
 ## Environment Variables
 

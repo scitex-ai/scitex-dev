@@ -34,8 +34,6 @@ visible; do not silently substitute another package or checkout.
 `~/.scitex/dev_config.yaml` is a fallback only when the preferred file is absent.
 A default path can exist as a convention without the file having been created.
 
-Effective per-package switches resolve as:
-
 An existing project-local `.scitex/dev/config.yaml` wins over the user default
 through the shared config path resolver; explicit paths and `SCITEX_DEV_CONFIG`
 still take priority over that default selection.
@@ -85,14 +83,15 @@ unknown_mcp_preference = policy.is_enabled("unregistered-installed-owner", "mcp"
 For installed umbrella versions exposing Dev's CLI passthrough:
 
 ```bash
-scitex dev dev skills status --json
+scitex dev skills status --json
 scitex dev mcp status --json
-scitex dev dev skills disable scitex-writer --dry-run
+scitex dev skills disable scitex-writer --dry-run
 ```
 
 Omit `--dry-run` only when applying the requested change. The `enable` and
 `disable` commands write the machine-managed JSON state, not the YAML file.
-The standalone equivalent replaces the `scitex dev` prefix with `scitex-dev`.
+Standalone maintenance uses `scitex-dev dev skills ...`; MCP uses
+`scitex-dev mcp ...`. Older hidden aliases may warn while still forwarding.
 Check actual installed help before assuming a different version exposes that path.
 These switches do not uninstall packages or change already-running client context;
 consuming dispatchers must honor them and refresh their projections/server state.
@@ -105,9 +104,9 @@ Select packages or skills for a workflow, then load more through discovery when
 needed. Keep leaf resources authoritative and generated stores reproducible.
 
 ```bash
-scitex dev dev skills list --package scitex-dev --json
-scitex dev dev skills install --package scitex-dev --dry-run --json
-scitex dev dev skills install --package scitex-dev --dest /path/to/owned/skills --dry-run --json
+scitex dev skills list --package scitex-dev --json
+scitex dev skills install --package scitex-dev --dry-run --json
+scitex dev skills install --package scitex-dev --directory /path/to/external/skills --dry-run --json
 ```
 
 Without `--package`, installed discovery includes all enabled registered owners.
@@ -115,7 +114,11 @@ A full install can correctly refuse if retired and replacement distributions bot
 claim one namespace. Inspect ownership; do not hide the collision or delete packages
 without a deliberate retirement decision. A scoped refresh preserves other owners.
 
-`--dest` chooses the generated store, not a universal agent vendor configuration.
+`--directory` chooses the generated store; `--dest` remains an alias. The real
+destination must remain outside Git authority, even if the canonical path or a
+parent is symlinked into a dotfile checkout. Use an explicit external destination
+when that default is refused; preserve existing files. This does not configure
+every agent vendor automatically.
 Link selected skill folders into the directory supported by that agent, preserving
 existing files and reporting conflicts. Do not assume that linking the whole store
 will be discovered identically by every client. The legacy Claude-specific flag
@@ -128,21 +131,16 @@ when diagnosing behavior. Compare exported skills with their owning package's
 projection manifest and hashes. A source edit, a published version, a generated
 store, and an agent loading that store are separate observations.
 
-The existing CI matrix runs on pull requests and nightly at 17:00 UTC. Configuration
-regressions exercise these examples against isolated files and CLI commands there;
-this does not certify every documentation example. The read-only documentation
-verifier reports its static scope and unverified cases rather than equating valid
-Python syntax with successful execution.
+Configuration tests use isolated files and CLI commands. They do not certify
+every documentation example; the read-only verifier reports its static scope
+and unverified cases separately from behavioral execution.
 
 See [36_skill-registry.md](36_skill-registry.md) for ownership/projection checks,
 [41_agent-setup.md](41_agent-setup.md) for setup and protocol qualification, and
 [42_context-discovery.md](42_context-discovery.md) for selective MCP exposure and
 honest metadata accounting.
 
-
 ## Shared immutable exposure snapshot
-
-The Python example above constructs the public snapshot once.
 
 The same files and precedence apply even when an installed owner is absent from
 ECOSYSTEM. Unconfigured owners default to enabled independently for CLI, MCP and
@@ -193,5 +191,4 @@ Only locations and selected booleans are shown, never raw configuration values.
 The snapshot exposes the same frozen paths, so a project-local file shadowing a
 home default is visible without adding another provenance registry.
 
-These local package toggles are non-interactive. `--yes` is retained as a
-compatibility flag; it does not add consent enforcement or authorization.
+Setters are non-interactive; `--yes` is a compatibility flag, not consent.

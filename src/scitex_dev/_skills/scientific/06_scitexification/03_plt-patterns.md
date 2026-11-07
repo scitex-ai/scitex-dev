@@ -97,7 +97,9 @@ cruft). The manuscript consumes only the rendered media, by **symlink**.
 
 ## Worked example
 
-```python
+Side-by-side comparison (illustrative text, not a runnable script):
+
+```text
 # BEFORE                              # AFTER (stage 3)
 plt.figure(figsize=(8,6))             fig, ax = stx.plt.subplots()
 plt.plot(t, v, color="C0")            ax.plot_line(t, v)

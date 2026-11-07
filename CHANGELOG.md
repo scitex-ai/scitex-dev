@@ -12,6 +12,13 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [0.62.17] - 2026-11-07
 
+- Respect opening-fence indentation when checking Python documentation blocks,
+  preserving nested Python indentation and rejecting genuinely invalid code.
+- Correct skill examples against public API signatures and owned behavior checks;
+  distinguish signature references and templates from runnable Python. Remove
+  retired test-harness factories and unregistered test CLI routes, document the
+  rename undo limitation, and explain Git-boundary checks for skill destinations.
+
 - Decode YAML skill descriptions in discovery catalogs, including multiline
   blocks and quoted text, instead of advertising block markers or quotes.
   Preserve skill identity and version stamps; reject non-text metadata and

@@ -121,7 +121,9 @@ loudest tell that Stage 2 was rushed.
 
 ## Worked example
 
-```python
+Side-by-side comparison (illustrative text, not a runnable script):
+
+```text
 # BEFORE                                    # AFTER (stage 2)
 THRESH = 0.5                                 # config/PARAMS.yaml: THRESHOLD: 0.5
 def main():                                  @stx.session.start
