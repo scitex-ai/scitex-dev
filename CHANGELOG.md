@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Keep the Unified Search guide at a distinct documentation URL instead of
+  colliding with Sphinx's generated search page and removing its built-in label.
+
 - Correct CLI/MCP audit help to describe the base installation and existing
   severity-based failures instead of a removed extra and warn-only behavior.
 
