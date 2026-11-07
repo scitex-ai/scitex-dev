@@ -12,6 +12,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [0.62.17] - 2026-11-07
 
+- Decode YAML skill descriptions in discovery catalogs, including multiline
+  blocks and quoted text, instead of advertising block markers or quotes.
+  Preserve skill identity and version stamps; reject non-text metadata and
+  unsafe YAML tags without executing them.
 - Regenerate the bundled Sphinx documentation from source and check shipped
   guide titles plus the generated search form, preventing a missing guide from
   passing unnoticed when the source-only documentation build succeeds.
