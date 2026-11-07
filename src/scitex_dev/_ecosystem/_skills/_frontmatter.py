@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 
@@ -9,22 +10,27 @@ def _parse_frontmatter(path: Path) -> dict[str, str]:
     """Parse YAML frontmatter from a markdown file."""
     try:
         text = path.read_text()
-    except Exception:
+    except (OSError, UnicodeError):
         return {}
 
-    if not text.startswith("---"):
+    match = re.match(r"\A---[ \t]*\n(.*?)\n---[ \t]*(?:\n|\Z)", text, re.DOTALL)
+    if match is None:
         return {}
 
-    parts = text.split("---", 2)
-    if len(parts) < 3:
+    import yaml
+
+    try:
+        metadata = yaml.safe_load(match.group(1) + "\n")
+    except yaml.YAMLError:
         return {}
 
-    result = {}
-    for line in parts[1].strip().split("\n"):
-        if ":" in line:
-            key, _, value = line.partition(":")
-            result[key.strip()] = value.strip()
-    return result
+    if not isinstance(metadata, dict):
+        return {}
+    return {
+        key: value
+        for key, value in metadata.items()
+        if isinstance(key, str) and isinstance(value, str)
+    }
 
 
 def _stamp_frontmatter_field(content: str, key: str, value: str) -> str:

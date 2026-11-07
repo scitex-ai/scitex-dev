@@ -46,7 +46,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quick Start</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../api.html">API Reference</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../search.html">Search Page</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../unified-search.html">Unified Search</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../cli.html">CLI Mixin</a></li>
 </ul>
 
@@ -77,39 +77,39 @@
   <h1>Source code for scitex_dev._docs.search</h1><div class="highlight"><pre>
 <span></span><span class="ch">#!/usr/bin/env python3</span>
 <span class="c1"># -*- coding: utf-8 -*-</span>
-<span class="sd">&quot;&quot;&quot;Unified search across the SciTeX ecosystem.</span>
+<span class="sd">"""Unified search across the SciTeX ecosystem.</span>
 
 <span class="sd">Searches Python APIs, CLI commands, MCP tools, and documentation pages</span>
 <span class="sd">across all installed scitex packages.</span>
 
 <span class="sd">Query syntax (Google-like):</span>
-<span class="sd">    search(&quot;save figure&quot;)           # match any term</span>
-<span class="sd">    search(&#39;&quot;save figure&quot;&#39;)         # exact phrase match</span>
-<span class="sd">    search(&quot;stats -deprecated&quot;)     # exclude results with &quot;deprecated&quot;</span>
-<span class="sd">    search(&quot;+ttest statistics&quot;)     # &quot;ttest&quot; required, &quot;statistics&quot; optional boost</span>
+<span class="sd">    search("save figure")           # match any term</span>
+<span class="sd">    search('"save figure"')         # exact phrase match</span>
+<span class="sd">    search("stats -deprecated")     # exclude results with "deprecated"</span>
+<span class="sd">    search("+ttest statistics")     # "ttest" required, "statistics" optional boost</span>
 
 <span class="sd">Usage:</span>
 <span class="sd">    from scitex_dev import search</span>
 
-<span class="sd">    search(&quot;save figure&quot;)                      # search everything</span>
-<span class="sd">    search(&quot;ttest&quot;, scope=&quot;api&quot;)               # Python API only</span>
-<span class="sd">    search(&quot;docs&quot;, scope=&quot;cli&quot;)                # CLI subcommands only</span>
-<span class="sd">    search(&quot;stats -internal&quot;, scope=&quot;mcp&quot;)     # MCP tools, excluding &quot;internal&quot;</span>
-<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    search("save figure")                      # search everything</span>
+<span class="sd">    search("ttest", scope="api")               # Python API only</span>
+<span class="sd">    search("docs", scope="cli")                # CLI subcommands only</span>
+<span class="sd">    search("stats -internal", scope="mcp")     # MCP tools, excluding "internal"</span>
+<span class="sd">"""</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">difflib</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">scitex_logging</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">slogging</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">Optional</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">.._core.discovery</span><span class="w"> </span><span class="kn">import</span> <span class="n">discover_packages</span><span class="p">,</span> <span class="n">get_package_root</span>
 
-<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+<span class="n">logger</span> <span class="o">=</span> <span class="n">slogging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
-<span class="n">Scope</span> <span class="o">=</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;all&quot;</span><span class="p">,</span> <span class="s2">&quot;api&quot;</span><span class="p">,</span> <span class="s2">&quot;cli&quot;</span><span class="p">,</span> <span class="s2">&quot;mcp&quot;</span><span class="p">,</span> <span class="s2">&quot;docs&quot;</span><span class="p">]</span>
+<span class="n">Scope</span> <span class="o">=</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"all"</span><span class="p">,</span> <span class="s2">"api"</span><span class="p">,</span> <span class="s2">"cli"</span><span class="p">,</span> <span class="s2">"mcp"</span><span class="p">,</span> <span class="s2">"docs"</span><span class="p">]</span>
 
 <span class="c1"># Fuzzy match threshold (0.0–1.0). Lower = more permissive.</span>
 <span class="n">_FUZZY_THRESHOLD</span> <span class="o">=</span> <span class="mf">0.6</span>
@@ -122,16 +122,16 @@
 
 <span class="nd">@dataclass</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">ParsedQuery</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Parsed search query with Google-like operators.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Parsed search query with Google-like operators."""</span>
 
     <span class="n">required</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>  <span class="c1"># +term</span>
     <span class="n">optional</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>  <span class="c1"># plain term</span>
     <span class="n">excluded</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>  <span class="c1"># -term</span>
-    <span class="n">phrases</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>  <span class="c1"># &quot;exact phrase&quot;</span>
+    <span class="n">phrases</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>  <span class="c1"># "exact phrase"</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">all_positive</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;All terms that should match (required + optional).&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""All terms that should match (required + optional)."""</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">required</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">optional</span>
 
     <span class="nd">@property</span>
@@ -140,30 +140,30 @@
 
 
 <div class="viewcode-block" id="parse_query">
-<a class="viewcode-back" href="../../../search.html#scitex_dev._docs.search.parse_query">[docs]</a>
+<a class="viewcode-back" href="../../../unified-search.html#scitex_dev._docs.search.parse_query">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">parse_query</span><span class="p">(</span><span class="n">query</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ParsedQuery</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Parse a Google-like query string.</span>
+<span class="w">    </span><span class="sd">"""Parse a Google-like query string.</span>
 
 <span class="sd">    Supports:</span>
 <span class="sd">        word         → optional term (boosts score)</span>
 <span class="sd">        +word        → required term (must match)</span>
 <span class="sd">        -word        → excluded term (must NOT match)</span>
-<span class="sd">        &quot;phrase&quot;     → exact phrase match</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">        "phrase"     → exact phrase match</span>
+<span class="sd">    """</span>
     <span class="n">parsed</span> <span class="o">=</span> <span class="n">ParsedQuery</span><span class="p">()</span>
 
     <span class="c1"># Extract quoted phrases first</span>
-    <span class="k">for</span> <span class="n">match</span> <span class="ow">in</span> <span class="n">re</span><span class="o">.</span><span class="n">finditer</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;&quot;([^&quot;]+)&quot;&#39;</span><span class="p">,</span> <span class="n">query</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">match</span> <span class="ow">in</span> <span class="n">re</span><span class="o">.</span><span class="n">finditer</span><span class="p">(</span><span class="sa">r</span><span class="s1">'"([^"]+)"'</span><span class="p">,</span> <span class="n">query</span><span class="p">):</span>
         <span class="n">parsed</span><span class="o">.</span><span class="n">phrases</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">())</span>
 
     <span class="c1"># Remove quoted parts from remaining query</span>
-    <span class="n">remaining</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;&quot;[^&quot;]*&quot;&#39;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">query</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="n">remaining</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s1">'"[^"]*"'</span><span class="p">,</span> <span class="s2">""</span><span class="p">,</span> <span class="n">query</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
 
     <span class="k">for</span> <span class="n">token</span> <span class="ow">in</span> <span class="n">remaining</span><span class="o">.</span><span class="n">split</span><span class="p">():</span>
         <span class="n">token_lower</span> <span class="o">=</span> <span class="n">token</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
-        <span class="k">if</span> <span class="n">token</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;+&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">token</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">token</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"+"</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">token</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
             <span class="n">parsed</span><span class="o">.</span><span class="n">required</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">token_lower</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
-        <span class="k">elif</span> <span class="n">token</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;-&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">token</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="n">token</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"-"</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">token</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
             <span class="n">parsed</span><span class="o">.</span><span class="n">excluded</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">token_lower</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">parsed</span><span class="o">.</span><span class="n">optional</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">token_lower</span><span class="p">)</span>
@@ -178,13 +178,13 @@
 
 
 <div class="viewcode-block" id="score_text">
-<a class="viewcode-back" href="../../../search.html#scitex_dev._docs.search.score_text">[docs]</a>
+<a class="viewcode-back" href="../../../unified-search.html#scitex_dev._docs.search.score_text">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">score_text</span><span class="p">(</span><span class="n">pq</span><span class="p">:</span> <span class="n">ParsedQuery</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">fuzzy</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Score text against a parsed query.</span>
+<span class="w">    </span><span class="sd">"""Score text against a parsed query.</span>
 
 <span class="sd">    Returns:</span>
 <span class="sd">        Score &gt;= 0. Returns -1 if excluded term found or required term missing.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">text_lower</span> <span class="o">=</span> <span class="n">text</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
 
     <span class="c1"># Check exclusions first</span>
@@ -220,7 +220,7 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_term_matches</span><span class="p">(</span><span class="n">term</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">fuzzy</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Check if a term matches text (exact or fuzzy).&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Check if a term matches text (exact or fuzzy)."""</span>
     <span class="k">if</span> <span class="n">term</span> <span class="ow">in</span> <span class="n">text</span><span class="p">:</span>
         <span class="k">return</span> <span class="kc">True</span>
     <span class="k">if</span> <span class="n">fuzzy</span><span class="p">:</span>
@@ -229,11 +229,11 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_fuzzy_match</span><span class="p">(</span><span class="n">term</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Check if term fuzzy-matches any word in text.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Check if term fuzzy-matches any word in text."""</span>
     <span class="n">words</span> <span class="o">=</span> <span class="n">text</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
     <span class="k">for</span> <span class="n">word</span> <span class="ow">in</span> <span class="n">words</span><span class="p">:</span>
         <span class="c1"># Strip non-alphanumeric for cleaner matching</span>
-        <span class="n">clean</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;[^a-z0-9_]&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">word</span><span class="p">)</span>
+        <span class="n">clean</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s2">"[^a-z0-9_]"</span><span class="p">,</span> <span class="s2">""</span><span class="p">,</span> <span class="n">word</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">clean</span><span class="p">:</span>
             <span class="k">continue</span>
         <span class="n">ratio</span> <span class="o">=</span> <span class="n">difflib</span><span class="o">.</span><span class="n">SequenceMatcher</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">term</span><span class="p">,</span> <span class="n">clean</span><span class="p">)</span><span class="o">.</span><span class="n">ratio</span><span class="p">()</span>
@@ -248,26 +248,26 @@
 
 
 <div class="viewcode-block" id="search">
-<a class="viewcode-back" href="../../../search.html#scitex_dev._docs.search.search">[docs]</a>
+<a class="viewcode-back" href="../../../unified-search.html#scitex_dev._docs.search.search">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">search</span><span class="p">(</span>
     <span class="n">query</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-    <span class="n">scope</span><span class="p">:</span> <span class="n">Scope</span> <span class="o">=</span> <span class="s2">&quot;all&quot;</span><span class="p">,</span>
+    <span class="n">scope</span><span class="p">:</span> <span class="n">Scope</span> <span class="o">=</span> <span class="s2">"all"</span><span class="p">,</span>
     <span class="n">package</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">packages</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">max_results</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span>
     <span class="n">fuzzy</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Search across the SciTeX ecosystem.</span>
+<span class="w">    </span><span class="sd">"""Search across the SciTeX ecosystem.</span>
 
 <span class="sd">    Query syntax:</span>
-<span class="sd">        &quot;save figure&quot;     → match any term</span>
-<span class="sd">        &#39;&quot;exact phrase&quot;&#39;  → match exact phrase</span>
-<span class="sd">        &quot;+required term&quot;  → term must appear</span>
-<span class="sd">        &quot;-excluded&quot;       → results with this term are removed</span>
+<span class="sd">        "save figure"     → match any term</span>
+<span class="sd">        '"exact phrase"'  → match exact phrase</span>
+<span class="sd">        "+required term"  → term must appear</span>
+<span class="sd">        "-excluded"       → results with this term are removed</span>
 
 <span class="sd">    Args:</span>
-<span class="sd">        query: Search query (supports +required, -excluded, &quot;phrases&quot;).</span>
-<span class="sd">        scope: What to search — &quot;all&quot;, &quot;api&quot;, &quot;cli&quot;, &quot;mcp&quot;, or &quot;docs&quot;.</span>
+<span class="sd">        query: Search query (supports +required, -excluded, "phrases").</span>
+<span class="sd">        scope: What to search — "all", "api", "cli", "mcp", or "docs".</span>
 <span class="sd">        package: Limit to a single package.</span>
 <span class="sd">        packages: Limit to specific packages.</span>
 <span class="sd">        max_results: Maximum results to return.</span>
@@ -276,7 +276,7 @@
 <span class="sd">    Returns:</span>
 <span class="sd">        List of dicts with: package, name, title, score, scope, match_type.</span>
 <span class="sd">        Sorted by relevance (score descending).</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">pq</span> <span class="o">=</span> <span class="n">parse_query</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">pq</span><span class="o">.</span><span class="n">is_empty</span><span class="p">:</span>
         <span class="k">return</span> <span class="p">[]</span>
@@ -287,32 +287,32 @@
 
     <span class="c1"># Dispatch to scope-specific searchers</span>
     <span class="n">searchers</span> <span class="o">=</span> <span class="p">{</span>
-        <span class="s2">&quot;docs&quot;</span><span class="p">:</span> <span class="n">_search_docs</span><span class="p">,</span>
-        <span class="s2">&quot;api&quot;</span><span class="p">:</span> <span class="n">_search_api</span><span class="p">,</span>
-        <span class="s2">&quot;cli&quot;</span><span class="p">:</span> <span class="n">_search_cli</span><span class="p">,</span>
-        <span class="s2">&quot;mcp&quot;</span><span class="p">:</span> <span class="n">_search_mcp</span><span class="p">,</span>
+        <span class="s2">"docs"</span><span class="p">:</span> <span class="n">_search_docs</span><span class="p">,</span>
+        <span class="s2">"api"</span><span class="p">:</span> <span class="n">_search_api</span><span class="p">,</span>
+        <span class="s2">"cli"</span><span class="p">:</span> <span class="n">_search_cli</span><span class="p">,</span>
+        <span class="s2">"mcp"</span><span class="p">:</span> <span class="n">_search_mcp</span><span class="p">,</span>
     <span class="p">}</span>
 
-    <span class="k">if</span> <span class="n">scope</span> <span class="o">==</span> <span class="s2">&quot;all&quot;</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">scope</span> <span class="o">==</span> <span class="s2">"all"</span><span class="p">:</span>
         <span class="k">for</span> <span class="n">searcher</span> <span class="ow">in</span> <span class="n">searchers</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
             <span class="n">results</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">searcher</span><span class="p">(</span><span class="n">pq</span><span class="p">,</span> <span class="n">targets</span><span class="p">,</span> <span class="n">fuzzy</span><span class="o">=</span><span class="n">fuzzy</span><span class="p">))</span>
     <span class="k">elif</span> <span class="n">scope</span> <span class="ow">in</span> <span class="n">searchers</span><span class="p">:</span>
         <span class="n">results</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">searchers</span><span class="p">[</span><span class="n">scope</span><span class="p">](</span><span class="n">pq</span><span class="p">,</span> <span class="n">targets</span><span class="p">,</span> <span class="n">fuzzy</span><span class="o">=</span><span class="n">fuzzy</span><span class="p">))</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;Unknown scope: </span><span class="si">{</span><span class="n">scope</span><span class="si">!r}</span><span class="s2">. Use &#39;all&#39;, &#39;api&#39;, &#39;cli&#39;, &#39;mcp&#39;, or &#39;docs&#39;.&quot;</span>
+            <span class="sa">f</span><span class="s2">"Unknown scope: </span><span class="si">{</span><span class="n">scope</span><span class="si">!r}</span><span class="s2">. Use 'all', 'api', 'cli', 'mcp', or 'docs'."</span>
         <span class="p">)</span>
 
     <span class="c1"># Deduplicate by (package, name, scope)</span>
     <span class="n">seen</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
     <span class="n">unique</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">results</span><span class="p">:</span>
-        <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;package&quot;</span><span class="p">],</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;scope&quot;</span><span class="p">])</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s2">"package"</span><span class="p">],</span> <span class="n">r</span><span class="p">[</span><span class="s2">"name"</span><span class="p">],</span> <span class="n">r</span><span class="p">[</span><span class="s2">"scope"</span><span class="p">])</span>
         <span class="k">if</span> <span class="n">key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">seen</span><span class="p">:</span>
             <span class="n">seen</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
             <span class="n">unique</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
 
-    <span class="n">unique</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">r</span><span class="p">:</span> <span class="p">(</span><span class="o">-</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;score&quot;</span><span class="p">],</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]))</span>
+    <span class="n">unique</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">r</span><span class="p">:</span> <span class="p">(</span><span class="o">-</span><span class="n">r</span><span class="p">[</span><span class="s2">"score"</span><span class="p">],</span> <span class="n">r</span><span class="p">[</span><span class="s2">"name"</span><span class="p">]))</span>
     <span class="k">return</span> <span class="n">unique</span><span class="p">[:</span><span class="n">max_results</span><span class="p">]</span></div>
 
 
@@ -326,7 +326,7 @@
     <span class="n">package</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
     <span class="n">packages</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]],</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Resolve which packages to search.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Resolve which packages to search."""</span>
     <span class="k">if</span> <span class="n">package</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">discovered</span> <span class="o">=</span> <span class="n">discover_packages</span><span class="p">()</span>
         <span class="k">return</span> <span class="p">{</span><span class="n">package</span><span class="p">:</span> <span class="n">discovered</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">package</span><span class="p">)}</span>
@@ -345,12 +345,12 @@
     <span class="n">match_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
     <span class="k">return</span> <span class="p">{</span>
-        <span class="s2">&quot;package&quot;</span><span class="p">:</span> <span class="n">package</span><span class="p">,</span>
-        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span>
-        <span class="s2">&quot;title&quot;</span><span class="p">:</span> <span class="n">title</span><span class="p">,</span>
-        <span class="s2">&quot;score&quot;</span><span class="p">:</span> <span class="n">score</span><span class="p">,</span>
-        <span class="s2">&quot;scope&quot;</span><span class="p">:</span> <span class="n">scope</span><span class="p">,</span>
-        <span class="s2">&quot;match_type&quot;</span><span class="p">:</span> <span class="n">match_type</span><span class="p">,</span>
+        <span class="s2">"package"</span><span class="p">:</span> <span class="n">package</span><span class="p">,</span>
+        <span class="s2">"name"</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span>
+        <span class="s2">"title"</span><span class="p">:</span> <span class="n">title</span><span class="p">,</span>
+        <span class="s2">"score"</span><span class="p">:</span> <span class="n">score</span><span class="p">,</span>
+        <span class="s2">"scope"</span><span class="p">:</span> <span class="n">scope</span><span class="p">,</span>
+        <span class="s2">"match_type"</span><span class="p">:</span> <span class="n">match_type</span><span class="p">,</span>
     <span class="p">}</span>
 
 
@@ -364,7 +364,7 @@
     <span class="n">targets</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]],</span>
     <span class="n">fuzzy</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Search documentation pages.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Search documentation pages."""</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">.docs</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_docs</span>
 
     <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
@@ -376,28 +376,28 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">manifest</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
             <span class="k">continue</span>
 
-        <span class="k">for</span> <span class="n">page_entry</span> <span class="ow">in</span> <span class="n">manifest</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;pages&quot;</span><span class="p">,</span> <span class="p">[]):</span>
+        <span class="k">for</span> <span class="n">page_entry</span> <span class="ow">in</span> <span class="n">manifest</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"pages"</span><span class="p">,</span> <span class="p">[]):</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">page_entry</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
-                <span class="n">name</span> <span class="o">=</span> <span class="n">page_entry</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
-                <span class="n">title</span> <span class="o">=</span> <span class="n">page_entry</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;title&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                <span class="n">name</span> <span class="o">=</span> <span class="n">page_entry</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"name"</span><span class="p">,</span> <span class="s2">""</span><span class="p">)</span>
+                <span class="n">title</span> <span class="o">=</span> <span class="n">page_entry</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"title"</span><span class="p">,</span> <span class="s2">""</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="n">name</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">page_entry</span><span class="p">)</span>
                 <span class="n">title</span> <span class="o">=</span> <span class="n">name</span>
 
-            <span class="n">text</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">title</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="n">text</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">title</span><span class="si">}</span><span class="s2">"</span>
             <span class="n">s</span> <span class="o">=</span> <span class="n">score_text</span><span class="p">(</span><span class="n">pq</span><span class="p">,</span> <span class="n">text</span><span class="p">,</span> <span class="n">fuzzy</span><span class="o">=</span><span class="n">fuzzy</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">s</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
                 <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-                    <span class="n">_make_result</span><span class="p">(</span><span class="n">pkg_name</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">title</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="s2">&quot;docs&quot;</span><span class="p">,</span> <span class="s2">&quot;page_title&quot;</span><span class="p">)</span>
+                    <span class="n">_make_result</span><span class="p">(</span><span class="n">pkg_name</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">title</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="s2">"docs"</span><span class="p">,</span> <span class="s2">"page_title"</span><span class="p">)</span>
                 <span class="p">)</span>
 
         <span class="c1"># Package description</span>
-        <span class="n">desc</span> <span class="o">=</span> <span class="n">manifest</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;description&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">desc</span> <span class="o">=</span> <span class="n">manifest</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"description"</span><span class="p">,</span> <span class="s2">""</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">desc</span><span class="p">:</span>
             <span class="n">s</span> <span class="o">=</span> <span class="n">score_text</span><span class="p">(</span><span class="n">pq</span><span class="p">,</span> <span class="n">desc</span><span class="p">,</span> <span class="n">fuzzy</span><span class="o">=</span><span class="n">fuzzy</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">s</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
                 <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-                    <span class="n">_make_result</span><span class="p">(</span><span class="n">pkg_name</span><span class="p">,</span> <span class="n">pkg_name</span><span class="p">,</span> <span class="n">desc</span><span class="p">[:</span><span class="mi">80</span><span class="p">],</span> <span class="n">s</span><span class="p">,</span> <span class="s2">&quot;docs&quot;</span><span class="p">,</span> <span class="s2">&quot;package&quot;</span><span class="p">)</span>
+                    <span class="n">_make_result</span><span class="p">(</span><span class="n">pkg_name</span><span class="p">,</span> <span class="n">pkg_name</span><span class="p">,</span> <span class="n">desc</span><span class="p">[:</span><span class="mi">80</span><span class="p">],</span> <span class="n">s</span><span class="p">,</span> <span class="s2">"docs"</span><span class="p">,</span> <span class="s2">"package"</span><span class="p">)</span>
                 <span class="p">)</span>
 
     <span class="k">return</span> <span class="n">results</span>
@@ -408,7 +408,7 @@
     <span class="n">targets</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]],</span>
     <span class="n">fuzzy</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Search Python API (public functions, classes, methods).&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Search Python API (public functions, classes, methods)."""</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">.._core.introspect</span><span class="w"> </span><span class="kn">import</span> <span class="n">introspect_package</span>
 
     <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
@@ -422,38 +422,38 @@
         <span class="k">if</span> <span class="n">info</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">continue</span>
 
-        <span class="k">for</span> <span class="n">member_name</span><span class="p">,</span> <span class="n">member_info</span> <span class="ow">in</span> <span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;modules&quot;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-            <span class="n">text</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">member_name</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">member_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;description&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
-            <span class="n">sig</span> <span class="o">=</span> <span class="n">member_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;signature&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">member_name</span><span class="p">,</span> <span class="n">member_info</span> <span class="ow">in</span> <span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"modules"</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">text</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">member_name</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">member_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'description'</span><span class="p">,</span><span class="w"> </span><span class="s1">''</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
+            <span class="n">sig</span> <span class="o">=</span> <span class="n">member_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"signature"</span><span class="p">,</span> <span class="s2">""</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">sig</span><span class="p">:</span>
-                <span class="n">text</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot; </span><span class="si">{</span><span class="n">sig</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="n">text</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">" </span><span class="si">{</span><span class="n">sig</span><span class="si">}</span><span class="s2">"</span>
             <span class="n">s</span> <span class="o">=</span> <span class="n">score_text</span><span class="p">(</span><span class="n">pq</span><span class="p">,</span> <span class="n">text</span><span class="p">,</span> <span class="n">fuzzy</span><span class="o">=</span><span class="n">fuzzy</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">s</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
                 <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                     <span class="n">_make_result</span><span class="p">(</span>
                         <span class="n">pkg_name</span><span class="p">,</span>
                         <span class="n">member_name</span><span class="p">,</span>
-                        <span class="n">member_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;description&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)[:</span><span class="mi">80</span><span class="p">],</span>
+                        <span class="n">member_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"description"</span><span class="p">,</span> <span class="s2">""</span><span class="p">)[:</span><span class="mi">80</span><span class="p">],</span>
                         <span class="n">s</span><span class="p">,</span>
-                        <span class="s2">&quot;api&quot;</span><span class="p">,</span>
-                        <span class="n">member_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;type&quot;</span><span class="p">,</span> <span class="s2">&quot;function&quot;</span><span class="p">),</span>
+                        <span class="s2">"api"</span><span class="p">,</span>
+                        <span class="n">member_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"type"</span><span class="p">,</span> <span class="s2">"function"</span><span class="p">),</span>
                     <span class="p">)</span>
                 <span class="p">)</span>
 
             <span class="c1"># Search methods within classes</span>
-            <span class="k">if</span> <span class="n">member_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;type&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;class&quot;</span><span class="p">:</span>
-                <span class="k">for</span> <span class="n">method_name</span><span class="p">,</span> <span class="n">method_info</span> <span class="ow">in</span> <span class="n">member_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;methods&quot;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-                    <span class="n">text</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">member_name</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">method_name</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">method_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;description&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">if</span> <span class="n">member_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"type"</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"class"</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">method_name</span><span class="p">,</span> <span class="n">method_info</span> <span class="ow">in</span> <span class="n">member_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"methods"</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                    <span class="n">text</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">member_name</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">method_name</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">method_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'description'</span><span class="p">,</span><span class="w"> </span><span class="s1">''</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
                     <span class="n">s</span> <span class="o">=</span> <span class="n">score_text</span><span class="p">(</span><span class="n">pq</span><span class="p">,</span> <span class="n">text</span><span class="p">,</span> <span class="n">fuzzy</span><span class="o">=</span><span class="n">fuzzy</span><span class="p">)</span>
                     <span class="k">if</span> <span class="n">s</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
                         <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                             <span class="n">_make_result</span><span class="p">(</span>
                                 <span class="n">pkg_name</span><span class="p">,</span>
-                                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">member_name</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">method_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                                <span class="n">method_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;description&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)[:</span><span class="mi">80</span><span class="p">],</span>
+                                <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">member_name</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">method_name</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
+                                <span class="n">method_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"description"</span><span class="p">,</span> <span class="s2">""</span><span class="p">)[:</span><span class="mi">80</span><span class="p">],</span>
                                 <span class="n">s</span><span class="p">,</span>
-                                <span class="s2">&quot;api&quot;</span><span class="p">,</span>
-                                <span class="s2">&quot;method&quot;</span><span class="p">,</span>
+                                <span class="s2">"api"</span><span class="p">,</span>
+                                <span class="s2">"method"</span><span class="p">,</span>
                             <span class="p">)</span>
                         <span class="p">)</span>
 
@@ -465,16 +465,16 @@
     <span class="n">targets</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]],</span>
     <span class="n">fuzzy</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Search CLI subcommands via console_scripts entry points.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Search CLI subcommands via console_scripts entry points."""</span>
     <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="k">try</span><span class="p">:</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">importlib.metadata</span><span class="w"> </span><span class="kn">import</span> <span class="n">entry_points</span>
 
-        <span class="n">eps</span> <span class="o">=</span> <span class="n">entry_points</span><span class="p">(</span><span class="n">group</span><span class="o">=</span><span class="s2">&quot;console_scripts&quot;</span><span class="p">)</span>
+        <span class="n">eps</span> <span class="o">=</span> <span class="n">entry_points</span><span class="p">(</span><span class="n">group</span><span class="o">=</span><span class="s2">"console_scripts"</span><span class="p">)</span>
         <span class="k">for</span> <span class="n">ep</span> <span class="ow">in</span> <span class="n">eps</span><span class="p">:</span>
             <span class="n">pkg_match</span> <span class="o">=</span> <span class="kc">None</span>
             <span class="k">for</span> <span class="n">pkg_name</span> <span class="ow">in</span> <span class="n">targets</span><span class="p">:</span>
-                <span class="n">normalized</span> <span class="o">=</span> <span class="n">pkg_name</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;-&quot;</span><span class="p">,</span> <span class="s2">&quot;_&quot;</span><span class="p">)</span>
+                <span class="n">normalized</span> <span class="o">=</span> <span class="n">pkg_name</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">"-"</span><span class="p">,</span> <span class="s2">"_"</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">normalized</span> <span class="ow">in</span> <span class="n">ep</span><span class="o">.</span><span class="n">value</span> <span class="ow">or</span> <span class="n">ep</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">pkg_name</span><span class="p">):</span>
                     <span class="n">pkg_match</span> <span class="o">=</span> <span class="n">pkg_name</span>
                     <span class="k">break</span>
@@ -482,21 +482,21 @@
             <span class="k">if</span> <span class="n">pkg_match</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="k">continue</span>
 
-            <span class="n">text</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">ep</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">ep</span><span class="o">.</span><span class="n">value</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="n">text</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">ep</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">ep</span><span class="o">.</span><span class="n">value</span><span class="si">}</span><span class="s2">"</span>
             <span class="n">s</span> <span class="o">=</span> <span class="n">score_text</span><span class="p">(</span><span class="n">pq</span><span class="p">,</span> <span class="n">text</span><span class="p">,</span> <span class="n">fuzzy</span><span class="o">=</span><span class="n">fuzzy</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">s</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
                 <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                     <span class="n">_make_result</span><span class="p">(</span>
                         <span class="n">pkg_match</span><span class="p">,</span>
                         <span class="n">ep</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
-                        <span class="sa">f</span><span class="s2">&quot;CLI: </span><span class="si">{</span><span class="n">ep</span><span class="o">.</span><span class="n">value</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                        <span class="sa">f</span><span class="s2">"CLI: </span><span class="si">{</span><span class="n">ep</span><span class="o">.</span><span class="n">value</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
                         <span class="n">s</span><span class="p">,</span>
-                        <span class="s2">&quot;cli&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;console_script&quot;</span><span class="p">,</span>
+                        <span class="s2">"cli"</span><span class="p">,</span>
+                        <span class="s2">"console_script"</span><span class="p">,</span>
                     <span class="p">)</span>
                 <span class="p">)</span>
     <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Failed to search CLI entry points&quot;</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"Failed to search CLI entry points"</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="n">results</span>
 
@@ -506,7 +506,7 @@
     <span class="n">targets</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]],</span>
     <span class="n">fuzzy</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Search MCP tool names and descriptions.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Search MCP tool names and descriptions."""</span>
     <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
 
     <span class="k">for</span> <span class="n">pkg_name</span><span class="p">,</span> <span class="n">module_name</span> <span class="ow">in</span> <span class="n">targets</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
@@ -518,29 +518,29 @@
             <span class="k">continue</span>
 
         <span class="n">mcp_candidates</span> <span class="o">=</span> <span class="p">[</span>
-            <span class="n">pkg_root</span> <span class="o">/</span> <span class="s2">&quot;_mcp_tools&quot;</span><span class="p">,</span>
-            <span class="n">pkg_root</span> <span class="o">/</span> <span class="s2">&quot;mcp&quot;</span><span class="p">,</span>
-            <span class="n">pkg_root</span> <span class="o">/</span> <span class="s2">&quot;_mcp&quot;</span><span class="p">,</span>
+            <span class="n">pkg_root</span> <span class="o">/</span> <span class="s2">"_mcp_tools"</span><span class="p">,</span>
+            <span class="n">pkg_root</span> <span class="o">/</span> <span class="s2">"mcp"</span><span class="p">,</span>
+            <span class="n">pkg_root</span> <span class="o">/</span> <span class="s2">"_mcp"</span><span class="p">,</span>
         <span class="p">]</span>
 
         <span class="k">for</span> <span class="n">mcp_dir</span> <span class="ow">in</span> <span class="n">mcp_candidates</span><span class="p">:</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">mcp_dir</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
                 <span class="k">continue</span>
-            <span class="k">for</span> <span class="n">py_file</span> <span class="ow">in</span> <span class="n">mcp_dir</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;*.py&quot;</span><span class="p">):</span>
-                <span class="k">if</span> <span class="n">py_file</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;_&quot;</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">py_file</span> <span class="ow">in</span> <span class="n">mcp_dir</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">"*.py"</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">py_file</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"_"</span><span class="p">):</span>
                     <span class="k">continue</span>
                 <span class="k">try</span><span class="p">:</span>
-                    <span class="n">content</span> <span class="o">=</span> <span class="n">py_file</span><span class="o">.</span><span class="n">read_text</span><span class="p">(</span><span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
+                    <span class="n">content</span> <span class="o">=</span> <span class="n">py_file</span><span class="o">.</span><span class="n">read_text</span><span class="p">(</span><span class="n">encoding</span><span class="o">=</span><span class="s2">"utf-8"</span><span class="p">)</span>
                 <span class="k">except</span> <span class="ne">OSError</span><span class="p">:</span>
                     <span class="k">continue</span>
 
                 <span class="k">for</span> <span class="n">match</span> <span class="ow">in</span> <span class="n">re</span><span class="o">.</span><span class="n">finditer</span><span class="p">(</span>
-                    <span class="sa">r</span><span class="s1">&#39;(?:async\s+)?def\s+(\w+)\s*\([^)]*\)\s*(?:-&gt;.*?)?:\s*\n\s*&quot;&quot;&quot;([^&quot;]*)&#39;</span><span class="p">,</span>
+                    <span class="sa">r</span><span class="s1">'(?:async\s+)?def\s+(\w+)\s*\([^)]*\)\s*(?:-&gt;.*?)?:\s*\n\s*"""([^"]*)'</span><span class="p">,</span>
                     <span class="n">content</span><span class="p">,</span>
                 <span class="p">):</span>
                     <span class="n">func_name</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
                     <span class="n">docstring</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
-                    <span class="n">text</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">func_name</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">docstring</span><span class="si">}</span><span class="s2">&quot;</span>
+                    <span class="n">text</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">func_name</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">docstring</span><span class="si">}</span><span class="s2">"</span>
                     <span class="n">s</span> <span class="o">=</span> <span class="n">score_text</span><span class="p">(</span><span class="n">pq</span><span class="p">,</span> <span class="n">text</span><span class="p">,</span> <span class="n">fuzzy</span><span class="o">=</span><span class="n">fuzzy</span><span class="p">)</span>
                     <span class="k">if</span> <span class="n">s</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
                         <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
@@ -549,8 +549,8 @@
                                 <span class="n">func_name</span><span class="p">,</span>
                                 <span class="n">docstring</span><span class="p">[:</span><span class="mi">80</span><span class="p">],</span>
                                 <span class="n">s</span><span class="p">,</span>
-                                <span class="s2">&quot;mcp&quot;</span><span class="p">,</span>
-                                <span class="s2">&quot;mcp_tool&quot;</span><span class="p">,</span>
+                                <span class="s2">"mcp"</span><span class="p">,</span>
+                                <span class="s2">"mcp_tool"</span><span class="p">,</span>
                             <span class="p">)</span>
                         <span class="p">)</span>
 

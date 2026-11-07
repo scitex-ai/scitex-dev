@@ -1,179 +1,106 @@
 ---
 description: |
-  [TOPIC] Version Control Release Automation
-  [DETAILS] Ecosystem-wide release automation via `scitex-dev` — the `ecosystem` subcommand tree (`list`, `sync`, `sync-remote`, `fix-mismatches`, `start-dashboard`), the dashboard web UI at `http://localhost:8050` for at-a-glance version reconciliation across all scitex-* packages, the matching Python API in `scitex_dev.ecosystem`, and the MCP tools so agents can drive the same release flow. Complements `05_development/01_version-control.md` (manual workflow) with the automated path used during multi-package release waves. Use when bumping versions across the ecosystem, resolving cross-package version drift, or scripting a release.
+  [TOPIC] Release inventory and automation boundaries
+  [DETAILS] Inspect ecosystem versions through the actual CLI, public Python API and registered MCP tools. Version reports are diagnostic snapshots, not release acceptance. Follow standing authorization, leaf-owned publication and separate host rollout checks.
 tags: [scitex-general-development-release-automation]
 ---
 
-# Version Control — Release Automation
+# Release inventory and automation boundaries
 
-Companion to [05_development/01_version-control.md](01_version-control.md). This skill documents the **automation commands** (CLI, MCP, Python API) that support the release workflow.
+Dev supplies ecosystem inventory and reconciliation tools. The package being
+released owns its version source, test profile, publication workflow and rollout.
+Start with [version control](01_version-control.md), then follow the
+[release flow](18_end-to-end-release-flow.md). Existing scoped user authorization
+persists; green CI alone does not supply missing publication authority.
 
-## Full Ecosystem Update
+## Inspect the inventory
 
-When user says "update all packages" or "full release", for each package:
-
-1. **Check CI** — verify GitHub Actions pass (`gh run list`).
-2. Check commits since last tag and classify (`feat:` → minor, `fix:` → patch).
-3. Skip alpha/beta packages unless explicitly requested.
-4. For each needing update: bump pyproject.toml → commit → tag → push → gh release → wait for PyPI → pip install -e → fix mismatches → sync to other hosts.
-5. Use parallel subagents for independent repos.
-
-**Key tools for the full update workflow:**
-
-- `mcp__scitex__dev_ecosystem_list` — initial status check across all packages
-- `mcp__scitex__dev_ecosystem_fix_mismatches` — auto-fix installed vs pyproject.toml mismatches after PyPI publish
-- CLI equivalent: `scitex-dev ecosystem fix-mismatches --confirm`
-
-## Dashboard
+Prefer the umbrella CLI when installed. Standalone `scitex-dev` is the bootstrap
+route; check its actual help when the umbrella is unavailable.
 
 ```bash
-scitex-dev ecosystem list --json
-scitex-dev ecosystem start-dashboard                      # Web GUI (0.0.0.0:8050)
-scitex-dev ecosystem start-dashboard --background         # background process
-scitex-dev ecosystem start-dashboard --host 0.0.0.0 --port 8050 --force
+scitex dev ecosystem list --json
+scitex dev ecosystem list --package scitex-dev --versions --json
+scitex dev ecosystem validate-versions --help
+scitex dev docs validate --path /owned/package --document README.md --json
 ```
 
-The dashboard reads `~/.scitex/dev/config.yaml` (or `<project>/.scitex/dev/config.yaml` if present — project overrides user; see `01_ecosystem/06_dot_scitex_directory.md`). Project-scope config.yaml wins when both exist.
+`ecosystem list` defaults to the roster. `--versions` adds observations from
+local source, installed distributions, Git and PyPI. These observations may be
+unavailable or inconsistent; inspect the reported issues and install provenance.
+A dynamic version source such as setuptools-scm need not have a static
+`project.version` in `pyproject.toml`.
 
-## CLI Commands
+`ecosystem validate-versions` can contact configured fleet hosts. Its ordinary
+mode reports observations, `--dry-run` previews reconciliation and `--apply`
+executes it. Inspect the selected hosts and package scope before invoking it.
+This guide does not request a fleet sweep, editable reinstall or automatic sync.
+The deprecated `fix-mismatches` and `packages` CLI routes are not the current
+release procedure.
 
-### Read-only
+## Public Python API
 
-```bash
-scitex-dev ecosystem list                         # Packages with version status
-scitex-dev ecosystem list --json                  # JSON output
-scitex-dev ecosystem list -p scitex               # Specific package
-scitex-dev show-stats                             # Ecosystem-wide stats (count/LOC/tests)
-scitex-dev show-config                            # Show resolved dev config
-scitex-dev docs search <query>                    # Search package docs
-```
-
-### Sync
-
-```bash
-scitex-dev ecosystem sync                         # Local editable reinstall (dry-run default)
-scitex-dev ecosystem sync --confirm               # Execute
-scitex-dev ecosystem sync-remote --host nas       # Push to remote host over SSH
-scitex-dev ecosystem sync-remote --confirm --host all
-```
-
-### Fix version mismatches
-
-```bash
-scitex-dev ecosystem fix-mismatches               # Preview
-scitex-dev ecosystem fix-mismatches --confirm     # Execute
-```
-
-Aligns installed version, pyproject toml version, and git tag for every package.
-
-### Utilities
-
-```bash
-scitex-dev doctor                                 # Check scitex-dev + dependencies
-scitex-dev mcp start                              # Start MCP server for agents
-scitex-dev mcp show-installation                  # Print MCP client config
-scitex-dev install-tab-completion --shell bash    # Install shell tab-completion
-scitex-dev print-tab-completion --shell bash      # Print completion script to stdout
-scitex-dev quality audit-cli <package>            # Audit a package's CLI (warn-only)
-scitex-dev quality audit-docs                     # Audit docs drift
-scitex-dev quality audit-scope                    # Audit test-coverage scope
-scitex-dev quality audit-lines                    # Audit per-file line limits
-```
-
-## MCP Tools
-
-Mirror the CLI verbs; names follow `dev_<noun>_<verb>` (see `03_interface/03_mcp/SKILL.md`):
-
-| Tool | Purpose |
-|------|---------|
-| `dev_ecosystem_list` | List every package with local/toml/git/PyPI version |
-| `dev_ecosystem_sync` | Local editable reinstall (confirm=False for preview) |
-| `dev_ecosystem_sync_remote` | Push to remote hosts over SSH |
-| `dev_ecosystem_fix_mismatches` | Align installed ↔ toml ↔ git tag (confirm=False for preview) |
-| `dev_quality_audit_cli` | Per-package noun-verb audit (warn-only) |
-| `dev_quality_audit_docs` | Docs-drift audit |
-| `dev_show_stats` | Ecosystem stats |
-| `dev_show_config` | Resolved dev config |
-
-## Python API
+Use the public exports from `scitex_dev`, not the removed
+`scitex_dev.versions` or `scitex_dev.fix` module paths:
 
 ```python
-from scitex._dev import sync_all, sync_local, sync_tags
-from scitex._dev import remote_diff, remote_commit, pull_local
+from scitex_dev import get_mismatches, list_versions
 
-# Push (preview by default)
-sync_all(confirm=True)                    # Parallel across hosts
-sync_all(hosts=["nas"], confirm=True)     # Specific host
-sync_local(confirm=True)                  # Local reinstall
-sync_tags(confirm=True)                   # Push tags
-
-# Pull (preview by default)
-diffs = remote_diff()                     # Read-only
-remote_commit(host="nas", confirm=True)   # Commit + push
-pull_local(confirm=True)                  # Git pull all
+versions = list_versions(packages=["scitex-dev"])
+mismatches = get_mismatches(packages=["scitex-dev"])
+for package, observation in versions.items():
+    print(package, observation["status"], observation.get("issues", []))
 ```
 
-## Standard Workflow
+These functions collect observations; they are not purely offline operations.
+`packages=None` selects the ecosystem roster. A `commits_since_tag` count is
+review input, not proof that every package needs a bump or that it is safe to
+publish. Review change scope and the leaf's actual version strategy.
 
-```bash
-# 1. Check both sides
-scitex dev versions diff                     # Remote state
-scitex dev versions list                     # Version alignment
-git status                                   # Local state
+The public `fix_mismatches` function remains for backward compatibility. Its
+`confirm=False` default is a preview; `confirm=True` can install or sync packages
+locally and remotely. Do not substitute it for immutable-tag qualification or
+use a broad reconciliation to overwrite unrelated host work.
 
-# 2. Triage remote changes — read diffs, classify each
-scitex dev versions diff --host nas --json
-scitex dev versions commit --host nas -p scitex -m "feat: work from NAS" --confirm
+Implementation: `scitex_dev/_release/versions.py`, `_release/fix.py` and public
+exports in `scitex_dev/__init__.py`.
 
-# 3. Pull, work, push
-scitex dev versions pull --confirm
-# ... do local work ...
-scitex dev versions sync --confirm
+## MCP discovery
 
-# 4. Verify
-scitex dev versions list
-scitex dev versions diff                     # Should be clean
-```
+Query the connected server's tool list; the client may add its own namespace.
+The standalone Dev server registers these relevant names in `_mcp/_server.py`:
 
-## Ecosystem-Wide Check
+| Tool | Scope |
+|---|---|
+| `dev_ecosystem_list` | Version observations for selected packages |
+| `dev_config_show` | Resolved Dev configuration |
+| `dev_ecosystem_fix_mismatches` | Legacy reconciliation; `dry_run=True` by default |
+| `dev_ecosystem_sync_local` | Editable installation; `confirm=False` by default |
+| `dev_ecosystem_sync_remote` | Remote synchronization; `confirm=False` by default |
 
-Run `scitex-dev ecosystem list` for the authoritative roster and current version states. Flag mismatches: toml != tag → needs tag. tag != PyPI → needs release/publish.
+A tool listed in source need not be advertised by every client configuration.
+Listing a mutation tool does not authorize invoking it. Keep source registration,
+actual server discovery and execution results as separate evidence.
 
-### Consistency Checker (scitex-dev built-in)
+## Qualify and publish
 
-Detects both **version mismatches** (toml != tag != PyPI) and **code-version mismatches** (commits exist since last tag but version not bumped).
+1. Inspect the requested package, source state, published versions and unused
+   canonical version. Preserve dirty checkouts and unrelated work.
+2. Use an owned worktree to integrate accepted source. Review all checks at the
+   exact PR head, including consent and security outcomes; required checks alone
+   are insufficient. Merge normally with a reviewed-head guard, without auto-merge.
+3. Follow the leaf's actual workflow. Dev uses setuptools-scm, tag-driven native
+   release validation and a separate protected-main publication dispatch; see
+   its [source-owned procedure](../../scitex-dev/18_full-update.md).
+4. Verify whole wheel/sdist identities, dependency-compatible installation and
+   documented interfaces. Treat generated docs, source skills, exported skills
+   and served pages as separate artifacts.
+5. Roll out only qualified artifacts through the leaf's deployment procedure,
+   preserving user data and a tested rollback. Verify actual installed and
+   running versions separately from the repository tag.
 
-```bash
-scitex-dev ecosystem fix-mismatches              # Preview mismatches
-scitex-dev ecosystem fix-mismatches --confirm    # Fix them
-```
-
-Or via MCP: `mcp__scitex__dev_ecosystem_fix_mismatches`.
-
-Python API:
-
-```python
-from scitex_dev.versions import get_mismatches, get_commits_since_tag
-from scitex_dev.fix import fix_mismatches
-
-mismatches = get_mismatches()                          # {pkg: {status, issues, ...}}
-# Issues include: "N commit(s) since vX.Y.Z but version not bumped"
-fix_mismatches(confirm=True)                           # Fix all (local + remote)
-```
-
-The `commits_since_tag` field in `list_versions()` output tells you how many commits exist since the last tag — if > 0 and version matches tag, a version bump is needed.
-
-## End-to-end release flow (develop → PyPI) — **opt-in only, per release**
-
-Opt-in, per-release only — never auto-release. The authorization doctrine,
-pre-flight checklist, the full `/loop until pypi` sequence, the built-in guards,
-and one-time PyPI Trusted Publisher setup are in
-[18_end-to-end-release-flow.md](18_end-to-end-release-flow.md).
-
-## Gotchas across the release pipeline
-
-Recurring release failure modes not visible from a green local audit — gh-CI as
-the real merge gate, `enforce_admins`, the no-retag/PATCH-bump rule, hatchling
-duplicate-filename, the CLA allowlist, and quota pressure (429 vs 529) — are in
-[19_release-pipeline-gotchas.md](19_release-pipeline-gotchas.md).
+Do not force-push or move published tags, replace failed checks with synthetic
+verdicts, relax tests or presume a tag event publishes to PyPI. Preserve failures
+and report unavailable coverage. See
+[release pipeline gotchas](19_release-pipeline-gotchas.md) and
+[documentation drift](22_documentation-drift.md).

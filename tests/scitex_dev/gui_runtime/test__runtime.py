@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """Tests for scitex_dev.gui_runtime._runtime — GuiRuntime + pid_alive.
 
 Real fakes only (STX-NM policy: no `unittest.mock`, no `monkeypatch`).
@@ -42,20 +41,27 @@ def zombie_pid():
     """
     if not Path("/proc").is_dir():
         pytest.skip("zombie detection requires /proc (Linux only)")
-    child = subprocess.Popen([sys.executable, "-c", "pass"])
+    # Only kernel liveness is under test; installed startup hooks must not
+    # postpone the child exiting before the original five-second deadline.
+    child = subprocess.Popen([sys.executable, "-I", "-S", "-c", "pass"])
     stat_path = Path(f"/proc/{child.pid}/stat")
     deadline = time.monotonic() + 5.0
     state = ""
-    while time.monotonic() < deadline:
-        try:
-            state = stat_path.read_text().rpartition(")")[2].split()[0]
-        except OSError:
-            state = ""
-        if state == "Z":
-            break
-        time.sleep(0.02)
-    yield child.pid
-    child.wait(timeout=5)
+    try:
+        while time.monotonic() < deadline:
+            try:
+                state = stat_path.read_text().rpartition(")")[2].split()[0]
+            except OSError:
+                state = ""
+            if state == "Z":
+                break
+            time.sleep(0.02)
+        assert state == "Z", f"child {child.pid} never became a zombie: {state!r}"
+        yield child.pid
+    finally:
+        if state != "Z":
+            child.kill()
+        child.wait(timeout=5)
 
 
 def _deny_signal(pid, sig):
@@ -243,7 +249,7 @@ def test_status_reports_running_with_url_for_a_live_pid(state_file):
 
 def test_status_self_heals_stale_state_for_a_dead_pid(state_file):
     # Arrange
-    child = subprocess.Popen([sys.executable, "-c", "pass"])
+    child = subprocess.Popen([sys.executable, "-I", "-S", "-c", "pass"])
     child.wait(timeout=5)
     runtime = GuiRuntime(state_file)
     runtime.write_state(child.pid, 5050, "127.0.0.1")
@@ -279,7 +285,9 @@ def test_stop_is_idempotent_when_nothing_is_running(state_file):
 
 def test_stop_terminates_the_recorded_process(state_file):
     # Arrange
-    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    child = subprocess.Popen(
+        [sys.executable, "-I", "-S", "-c", "import time; time.sleep(30)"]
+    )
     runtime = GuiRuntime(state_file)
     runtime.write_state(child.pid, 5050, "127.0.0.1")
     # Act
@@ -291,7 +299,9 @@ def test_stop_terminates_the_recorded_process(state_file):
 
 def test_stop_clears_the_state_file_after_stopping(state_file):
     # Arrange
-    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    child = subprocess.Popen(
+        [sys.executable, "-I", "-S", "-c", "import time; time.sleep(30)"]
+    )
     runtime = GuiRuntime(state_file)
     runtime.write_state(child.pid, 5050, "127.0.0.1")
     # Act

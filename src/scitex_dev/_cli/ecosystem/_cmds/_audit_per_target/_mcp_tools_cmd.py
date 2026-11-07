@@ -12,10 +12,11 @@ def register(ecosystem):
         "audit-mcp-tools",
         cls=SpecCommand,
         help_spec=CliHelp(
-            summary="Check a package's MCP server against the canonical convention (warn-only).",
+            summary="Check a package's MCP server against the canonical convention.",
             description=(
-                "Requires the `cli-audit` extra: pip install "
-                "'scitex-dev[cli-audit]'. The package list for --all is "
+                "Included in the base installation of scitex-dev. "
+                "Error findings and un-auditable targets fail; warnings "
+                "alone do not. The package list for --all is "
                 "resolved via the same registry cascade used by "
                 "`audit-cli` (see that command's --help). Rules audited "
                 "(per scitex `_skills/general/03_interface/03_mcp/`): "

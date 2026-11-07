@@ -18,8 +18,8 @@ ecosystem maintainers. Sits atop the docs tier
    - [17_develop-to-main-sync.md](17_develop-to-main-sync.md) — When to merge `develop` → `main`: tag-push auto-sync workflow, change-kind table, manual fallback
 2. [02_periodic-audits.md](02_periodic-audits.md) — Run `audit-all` continuously while editing — cron / tmux / agent loops, JSON contract, Claude Code mechanisms
 3. [03_release-automation.md](03_release-automation.md) — Automation commands, ecosystem sync CLI, MCP tools, Python API
-   - [18_end-to-end-release-flow.md](18_end-to-end-release-flow.md) — End-to-end release flow (develop → PyPI), opt-in only: authorization doctrine, pre-flight checklist, `/loop until pypi` sequence, trusted-publisher setup
-   - [19_release-pipeline-gotchas.md](19_release-pipeline-gotchas.md) — Release-pipeline gotchas: gh-CI as the real gate, enforce_admins, no-retag/PATCH bump, hatchling duplicate-filename, CLA allowlist, quota pressure
+   - [18_end-to-end-release-flow.md](18_end-to-end-release-flow.md) — Authorization-aware release flow, exact-head checks and leaf-owned publication boundaries
+   - [19_release-pipeline-gotchas.md](19_release-pipeline-gotchas.md) — Exact-head CI, consent, immutable artifacts, packaging and bounded recovery
 4. [04_skills-self-explain.md](04_skills-self-explain.md) — Quality measure for skill content
 5. [05_doc-surfaces.md](05_doc-surfaces.md) — Which documentation surface beats which
 6. [06_subprocess-coverage.md](06_subprocess-coverage.md) — Subprocess coverage wiring (parallel + COVERAGE_PROCESS_START + `.pth` shim)
@@ -34,5 +34,5 @@ ecosystem maintainers. Sits atop the docs tier
     - [21_baked-artifact-drift-loop.md](21_baked-artifact-drift-loop.md) — The baked-artifact gap (container image + agent overlay) and the SoC-split never-again loop (detect/judge/rebuild-remotely/verify/swap)
     - [23_agent-rebuild-restart-protocol.md](23_agent-rebuild-restart-protocol.md) — Agent rebuild/restart protocol when infra packages change: release-first, rebuild once, rolling-restart at a quiet window, interim env-shim
     - [22_documentation-drift.md](22_documentation-drift.md) — Documentation drift: PR-impact/daily/release evidence, scoped tools, leaf-owned behavior checks, and generated-content limits
-14. [14_release-and-pin-doctrine.md](14_release-and-pin-doctrine.md) — Operator release/versioning doctrine (constitution-referenceable): aggressive-publish with no approval gate (autonomous develop→main→tag→PyPI + fix-forward), and the scitex-python umbrella as the single deterministic pin-point — it exact-pins (`==`) every scitex member while leaves keep `>=` — with how-to-apply + scitex-dev umbrella-`==` enforcement
+14. [14_release-and-pin-doctrine.md](14_release-and-pin-doctrine.md) — Authorized releases and exact umbrella pins; leaves retain minimum dependency floors
 15. [15_pre-commit-policy.md](15_pre-commit-policy.md) — What may run in a pre-commit hook: FAST, BOUNDED, DETERMINISTIC checks only, never the test suite (tests belong in CI). Why a `language: system` hook invoking a Python tool is banned — it is a `$PATH` lookup, so it resolves to whichever venv is active at commit time (figrecipe's testmon hook ran ZERO tests fleet-wide for weeks while blocking every Python commit; davinci-resolve-mcp's took >14 min per commit). The only sanctioned commit-time test gate is `language: python` + `additional_dependencies:`. Enforced by audit rule PS-HOOK-001

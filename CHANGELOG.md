@@ -10,6 +10,46 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.62.17] - 2026-11-07
+
+- Decode YAML skill descriptions in discovery catalogs, including multiline
+  blocks and quoted text, instead of advertising block markers or quotes.
+  Preserve skill identity and version stamps; reject non-text metadata and
+  unsafe YAML tags without executing them.
+- Regenerate the bundled Sphinx documentation from source and check shipped
+  guide titles plus the generated search form, preventing a missing guide from
+  passing unnoticed when the source-only documentation build succeeds.
+- Align release skills and their index entries with existing authorization,
+  exact-head review, immutable tags, protected-main publication, declared
+  consent and leaf-owned deployment.
+- Correct error-handling and MCP skill examples to match implemented imports,
+  result envelopes and available helpers; keep unimplemented helpers explicit.
+- Require a real zombie state in process-only GUI test fixtures and isolate
+  their child interpreters from unrelated site startup hooks. Preserve deadlines.
+
+- Keep the Unified Search guide at a distinct documentation URL instead of
+  colliding with Sphinx's generated search page and removing its built-in label.
+
+- Correct CLI/MCP audit help to describe the base installation and existing
+  severity-based failures instead of a removed extra and warn-only behavior.
+
+
+- Add vendor-neutral `skills install --directory`, preserving `--dest` and the
+  canonical store default. Document explicit agent-readable destinations and
+  package selection without making Claude projection part of the default flow.
+
+- Include the canonical CLI audit dictionary in installed packages, with one
+  source copy shared by checkout audits and the package's build backend.
+
+- Generate shared shell-completion scripts with the current interpreter's Click
+  instead of executing a same-named program from PATH. This avoids foreign
+  environment scripts and works when the console executable is not on PATH.
+- Quote cached completion paths in shell rc lines so activation works with
+  spaces and apostrophes in the home or relocated state directory.
+- Commit each local Store put/hide/unhide operation and its materialized row
+  atomically. Rejected row writes no longer leave operations for peers to replay.
+  Preserve explicit nested batch transactions and sequence-allocation retries.
+
 ## [0.62.16] - 2026-11-05
 
 - Add scoped static documentation checks through `docs validate`, with explicit

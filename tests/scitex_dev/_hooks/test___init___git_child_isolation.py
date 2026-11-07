@@ -99,7 +99,7 @@ def _fixture_run(repositories, *, isolated):
     argv = [sys.executable, "-I", "-B", str(child), str(foreign)]
     if isolated:
         argv = ["bash", str(SHIM), *argv]
-    return subprocess.run(
+    result = subprocess.run(
         argv,
         cwd=delivery,
         env=inherited,
@@ -108,6 +108,13 @@ def _fixture_run(repositories, *, isolated):
         timeout=20,
         check=False,
     )
+
+    # Every control using this fixture requires successful setup. Report the
+    # original child's error before a secondary Git read can mask that cause.
+    assert result.returncode == 0, (
+        "Foreign Git fixture did not complete:\n" + result.stdout + result.stderr
+    )
+    return result
 
 
 def test_unisolated_foreign_fixture_changes_delivery_head(repositories):
