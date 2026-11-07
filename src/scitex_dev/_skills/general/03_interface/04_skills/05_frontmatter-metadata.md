@@ -85,6 +85,12 @@ keeps the skill's relative identity and owner version separate from its text.
 Implementation: `_ecosystem/_skills/_frontmatter.py`; behavioral controls:
 `tests/scitex_dev/_ecosystem/_skills/test__frontmatter.py`.
 
+Skill export stamps `version` and `exported_via` only in the opening frontmatter
+block. An identically named field in a body example is not export metadata and
+must remain unchanged. Stamping preserves the body, existing header spacing and
+line endings; legacy pages without frontmatter receive a new metadata block.
+Regression controls: `test__frontmatter_stamping.py` in the same test directory.
+
 ## 2. Recommended for SKILL.md only
 
 | Field | Purpose |

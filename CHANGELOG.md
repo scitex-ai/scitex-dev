@@ -10,6 +10,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Restrict exported skill version and origin stamps to the opening YAML
+  frontmatter. Preserve instruction bodies, including YAML examples with their
+  own `version` fields, and keep existing line endings and metadata spacing.
+
 ## [0.62.17] - 2026-11-07
 
 - Remove a linter help example advertising forbidden `--new-only` use. Update
