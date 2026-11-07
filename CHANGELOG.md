@@ -18,6 +18,9 @@ versions follow [Semantic Versioning](https://semver.org/).
   environment scripts and works when the console executable is not on PATH.
 - Quote cached completion paths in shell rc lines so activation works with
   spaces and apostrophes in the home or relocated state directory.
+- Commit each local Store put/hide/unhide operation and its materialized row
+  atomically. Rejected row writes no longer leave operations for peers to replay.
+  Preserve explicit nested batch transactions and sequence-allocation retries.
 
 ## [0.62.16] - 2026-11-05
 
