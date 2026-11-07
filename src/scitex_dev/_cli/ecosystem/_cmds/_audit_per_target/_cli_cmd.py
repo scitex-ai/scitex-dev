@@ -24,7 +24,11 @@ def _registry_cascade_paragraphs() -> tuple[str, ...]:
     for name, info in registry.items():
         groups[info.get("category", "uncategorized")].append(name)
 
-    lines: list[str] = [f"Resolved registry source: {provenance}", "", "Registry contents (used by --all):"]
+    lines: list[str] = [
+        f"Resolved registry source: {provenance}",
+        "",
+        "Registry contents (used by --all):",
+    ]
     for cat in sorted(groups):
         lines.append(f"  [{cat}] ({len(groups[cat])})")
         for n in sorted(groups[cat]):
@@ -37,11 +41,12 @@ def register(ecosystem):
         "audit-cli",
         cls=SpecCommand,
         help_spec=CliHelp(
-            summary="Check a package's CLI against the noun-verb convention (warn-only).",
+            summary="Check a package's CLI against the noun-verb convention.",
             description=(
                 (
-                    "Requires the `cli-audit` extra: pip install "
-                    "'scitex-dev[cli-audit]'. The package list for "
+                    "Included in the base installation of scitex-dev. "
+                    "Error findings and un-auditable targets fail; warnings "
+                    "alone do not. The package list for "
                     "--all is resolved via the registry cascade shown "
                     "below.",
                 )

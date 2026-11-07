@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Correct CLI/MCP audit help to describe the base installation and existing
+  severity-based failures instead of a removed extra and warn-only behavior.
+
 - Commit each local Store put/hide/unhide operation and its materialized row
   atomically. Rejected row writes no longer leave operations for peers to replay.
   Preserve explicit nested batch transactions and sequence-allocation retries.
