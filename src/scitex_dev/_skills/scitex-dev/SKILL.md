@@ -41,8 +41,8 @@ interfaces:
 - [15_rename.md](15_rename.md) — bulk_rename, preview_rename, execute_rename
 - [16_docs-search.md](16_docs-search.md) — get_docs, build_docs, search_docs, search
 - [17_test-runner.md](17_test-runner.md) — run_local, run_hpc_sbatch, poll_hpc_job, fetch_hpc_result
-- [18_full-update.md](18_full-update.md) — Release pipeline phases 1–2 (pre-flight + release)
-- [19_release-deploy.md](19_release-deploy.md) — Release pipeline phases 3–5 (local sync, NAS deploy, verify)
+- [18_full-update.md](18_full-update.md) — Source-owned release qualification and protected-main publication
+- [19_release-deploy.md](19_release-deploy.md) — Leaf-owned deployment and installed-interface verification
 
 ### Meta (20–29)
 - [20_env-vars.md](20_env-vars.md) — `SCITEX_DEV_*` env vars

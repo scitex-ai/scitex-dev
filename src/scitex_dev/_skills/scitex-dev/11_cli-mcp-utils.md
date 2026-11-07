@@ -1,192 +1,143 @@
 ---
 description: |
-  [TOPIC] Cli Mcp Utils
-  [DETAILS] Adapters for consuming Result objects in CLI (exit codes, text/JSON output) and MCP (JSON string) contexts. Also provides reusable Click option factories for --json and --dry-run flags.
+  [TOPIC] CLI and MCP adapters
+  [DETAILS] Format Result envelopes, adapt plain or decorated functions to CLI/MCP output and add shared Click or argparse flags. Distinguish process-exiting CLI calls from MCP JSON-returning helpers.
 tags: [scitex-dev-cli-mcp-utils]
 ---
 
-# CLI and MCP Utilities
+# CLI and MCP adapters
 
-## handle_result
+## Format an existing Result
 
-Format and print a Result to stdout/stderr; return exit code.
+`handle_result(result, as_json=False, file=None)` prints the chosen representation
+and returns an exit code; it does not exit the process:
 
 ```python
-from scitex_dev import handle_result
+from io import StringIO
+from scitex_dev import Result, handle_result
 
-exit_code = handle_result(
-    result: Result,
-    as_json: bool = False,    # True: full JSON; False: human-friendly text
-    file=None,                # output stream; defaults to stdout/stderr
-) -> int
+output = StringIO()
+code = handle_result(Result(success=True, data={"count": 5}), as_json=True, file=output)
+print(code)                                  # 0
+print('"count": 5' in output.getvalue())       # True
 ```
 
-- Success + `as_json=False`: prints `result.data` (dicts as JSON, else str).
-- Failure + `as_json=False`: prints `Error: <message>` to stderr + hints.
-- Any + `as_json=True`: prints `result.to_json()`.
+JSON mode serializes the full envelope. Human mode prints successful data or an
+error and recovery hints. Inspect the owning `_cli/_utils.py` implementation for
+stream selection and formatting details.
+
+## CLI execution
+
+`run_as_cli` calls a `@supports_return_as` function; `wrap_as_cli` adapts a plain
+function. Both accept `as_json` and function keyword arguments, format a Result
+and exit with its code. Run these examples as CLI entry points:
 
 ```python
-r = Result(success=True, data={"count": 5})
-code = handle_result(r)            # prints {"count": 5}, returns 0
-code = handle_result(r, as_json=True)  # prints full Result JSON, returns 0
-```
+from scitex_dev import run_as_cli, supports_return_as
 
-## run_as_cli
-
-Call a `@supports_return_as` function and exit with proper code.
-
-```python
-from scitex_dev import run_as_cli
-
-run_as_cli(
-    fn: Callable,       # function decorated with @supports_return_as
-    as_json: bool = False,
-    **kwargs,           # passed to fn
-) -> None               # calls sys.exit(code)
-```
-
-```python
 @supports_return_as
-def get_count(n: int) -> int:
+def doubled(n: int) -> int:
     return n * 2
 
-# In a Click command:
-run_as_cli(get_count, as_json=False, n=5)
-# prints "10", exits 0
+run_as_cli(doubled, as_json=True, n=5)          # Prints Result JSON; exits 0.
 ```
-
-## wrap_as_cli
-
-Call any plain function and display its result as CLI output. Does not
-require `@supports_return_as`; wraps exceptions automatically.
 
 ```python
 from scitex_dev import wrap_as_cli
 
-wrap_as_cli(
-    fn: Callable,
-    as_json: bool = False,
-    **kwargs,
-) -> None               # calls sys.exit(code)
+def count_rows(n: int) -> dict:
+    return {"count": n * 2}
+
+wrap_as_cli(count_rows, as_json=True, n=5)      # Prints Result JSON; exits 0.
 ```
 
-```python
-def plain_func(path: str) -> dict:
-    return {"files": 3}
+## MCP execution
 
-wrap_as_cli(plain_func, as_json=False, path=".")
-# prints {"files": 3}, exits 0
+`run_as_mcp` calls a decorated function and returns JSON. `wrap_as_mcp` wraps a
+plain function without requiring a decorator:
+
+```python
+import json
+from scitex_dev import run_as_mcp, supports_return_as, wrap_as_mcp
+
+@supports_return_as
+def doubled(n: int) -> int:
+    return n * 2
+
+print(json.loads(run_as_mcp(doubled, n=5))["data"])  # 10
+
+payload = wrap_as_mcp(lambda n: {"count": n * 2}, n=5, idempotent=True)
+print(json.loads(payload)["data"])                 # {'count': 10}
 ```
 
-## run_as_mcp
-
-Call a `@supports_return_as` function and return MCP-ready JSON string.
-
-```python
-from scitex_dev import run_as_mcp
-
-json_str = run_as_mcp(
-    fn: Callable,   # @supports_return_as function
-    **kwargs,
-) -> str            # JSON string with full Result structure
-```
-
-## wrap_as_mcp
-
-Call any plain function and return Result JSON. Use this to retrofit
-existing handlers without modifying the underlying function.
+`wrap_as_mcp` and `async_wrap_as_mcp` accept `side_effects`, `hints_on_error` and
+`idempotent` adapter metadata separately from function keyword arguments.
+Declare actual behavior; metadata does not enforce permissions or undo changes.
 
 ```python
-from scitex_dev import wrap_as_mcp
-
-json_str = wrap_as_mcp(
-    fn: Callable,
-    *,
-    side_effects: list[str] | None = None,   # e.g. ["file_create: /tmp/x"]
-    hints_on_error: list[str] | None = None,
-    idempotent: bool = False,
-    **kwargs,
-) -> str
-```
-
-```python
-def load_data(path: str) -> dict:
-    ...
-
-result_json = wrap_as_mcp(
-    load_data,
-    side_effects=None,
-    hints_on_error=["Check path exists"],
-    path="/data/file.csv",
-)
-```
-
-## async_wrap_as_mcp
-
-Async version of `wrap_as_mcp` for async MCP handlers.
-
-```python
+import asyncio
+import json
 from scitex_dev import async_wrap_as_mcp
 
-json_str = await async_wrap_as_mcp(
-    coro_fn: Callable,    # async coroutine function
-    *,
-    side_effects: list[str] | None = None,
-    hints_on_error: list[str] | None = None,
-    idempotent: bool = False,
-    **kwargs,
-) -> str
+async def doubled(n: int) -> int:
+    return n * 2
+
+async def main() -> None:
+    payload = await async_wrap_as_mcp(doubled, n=5, idempotent=True)
+    print(json.loads(payload)["data"])             # 10
+
+asyncio.run(main())
 ```
 
-## result_to_mcp
-
-Convert an existing Result object directly to MCP JSON.
+Use `result_to_mcp` when the Result already exists:
 
 ```python
-from scitex_dev import result_to_mcp
+import json
+from scitex_dev import Result, result_to_mcp
 
-r = Result(success=True, data=42)
-json_str = result_to_mcp(r)    # same as r.to_json()
+payload = result_to_mcp(Result(success=True, data=42))
+print(json.loads(payload)["data"])                 # 42
 ```
 
-## Universal flag factories
-
-Lazy-import decorators (Click optional; stdlib-only core).
+## Shared flags
 
 | Helper | Effect |
 |---|---|
-| `@json_option` | Adds `--json` (`as_json` param) to a Click command |
-| `@dry_run_option` | Adds `--dry-run` to a Click command |
-| `add_json_argument(parser)` | argparse equivalent (dest=`as_json`) |
-| `add_dry_run_argument(parser)` | argparse equivalent (dest=`dry_run`) |
+| `@json_option` | Adds Click `--json`, passed as `as_json` |
+| `@dry_run_option` | Adds Click `--dry-run` |
+| `add_json_argument(parser)` | Adds argparse JSON output selection |
+| `add_dry_run_argument(parser)` | Adds argparse preview selection |
+
+The decorators import Click lazily; Click is a declared dependency in the current
+Dev distribution. Flags still need real implementation in the command callback.
 
 ```python
-from scitex_dev import json_option, dry_run_option
 import click
+from scitex_dev import dry_run_option, json_option
 
 @click.command()
 @json_option
 @dry_run_option
-def my_cmd(as_json, dry_run):
-    ...
+def command(as_json: bool, dry_run: bool) -> None:
+    click.echo({"as_json": as_json, "dry_run": dry_run})
 ```
 
-## Typical MCP Tool Pattern
+## Register a leaf tool
+
+With FastMCP installed, define a local server and register the owning handler:
 
 ```python
-from scitex_dev import wrap_as_mcp, supports_return_as
+from fastmcp import FastMCP
+from scitex_dev import wrap_as_mcp
 
-# Pattern A: wrap plain function
-@mcp_server.tool()
-def my_tool(path: str) -> str:
-    return wrap_as_mcp(plain_handler, path=path)
+mcp = FastMCP("owned-example")
 
-# Pattern B: @supports_return_as + run_as_mcp
-@supports_return_as
-def my_handler(path: str) -> dict:
-    return {"result": path}
-
-@mcp_server.tool()
-def my_tool(path: str) -> str:
-    return run_as_mcp(my_handler, path=path)
+@mcp.tool()
+def doubled(n: int) -> str:
+    return wrap_as_mcp(lambda n: n * 2, n=n, idempotent=True)
 ```
+
+Registration alone does not prove client visibility or execution. Verify the
+actual connected server's list and call operations separately. The adapters
+live in `_cli/_utils.py` and `_ecosystem/_mcp/_utils.py`; leaf handlers retain
+ownership of domain logic.

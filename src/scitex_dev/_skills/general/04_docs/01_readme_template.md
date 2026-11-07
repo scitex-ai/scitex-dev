@@ -9,8 +9,10 @@ tags: [scitex-general-docs-readme-template]
 
 Literal template for every SciTeX package README.md. Replace `<PACKAGE>`
 (distribution name, e.g. `scitex-io`), `<MODULE>` (import name, e.g.
-`scitex_io`), and `<TAGLINE>` (one-line value proposition) before
-committing. The audit rules PS-107 / PS-109 / PS-110 / PS-111 / PS-112 /
+`scitex_io`), `<OWNER>/<REPOSITORY>` (the actual GitHub identity),
+and `<TAGLINE>` (one-line value proposition) before
+committing. Substitute the checked-in workflow filenames, actual interface
+commands/URLs and declared license as well. The audit rules PS-107 / PS-109 / PS-110 / PS-111 / PS-112 /
 PS-133 / **PS-167 (badge layout)** enforce the load-bearing parts of
 this template.
 
@@ -64,7 +66,7 @@ The badge block uses the **canonical SAC layout** (PS-167):
   `readthedocs.org/projects/.../badge`, and `badge.fury.io` forms
   are PS-167 violations because they cannot carry a short label.
 
-```markdown
+````markdown
 # <PACKAGE> (<code><PACKAGE></code>)
 
 <p align="center">
@@ -76,20 +78,20 @@ The badge block uses the **canonical SAC layout** (PS-167):
 <p align="center"><b><TAGLINE></b></p>
 
 <p align="center">
-  <a href="https://<PACKAGE>.readthedocs.io/">Full Documentation</a> · <code>uv pip install <PACKAGE>[all]</code>
+  <a href="https://<PACKAGE>.readthedocs.io/">Full Documentation</a> · <code>uv pip install '<PACKAGE>[all]'</code>
 </p>
 
 <!-- scitex-badges:start -->
 <p align="center">
   <a href="https://pypi.org/project/<PACKAGE>/"><img src="https://img.shields.io/pypi/v/<PACKAGE>?label=pypi" alt="pypi"></a>
   <a href="https://pypi.org/project/<PACKAGE>/"><img src="https://img.shields.io/pypi/pyversions/<PACKAGE>?label=python" alt="python"></a>
-  <a href="https://github.com/ywatanabe1989/<PACKAGE>/actions/workflows/rtd-sphinx-build-on-ubuntu-latest.yml"><img src="https://img.shields.io/github/actions/workflow/status/ywatanabe1989/<PACKAGE>/rtd-sphinx-build-on-ubuntu-latest.yml?branch=develop&label=docs" alt="docs"></a>
+  <a href="https://github.com/<OWNER>/<REPOSITORY>/actions/workflows/<DOCS_WORKFLOW>"><img src="https://img.shields.io/github/actions/workflow/status/<OWNER>/<REPOSITORY>/<DOCS_WORKFLOW>?branch=develop&label=docs" alt="docs"></a>
 </p>
 <p align="center">
-  <a href="https://github.com/ywatanabe1989/<PACKAGE>/actions/workflows/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml"><img src="https://img.shields.io/github/actions/workflow/status/ywatanabe1989/<PACKAGE>/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml?branch=develop&label=tests" alt="tests"></a>
-  <a href="https://github.com/ywatanabe1989/<PACKAGE>/actions/workflows/import-smoke-on-ubuntu-py3-12.yml"><img src="https://img.shields.io/github/actions/workflow/status/ywatanabe1989/<PACKAGE>/import-smoke-on-ubuntu-py3-12.yml?branch=develop&label=install-check" alt="install-check"></a>
-  <a href="https://github.com/ywatanabe1989/<PACKAGE>/actions/workflows/scitex-dev-quality-audit-on-ubuntu-latest.yml"><img src="https://img.shields.io/github/actions/workflow/status/ywatanabe1989/<PACKAGE>/scitex-dev-quality-audit-on-ubuntu-latest.yml?branch=develop&label=quality" alt="quality"></a>
-  <a href="https://codecov.io/gh/ywatanabe1989/<PACKAGE>"><img src="https://img.shields.io/codecov/c/github/ywatanabe1989/<PACKAGE>/develop?label=cov" alt="cov"></a>
+  <a href="https://github.com/<OWNER>/<REPOSITORY>/actions/workflows/<TEST_WORKFLOW>"><img src="https://img.shields.io/github/actions/workflow/status/<OWNER>/<REPOSITORY>/<TEST_WORKFLOW>?branch=develop&label=tests" alt="tests"></a>
+  <a href="https://github.com/<OWNER>/<REPOSITORY>/actions/workflows/<IMPORT_WORKFLOW>"><img src="https://img.shields.io/github/actions/workflow/status/<OWNER>/<REPOSITORY>/<IMPORT_WORKFLOW>?branch=develop&label=install-check" alt="install-check"></a>
+  <a href="https://github.com/<OWNER>/<REPOSITORY>/actions/workflows/<QUALITY_WORKFLOW>"><img src="https://img.shields.io/github/actions/workflow/status/<OWNER>/<REPOSITORY>/<QUALITY_WORKFLOW>?branch=develop&label=quality" alt="quality"></a>
+  <a href="https://codecov.io/gh/<OWNER>/<REPOSITORY>"><img src="https://img.shields.io/codecov/c/github/<OWNER>/<REPOSITORY>/develop?label=cov" alt="cov"></a>
 </p>
 <!-- scitex-badges:end -->
 
@@ -105,17 +107,17 @@ The badge block uses the **canonical SAC layout** (PS-167):
 
 ## Installation
 
-> **Recommended**: `uv pip install <PACKAGE>[all]` —
-> uv's Rust resolver handles the SciTeX dep set in 1-3 min where
-> pip's serial backtracker can take 30+ min on the full extras.
-> Plain `pip install` still works; the install block below shows both.
+> **Recommended**: `uv pip install '<PACKAGE>[all]'` —
+> Use the package's declared extras and a normal dependency resolver.
+> The block below shows equivalent uv and pip installation requests; elapsed
+> time depends on the selected package set and environment.
 
 ```bash
 # Recommended — uv resolver
-uv pip install <PACKAGE>[all]
+uv pip install '<PACKAGE>[all]'
 
 # Plain pip also works
-pip install <PACKAGE>
+pip install '<PACKAGE>[all]'
 ```
 
 ## Quick Start
@@ -124,6 +126,16 @@ pip install <PACKAGE>
 from <MODULE> import <api>
 # minimal end-to-end example
 ```
+
+## Five Interfaces
+
+| Interface | Actual package entry point |
+|---|---|
+| Python API | `<MODULE>` |
+| CLI | `<CLI>` |
+| MCP | `<MCP_COMMAND>` |
+| Web API | `<WEB_API_URL>`, or explicitly unavailable |
+| Skills | `<SKILL_NAMESPACE>` |
 
 ## Part of SciTeX
 
@@ -136,24 +148,25 @@ from <MODULE> import <api>
 >2. The freedom to **redistribute** your workflows, not just your papers.
 >3. The freedom to **modify** any module and share improvements with the community.
 >
->AGPL-3.0 — because we believe research infrastructure deserves the same freedoms as the software it runs on.
+>License: `<LICENSE>` — use the package's actual declared license.
 
 ---
 
 <p align="center">
   <a href="https://scitex.ai" target="_blank"><img src="docs/scitex-icon-navy-inverted.png" alt="SciTeX" width="40"/></a>
 </p>
-```
+````
 
 ## Audit Rules That Enforce This Template
 
-Each rule warns (never errors) and fires from
-`scitex-dev ecosystem audit-project <pkg>`.
+Inspect the current per-rule severity and report from
+`scitex dev ecosystem audit-project <pkg>`; a convention table alone does not
+establish the command's exit status or full audit acceptance.
 
 | Code  | Enforces                                                        |
 |-------|-----------------------------------------------------------------|
 | PS-106 | Coverage badge present in first ~4 KB                           |
-| PS-107 | Required H2 sections: `## Installation`, `## Quick Start`, `## Part of SciTeX` |
+| PS-107 | Required section checks: Installation, Interfaces and Part of SciTeX; Quick Start is optional in the current implementation |
 | PS-109 | PyPI version badge present in first ~4 KB                       |
 | PS-110 | Four Freedoms for Research blockquote present                   |
 | PS-111 | Banned personal email `ywatanabe@scitex.ai` not present         |
@@ -164,22 +177,20 @@ Each rule warns (never errors) and fires from
 
 ## Workflow status badges — use `?label=...` short labels
 
-The literal template above uses the simple `test.yml/badge.svg` form.
-Packages that follow PS-164 ship descriptive workflow filenames
-(`pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml`), which makes the
-default GitHub badge text unreadable. Switch to shields.io with an
-explicit `?label=...`:
+Use the package's actual workflow filename and branch. The literal template
+uses shields.io with explicit short labels; do not invent a workflow merely to
+match a copied badge URL:
 
 ```html
-<a href="https://github.com/<owner>/<PACKAGE>/actions/workflows/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml">
-  <img src="https://img.shields.io/github/actions/workflow/status/<owner>/<PACKAGE>/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml?branch=develop&label=tests"
+<a href="https://github.com/<owner>/<PACKAGE>/actions/workflows/<TEST_WORKFLOW>">
+  <img src="https://img.shields.io/github/actions/workflow/status/<owner>/<PACKAGE>/<TEST_WORKFLOW>?branch=develop&label=tests"
        alt="tests">
 </a>
 ```
 
-The badge URL keys on the (descriptive) filename; the rendered short
-label keys on shields.io. Don't rename the workflow file to match the
-label — the descriptive filename is required by PS-164.
+The URL identifies the checked-in workflow; its short label controls the
+badge text. Inspect the current PS-164 workflow rules and the leaf's existing
+wrapper before choosing a filename.
 
 ## Acceptable Variants
 
@@ -189,8 +200,8 @@ label — the descriptive filename is required by PS-164.
   acceptable as long as the basename starts with `scitex-logo`.
 - Quick Start heading: `## Quick Start` or `## Quickstart` (both
   pass PS-107).
-- PyPI badge: `badge.fury.io/py/<pkg>.svg` or
-  `img.shields.io/pypi/v/<pkg>.svg`.
+- The canonical badge block uses shields.io. A lower-level presence check
+  recognizing another badge host does not mean it satisfies PS-167 layout.
 - `import` idiom in code blocks: both `import scitex` and
   `import scitex as stx` are acceptable. Pick one and stay
   consistent within a single README.

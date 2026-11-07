@@ -1,0 +1,378 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>scitex_dev.testing._import_vantage &mdash; scitex-dev  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=5929fcd5"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="../../../_static/copybutton.js?v=f281be69"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            scitex-dev
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api.html">API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../unified-search.html">Unified Search</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../cli.html">CLI Mixin</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">scitex-dev</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">scitex_dev.testing._import_vantage</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for scitex_dev.testing._import_vantage</h1><div class="highlight"><pre>
+<span></span><span class="ch">#!/usr/bin/env python3</span>
+<span class="c1"># -*- coding: utf-8 -*-</span>
+<span class="sd">"""Refuse to grade a tree we are not importing.</span>
+
+<span class="sd">A green is a CLAIM ABOUT THE CODE THAT PRODUCED IT. If ``figrecipe``</span>
+<span class="sd">resolves to site-packages while you are testing a worktree, the run cannot</span>
+<span class="sd">make that claim — so it must refuse rather than emit a number about</span>
+<span class="sd">somewhere else.</span>
+
+<span class="sd">WHY THIS IS A CHECK AND NOT A PARAGRAPH IN A CONTRIBUTING GUIDE</span>
+<span class="sd">----------------------------------------------------------------</span>
+<span class="sd">Four instances in ONE DAY, 2026-08-18, and three of them hit people who had</span>
+<span class="sd">already read or written the warning:</span>
+
+<span class="sd">* ``audit-all`` resolves its sub-auditors from ``PATH``. A 0.53.0 entry</span>
+<span class="sd">  point ran 0.50.0 checks and produced output BYTE-IDENTICAL to 0.50.0.</span>
+<span class="sd">  Read at face value: "the rule corpus made no difference." It came within</span>
+<span class="sd">  one message of being reported as a refuted measurement.</span>
+<span class="sd">* ``audit-cli --path &lt;tree&gt;`` IMPORTS the CLI, so it graded site-packages</span>
+<span class="sd">  rather than the tree it was pointed at. That invalidated a set of counts</span>
+<span class="sd">  already quoted as properties of a branch.</span>
+<span class="sd">* scitex-dev ran their own suite from a worktree: 1049 PASSED against</span>
+<span class="sd">  site-packages instead of the code they had just edited. Only three</span>
+<span class="sd">  UNRELATED failures revealed the wrong vantage point — a no-op change</span>
+<span class="sd">  would have reported a clean green about code the run never touched.</span>
+<span class="sd">* figrecipe: ``pytest tests/figrecipe/_cli/`` from a worktree returned</span>
+<span class="sd">  ``4 passed`` while importing the installed 0.34.6. CI, which puts the</span>
+<span class="sd">  checkout on the path, failed on the first run — on a capability</span>
+<span class="sd">  regression the local green had hidden.</span>
+
+<span class="sd">In every case the wrong answer was WELL-FORMED, SELF-CONSISTENT and</span>
+<span class="sd">CONFIDENT. Nothing warns, because from inside the process there is nothing</span>
+<span class="sd">anomalous about importing an installed package.</span>
+
+<span class="sd">Knowing about it demonstrably did not prevent it. Discipline had a fair</span>
+<span class="sd">trial that day and lost twice. Hence a mechanical barrier.</span>
+
+<span class="sd">BIASED TOWARDS ACCEPTING, ON PURPOSE</span>
+<span class="sd">-------------------------------------</span>
+<span class="sd">A FALSE NEGATIVE costs one bad green. A FALSE POSITIVE costs the guard</span>
+<span class="sd">itself: a check that refuses a legitimate CI setup gets switched off, and a</span>
+<span class="sd">guard everyone disables is worse than none. So this accepts ANY resolution</span>
+<span class="sd">inside the tree — editable installs, ``--target`` layouts, linked worktrees</span>
+<span class="sd">— and refuses only what is PROVABLY outside it.</span>
+
+<span class="sd">That is also why both sides are ``resolve()``d before comparing. This</span>
+<span class="sd">environment is full of symlinks: a linked git worktree, an editable install</span>
+<span class="sd">pointing at a ``src/`` that is itself a link, a venv whose ``python`` is a</span>
+<span class="sd">symlink chain. Comparing unresolved paths as strings gets legitimate setups</span>
+<span class="sd">wrong in both directions.</span>
+<span class="sd">"""</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">importlib</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.._core.streams</span><span class="w"> </span><span class="kn">import</span> <span class="n">write_stream</span>
+
+<span class="c1">#: The documented, shared opt-out. One name people learn once. A leaf that</span>
+<span class="c1">#: needs its own scope passes ``env_var=`` rather than forking this module.</span>
+<span class="n">DEFAULT_ENV_VAR</span> <span class="o">=</span> <span class="s2">"SCITEX_ALLOW_FOREIGN_IMPORT"</span>
+
+
+<div class="viewcode-block" id="ForeignImportError">
+<a class="viewcode-back" href="../../../api.html#scitex_dev.testing.ForeignImportError">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">ForeignImportError</span><span class="p">(</span><span class="ne">RuntimeError</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""The package under test resolves outside the tree under test."""</span></div>
+
+
+
+<div class="viewcode-block" id="PackageNotImportableError">
+<a class="viewcode-back" href="../../../api.html#scitex_dev.testing.PackageNotImportableError">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">PackageNotImportableError</span><span class="p">(</span><span class="n">ForeignImportError</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""The package under test could not be imported at all.</span>
+
+<span class="sd">    A SUBCLASS so every existing ``except ForeignImportError`` keeps</span>
+<span class="sd">    working: a caller that wants "the guard refused" does not have to learn</span>
+<span class="sd">    a second name, and a caller that wants to distinguish "wrong tree" from</span>
+<span class="sd">    "no package" now can.</span>
+<span class="sd">    """</span></div>
+
+
+
+<div class="viewcode-block" id="resolve_package_path">
+<a class="viewcode-back" href="../../../api.html#scitex_dev.testing.resolve_package_path">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">resolve_package_path</span><span class="p">(</span>
+    <span class="n">package</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">tree_under_test</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">os</span><span class="o">.</span><span class="n">PathLike</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Where ``package`` actually resolves, fully resolved.</span>
+
+<span class="sd">    Split out from the assertion so the CONTAINMENT DECISION below is a</span>
+<span class="sd">    pure function of two paths. That is not tidiness: the subtle half of</span>
+<span class="sd">    this guard is the symlink handling, and separating the two lets it be</span>
+<span class="sd">    tested against real directories and real links rather than against a</span>
+<span class="sd">    stand-in for the import system.</span>
+
+<span class="sd">    ``tree_under_test`` appears ONLY in the failure message. A bare</span>
+<span class="sd">    ``ModuleNotFoundError`` is loud and honest, so it was never a defect —</span>
+<span class="sd">    but it says neither WHICH TREE was being checked nor THAT A GUARD WAS</span>
+<span class="sd">    RUNNING, and naming what it looked at is this module's entire value.</span>
+<span class="sd">    A guard whose own failure does not identify itself reproduces, one</span>
+<span class="sd">    level up, the family it exists to catch.</span>
+
+<span class="sd">    The original exception is CHAINED, never replaced: the import error is</span>
+<span class="sd">    the actual diagnosis (a typo, a missing install, a broken dependency),</span>
+<span class="sd">    and this only adds the context it lacks.</span>
+<span class="sd">    """</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">module</span> <span class="o">=</span> <span class="n">importlib</span><span class="o">.</span><span class="n">import_module</span><span class="p">(</span><span class="n">package</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">ImportError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+        <span class="n">checked</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">"  tree under test : </span><span class="si">{</span><span class="n">Path</span><span class="p">(</span><span class="n">tree_under_test</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">()</span><span class="si">}</span><span class="se">\n</span><span class="s2">"</span>
+            <span class="k">if</span> <span class="n">tree_under_test</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+            <span class="k">else</span> <span class="s2">""</span>
+        <span class="p">)</span>
+        <span class="k">raise</span> <span class="n">PackageNotImportableError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">"the import-vantage guard could not import </span><span class="si">{</span><span class="n">package</span><span class="si">!r}</span><span class="s2">, so it "</span>
+            <span class="sa">f</span><span class="s2">"cannot tell which tree the tests would grade.</span><span class="se">\n</span><span class="s2">"</span>
+            <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">checked</span><span class="si">}</span><span class="s2">"</span>
+            <span class="sa">f</span><span class="s2">"  import error    : </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="se">\n</span><span class="s2">"</span>
+            <span class="sa">f</span><span class="s2">"This is the guard speaking, not the test suite: nothing has "</span>
+            <span class="sa">f</span><span class="s2">"been graded. Install the package (`pip install -e &lt;tree&gt;`) or "</span>
+            <span class="sa">f</span><span class="s2">"put it on the path, then re-run."</span>
+        <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
+    <span class="n">location</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="s2">"__file__"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">location</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># A namespace package has no __file__. Use its first path entry</span>
+        <span class="c1"># rather than returning None: "cannot tell" must not become "fine",</span>
+        <span class="c1"># which is the exact collapse this module exists to prevent. An</span>
+        <span class="c1"># empty __path__ is a broken install and surfaces as the IndexError</span>
+        <span class="c1"># it is.</span>
+        <span class="n">location</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">__path__</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">Path</span><span class="p">(</span><span class="n">location</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">()</span></div>
+
+
+
+<div class="viewcode-block" id="assert_path_inside_tree">
+<a class="viewcode-back" href="../../../api.html#scitex_dev.testing.assert_path_inside_tree">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">assert_path_inside_tree</span><span class="p">(</span>
+    <span class="n">package</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">package_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">os</span><span class="o">.</span><span class="n">PathLike</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+    <span class="n">root</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">os</span><span class="o">.</span><span class="n">PathLike</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">env_var</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">DEFAULT_ENV_VAR</span><span class="p">,</span>
+    <span class="n">stream</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Raise unless ``package_path`` is inside ``root``. Both are resolved.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        package: the importable name, used only in the message.</span>
+<span class="sd">        package_path: where the package was found.</span>
+<span class="sd">        root: the tree the caller believes it is grading.</span>
+<span class="sd">        env_var: the opt-out variable. Defaults to the shared</span>
+<span class="sd">            :data:`DEFAULT_ENV_VAR`; override only when a leaf genuinely</span>
+<span class="sd">            needs its own scope.</span>
+<span class="sd">        stream: where the opt-out notice is written (default</span>
+<span class="sd">            ``sys.stderr``).</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The resolved package path, so a caller can log what it graded.</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        ForeignImportError: naming BOTH paths and the fixes, in preference</span>
+<span class="sd">            order.</span>
+
+<span class="sd">    The opt-out is for deliberately testing an INSTALLED build (verifying a</span>
+<span class="sd">    wheel, say), and it PRINTS LOUDLY when used. AN OPT-OUT THAT HIDES</span>
+<span class="sd">    ITSELF IS THE DEFECT WEARING THE FIX'S CLOTHES — the whole family this</span>
+<span class="sd">    guard exists for is "the report does not say what answered it", and a</span>
+<span class="sd">    silent bypass would reproduce it one level up.</span>
+<span class="sd">    """</span>
+    <span class="n">resolved_root</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">root</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">()</span>
+    <span class="n">resolved_pkg</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">package_path</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">resolved_pkg</span><span class="o">.</span><span class="n">is_relative_to</span><span class="p">(</span><span class="n">resolved_root</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">resolved_pkg</span>
+
+    <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">env_var</span><span class="p">):</span>
+        <span class="n">write_stream</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">"</span><span class="se">\n</span><span class="si">{</span><span class="n">package</span><span class="si">}</span><span class="s2"> imported from </span><span class="si">{</span><span class="n">resolved_pkg</span><span class="si">}</span><span class="s2">, OUTSIDE "</span>
+            <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">resolved_root</span><span class="si">}</span><span class="s2"> — allowed by </span><span class="si">{</span><span class="n">env_var</span><span class="si">}</span><span class="s2">. THIS RUN DOES NOT "</span>
+            <span class="sa">f</span><span class="s2">"GRADE THE TREE UNDER TEST.</span><span class="se">\n</span><span class="s2">"</span><span class="p">,</span>
+            <span class="n">stream</span> <span class="k">if</span> <span class="n">stream</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">resolved_pkg</span>
+
+    <span class="k">raise</span> <span class="n">ForeignImportError</span><span class="p">(</span>
+        <span class="sa">f</span><span class="s2">"tests would grade a DIFFERENT </span><span class="si">{</span><span class="n">package</span><span class="si">}</span><span class="s2"> than this checkout.</span><span class="se">\n</span><span class="s2">"</span>
+        <span class="sa">f</span><span class="s2">"  tree under test : </span><span class="si">{</span><span class="n">resolved_root</span><span class="si">}</span><span class="se">\n</span><span class="s2">"</span>
+        <span class="sa">f</span><span class="s2">"  </span><span class="si">{</span><span class="n">package</span><span class="si">}</span><span class="s2"> found : </span><span class="si">{</span><span class="n">resolved_pkg</span><span class="si">}</span><span class="se">\n</span><span class="s2">"</span>
+        <span class="sa">f</span><span class="s2">"A pass here would describe code your change never touched.</span><span class="se">\n</span><span class="s2">"</span>
+        <span class="sa">f</span><span class="s2">"Fix, in order of preference:</span><span class="se">\n</span><span class="s2">"</span>
+        <span class="sa">f</span><span class="s2">"  1. pip install -e </span><span class="si">{</span><span class="n">resolved_root</span><span class="si">}</span><span class="se">\n</span><span class="s2">"</span>
+        <span class="sa">f</span><span class="s2">"  2. PYTHONPATH=</span><span class="si">{</span><span class="n">resolved_root</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="s1">'src'</span><span class="si">}</span><span class="s2"> pytest ...</span><span class="se">\n</span><span class="s2">"</span>
+        <span class="sa">f</span><span class="s2">"  3. </span><span class="si">{</span><span class="n">env_var</span><span class="si">}</span><span class="s2">=1 — only when testing an installed build ON PURPOSE."</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="assert_imports_tree_under_test">
+<a class="viewcode-back" href="../../../api.html#scitex_dev.testing.assert_imports_tree_under_test">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">assert_imports_tree_under_test</span><span class="p">(</span>
+    <span class="n">package</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">root</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">os</span><span class="o">.</span><span class="n">PathLike</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">env_var</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">DEFAULT_ENV_VAR</span><span class="p">,</span>
+    <span class="n">stream</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Import ``package`` and raise unless it resolves INSIDE ``root``."""</span>
+    <span class="k">return</span> <span class="n">assert_path_inside_tree</span><span class="p">(</span>
+        <span class="n">package</span><span class="p">,</span>
+        <span class="c1"># `root` is passed here ONLY so a failed import can name the tree it</span>
+        <span class="c1"># was checking. This is the composing entry point, so it is the one</span>
+        <span class="c1"># place that knows both halves.</span>
+        <span class="n">resolve_package_path</span><span class="p">(</span><span class="n">package</span><span class="p">,</span> <span class="n">tree_under_test</span><span class="o">=</span><span class="n">root</span><span class="p">),</span>
+        <span class="n">root</span><span class="p">,</span>
+        <span class="n">env_var</span><span class="o">=</span><span class="n">env_var</span><span class="p">,</span>
+        <span class="n">stream</span><span class="o">=</span><span class="n">stream</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="make_pytest_configure">
+<a class="viewcode-back" href="../../../api.html#scitex_dev.testing.make_pytest_configure">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">make_pytest_configure</span><span class="p">(</span>
+    <span class="n">package</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">root</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">os</span><span class="o">.</span><span class="n">PathLike</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">env_var</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">DEFAULT_ENV_VAR</span><span class="p">,</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Build a ``pytest_configure`` hook wrapping the assertion.</span>
+
+<span class="sd">    For a leaf's ``conftest.py``::</span>
+
+<span class="sd">        from pathlib import Path</span>
+<span class="sd">        from scitex_dev.testing import make_pytest_configure</span>
+
+<span class="sd">        pytest_configure = make_pytest_configure(</span>
+<span class="sd">            "figrecipe", Path(__file__).resolve().parent.parent</span>
+<span class="sd">        )</span>
+
+<span class="sd">    The FUNCTION above is the primitive and this is the convenience, not the</span>
+<span class="sd">    other way round: the check is useful anywhere a runner decides what it</span>
+<span class="sd">    is grading — a CI preflight, a release script, ``audit-all`` itself,</span>
+<span class="sd">    which has the same defect one level up. If the only entry point were a</span>
+<span class="sd">    pytest hook, every non-pytest caller would re-implement it, which is the</span>
+<span class="sd">    duplication this module exists to end.</span>
+<span class="sd">    """</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">pytest_configure</span><span class="p">(</span><span class="n">config</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>  <span class="c1"># noqa: ANN001  (pytest's Config)</span>
+        <span class="k">del</span> <span class="n">config</span>
+        <span class="n">assert_imports_tree_under_test</span><span class="p">(</span><span class="n">package</span><span class="p">,</span> <span class="n">root</span><span class="p">,</span> <span class="n">env_var</span><span class="o">=</span><span class="n">env_var</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">pytest_configure</span></div>
+
+
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">"DEFAULT_ENV_VAR"</span><span class="p">,</span>
+    <span class="s2">"ForeignImportError"</span><span class="p">,</span>
+    <span class="s2">"PackageNotImportableError"</span><span class="p">,</span>
+    <span class="s2">"assert_imports_tree_under_test"</span><span class="p">,</span>
+    <span class="s2">"assert_path_inside_tree"</span><span class="p">,</span>
+    <span class="s2">"make_pytest_configure"</span><span class="p">,</span>
+    <span class="s2">"resolve_package_path"</span><span class="p">,</span>
+<span class="p">]</span>
+
+<span class="c1"># EOF</span>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Yusuke Watanabe.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

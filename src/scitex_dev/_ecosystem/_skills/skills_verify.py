@@ -30,11 +30,13 @@ def _python_blocks(text: str):
     fence = None
     code = []
     start = 0
+    indent = 0
     for line_no, line in enumerate(text.splitlines(), 1):
         if fence is None:
             match = re.match(r"^ {0,3}(`{3,}|~{3,})([^`~]*)$", line)
             if match:
                 fence = match[1]
+                indent = len(line) - len(line.lstrip(" "))
                 language = match[2].strip().lower()
                 start = line_no + 1 if language in {"python", "py"} else 0
                 code = []
@@ -45,7 +47,8 @@ def _python_blocks(text: str):
                 yield start, "\n".join(code)
             fence = None
         elif start:
-            code.append(line)
+            leading = len(line) - len(line.lstrip(" "))
+            code.append(line[min(indent, leading) :])
     if fence is not None and start:
         raise ValueError(f"unclosed Python fence at line {start - 1}")
 
@@ -205,9 +208,11 @@ def verify_docs_and_skills(
         unverified.append("No Python/py fenced blocks were checked")
     skill_files = [str(path) for path in selected if "_skills" in path.parts]
     return {
-        "skills_stale": True
-        if stale_files.intersection(skill_files)
-        else (None if not skill_files or unverified else False),
+        "skills_stale": (
+            True
+            if stale_files.intersection(skill_files)
+            else (None if not skill_files or unverified else False)
+        ),
         "stale_files": sorted(stale_files),
         "readme_version_match": version_match,
         "readme_version_check": version_check,

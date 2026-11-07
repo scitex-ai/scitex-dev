@@ -1,6 +1,6 @@
 """Audit engine — walks a Click command tree and classifies tokens.
 
-Rules audited (warn-only):
+Rules classified using the configured severity policy:
 - §1   noun-verb structure        (subcommand grammar)
 - §1b  banned bare leaves         (`version`, `completion`)
 - §1d  vocabulary in catalog/dict

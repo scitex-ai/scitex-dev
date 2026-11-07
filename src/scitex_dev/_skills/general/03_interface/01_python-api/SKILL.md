@@ -20,7 +20,7 @@ The Python API is the **single source of truth**. CLI, MCP, and HTTP all delegat
 6. [06_type-hints.md](06_type-hints.md) — `from __future__ import annotations`, Union/Literal/Optional
 7. [07_decorators-post-import.md](07_decorators-post-import.md) — `@supports_return_as` (recommended-where-applicable)
 8. [08_submodule-exposure.md](08_submodule-exposure.md) — when to expose a submodule vs hide it (research deferred)
-9. [09_error-handling.md](09_error-handling.md) — `scitex_dev._errors.ErrorCode` as canonical
+9. [09_error-handling.md](09_error-handling.md) — `scitex_dev.ErrorCode` as canonical
 10. [10_introspection-commands.md](10_introspection-commands.md) — `list-python-apis -v|-vv|-vvv` + `--json`
 11. [11_import-conventions.md](11_import-conventions.md) — standalone vs umbrella; `import scitex` not `as stx`
 12. [12_audit-checklist.md](12_audit-checklist.md) — release-gate checklist

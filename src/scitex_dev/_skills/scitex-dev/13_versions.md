@@ -1,165 +1,90 @@
 ---
 description: |
-  [TOPIC] Versions
-  [DETAILS] Version checking and mismatch detection across the SciTeX ecosystem. Compares pyproject.toml, installed (importlib.metadata), git tag, and PyPI versions. fix_mismatches combines detection with sync.
+  [TOPIC] Version observations
+  [DETAILS] Inspect local source, installed provenance, Git and PyPI observations through current public helpers. Version status is diagnostic, not release acceptance. Legacy reconciliation is separate from publication and host deployment.
 tags: [scitex-dev-versions]
 ---
 
-# Version Management
+# Version observations
 
-## list_versions
-
-Collect version info for ecosystem packages from all sources.
+## Read selected packages
 
 ```python
-from scitex_dev import list_versions
+from scitex_dev import check_versions, get_mismatches, list_versions
 
-result = list_versions(
-    packages: list[str] | None = None,  # None = all ecosystem packages
-) -> dict[str, dict]
-```
+versions = list_versions(packages=["scitex-dev"])
+for package, observation in versions.items():
+    print(package, observation["status"], observation.get("issues", []))
 
-Returns a dict keyed by package name. Each value has:
-
-```python
-{
-    "local": {
-        "pyproject_toml": "0.3.2",   # from pyproject.toml
-        "installed": "0.3.2",        # from importlib.metadata
-    },
-    "git": {
-        "latest_tag": "v0.3.2",
-        "branch": "develop",
-        "dirty": False,
-        "ahead": 0,
-        "behind": 0,
-        "short_hash": "f08fdfd",
-    },
-    "remote": {
-        "pypi": "0.3.1",             # from PyPI JSON API
-    },
-    "status": "unreleased",          # ok | mismatch | unreleased | outdated | unavailable
-    "issues": ["local (0.3.2) > pypi (0.3.1) - ready to release"],
-}
-```
-
-Status values:
-- `ok` — all sources agree, no issues
-- `mismatch` — pyproject.toml != installed or git tag, or dirty/ahead/behind
-- `unreleased` — local version > PyPI (ready to publish)
-- `outdated` — local version < PyPI
-- `unavailable` — package not found locally
-
-```python
-# Check specific packages
-info = list_versions(["scitex-io", "scitex-stats"])
-for pkg, data in info.items():
-    print(pkg, data["status"], data.get("issues"))
-```
-
-## check_versions
-
-Same as `list_versions` but adds a summary counts dict.
-
-```python
-from scitex_dev import check_versions
-
-result = check_versions(
-    packages: list[str] | None = None,
-) -> dict
-# {"packages": {...}, "summary": {"total": 20, "ok": 15, "mismatch": 3, ...}}
-```
-
-```python
-report = check_versions()
+report = check_versions(packages=["scitex-dev"])
 print(report["summary"])
-# {"total": 20, "ok": 15, "mismatch": 2, "unreleased": 2, "outdated": 1, ...}
+mismatches = get_mismatches(packages=["scitex-dev"])
 ```
 
-## get_mismatches
+All three functions accept `packages: list[str] | None = None`. `None` selects the
+bundled ecosystem roster. Collection can inspect configured checkouts and contact
+PyPI; it is not a purely offline operation.
 
-Return only packages with non-ok status.
+`list_versions` returns a dictionary keyed by package name. An observation can
+include `local`, `git`, `remote`, `status` and `issues`; fields depend on source
+availability. Installed provenance checks distinguish the effective version
+from a raw metadata claim. Inspect fields such as `installed_metadata_claim`,
+`install_kind` and `install_trustworthy` when present.
 
-```python
-from scitex_dev import get_mismatches
+A dynamic version strategy need not declare a static `project.version`.
+Missing information is not permission to invent a version or repair a tag.
 
-result = get_mismatches(
-    packages: list[str] | None = None,
-) -> dict[str, dict]  # same schema as list_versions, filtered to non-ok
+| Status | Scope of the observation |
+|---|---|
+| `ok` | No mismatch detected by this version comparison |
+| `mismatch` | Source/install/Git observations disagree or checkout state needs review |
+| `unreleased` | A local version exceeds the observed PyPI version |
+| `outdated` | A local version is behind the observed PyPI version |
+| `unavailable` | Local source/install observations are unavailable |
+
+`check_versions` adds summary counts. `get_mismatches` filters out `ok` and
+`unavailable` entries. Neither an `ok` status nor an `unreleased` label establishes
+CI acceptance, correct artifacts, contributor consent or publication readiness.
+
+## Legacy reconciliation API
+
+The public `fix_mismatches` function remains for backward compatibility. Its
+selected parameters are a reference, not a call:
+
+```text
+fix_mismatches(hosts=None, packages=None, local=True, remote=True,
+               confirm=False, config=None) -> dict
 ```
 
-```python
-mismatches = get_mismatches()
-for pkg, info in mismatches.items():
-    print(f"{pkg}: {info['status']} — {info['issues']}")
-```
-
-## fix_mismatches
-
-Detect mismatches and fix them (local pip reinstall + remote git pull).
+`confirm=False` previews; `confirm=True` can reinstall locally and synchronize
+remote checkouts. A scoped local preview is:
 
 ```python
 from scitex_dev import fix_mismatches
 
-result = fix_mismatches(
-    hosts: list[str] | None = None,    # None = all enabled hosts
-    packages: list[str] | None = None, # None = all mismatched packages
-    local: bool = True,                # pip install -e . locally
-    remote: bool = True,               # git pull + pip install on SSH hosts
-    confirm: bool = False,             # False = dry-run (default)
-    config=None,
-) -> dict
-# {"detected": {...}, "local_fixes": {...}, "remote_fixes": {...}, "summary": {...}}
-```
-
-Safety: always defaults to `confirm=False` (dry-run). Pass `confirm=True`
-to actually execute.
-
-```python
-# Inspect what would be fixed
-preview = fix_mismatches(confirm=False)
+preview = fix_mismatches(
+    packages=["scitex-dev"], local=True, remote=False, confirm=False
+)
 print(preview["detected"])
-
-# Execute fixes
-result = fix_mismatches(confirm=True)
-print(result["summary"])
-# {"detected": 3, "local_fixed": 2, "remote_fixed": 1}
 ```
+
+This function does not replace the leaf's publication workflow. Inspect the
+selected scope and preserve unrelated work before any requested application.
+Implementation: `_release/versions.py` and `_release/fix.py`.
 
 ## CLI
 
+Prefer the umbrella route when its Dev adapter is installed:
+
 ```bash
-# Show all packages with version info
-scitex-dev ecosystem list --versions
-
-# Preview fixes (dry run, no changes made)
-scitex-dev ecosystem fix-mismatches
-
-# Execute fixes (actually applies changes)
-scitex-dev ecosystem fix-mismatches --confirm
-
-# JSON output
-scitex-dev ecosystem list --versions --json
+scitex dev ecosystem list --package scitex-dev --versions --json
+scitex dev ecosystem validate-versions --help
 ```
 
-## MCP Tools
+Standalone bootstrap: `scitex-dev ecosystem ...`. The legacy CLI names
+`fix-mismatches` and `packages` do not define the current release procedure.
+`validate-versions` can contact fleet hosts, and its `--apply` mode executes
+reconciliation; inspect actual help and target scope before using it.
 
-| Tool | Purpose |
-|------|---------|
-| `mcp__scitex__dev_ecosystem_list` | Read-only: list all ecosystem packages with version status |
-| `mcp__scitex__dev_ecosystem_fix_mismatches` | Auto-fix installed vs pyproject.toml mismatches (confirm=False for preview) |
-
-## Full Ecosystem Update Workflow
-
-When performing a full update across all packages, follow this order:
-
-1. **Check CI** — verify GitHub Actions pass for each package (`gh run list -R ywatanabe1989/PACKAGE`)
-2. **Check status** — `mcp__scitex__dev_ecosystem_list` or `scitex-dev ecosystem list --versions`
-3. **Bump versions** — edit pyproject.toml, classify changes (feat → minor, fix → patch)
-4. **Commit + tag** — `git commit` + `git tag vX.Y.Z`
-5. **Push** — `git push origin develop --tags`
-6. **GitHub Release** — `gh release create vX.Y.Z --generate-notes`
-7. **Wait for PyPI** — verify `publish-pypi.yml` workflow completes
-8. **Local reinstall** — `pip install -e .` in each updated repo
-9. **Fix mismatches** — `scitex-dev ecosystem fix-mismatches --confirm` or `mcp__scitex__dev_ecosystem_fix_mismatches`
-10. **Sync to NAS** — `scitex dev versions sync --confirm`
+Follow [18_full-update.md](18_full-update.md) for qualified publication and
+[19_release-deploy.md](19_release-deploy.md) for installed/runtime adoption.

@@ -39,9 +39,10 @@ def register(skills):
             description=(
                 (
                     "Default DEST is ~/.scitex/dev/skills/ — the canonical "
-                    "store, peer to ~/.scitex/{audio,browser,scholar,...}/. "
-                    "Pass --claude-symlink to also expose the store under "
-                    "~/.claude/skills/scitex/."
+                    "store. Its resolved destination must be outside Git "
+                    "checkouts, including symlinked dotfile trees. Use "
+                    "--directory for an external agent-readable destination; "
+                    "--package limits the owning distribution."
                 ),
             ),
             examples=(
@@ -49,12 +50,8 @@ def register(skills):
                     "{prog} dev skills install", "Install to ~/.scitex/dev/skills/."
                 ),
                 Example(
-                    "{prog} dev skills install --claude-symlink",
-                    "Also expose under ~/.claude/skills/scitex/.",
-                ),
-                Example(
-                    "{prog} dev skills install --dest /tmp/skills --package scitex-writer",
-                    "Custom dest, one package.",
+                    "{prog} dev skills install --directory /tmp/skills --package scitex-writer",
+                    "Explicit destination, one package.",
                 ),
                 Example(
                     "{prog} dev skills install --link",
@@ -67,13 +64,16 @@ def register(skills):
         ),
     )
     @click.option(
+        "--directory",
         "--dest",
+        "dest",
         type=click.Path(),
         default=None,
         help=(
             "Target directory. Default: ~/.scitex/dev/skills/ — the "
-            "canonical store, peer to ~/.scitex/{audio,browser,scholar,...}/. "
-            "Use --claude-symlink to also expose under ~/.claude/skills/scitex/."
+            "canonical store. --dest remains a compatible alias. "
+            "Its real path must be outside Git checkouts and readable "
+            "by your agent or tools."
         ),
     )
     @click.option("--package", default=None, help="Install only this package.")

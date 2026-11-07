@@ -37,11 +37,10 @@ def test_audit_cli_help_exits_zero():
     assert result.exit_code == 0
 
 
-def test_audit_cli_help_mentions_the_cli_audit_extra():
-    # Arrange -- the help text documents the required extra (regression
-    # guard for the CliHelp conversion preserving the original content).
+def test_audit_cli_help_describes_the_base_installation():
+    # Arrange -- the auditor ships in core, not a retired optional extra.
     runner = CliRunner()
     # Act
     result = runner.invoke(_make_group(), ["ecosystem", "audit-cli", "--help"])
     # Assert
-    assert "cli-audit" in result.output
+    assert "base installation" in " ".join(result.output.split())

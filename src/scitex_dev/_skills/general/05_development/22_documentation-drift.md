@@ -74,6 +74,13 @@ execute examples, check signatures/results, validate prose or other interfaces,
 or compare installed/exported skills. Inspect `limitations`; `ok` is scoped,
 `incomplete` is not a complete pass, and `needs_update` reports a detected issue.
 
+The current source verifier removes up to the opening fence's indentation from
+each code line, preserving Python indentation within that block. This follows
+the [CommonMark fence indentation rule](https://spec.commonmark.org/0.31.2/#fenced-code-blocks);
+it does not dedent arbitrary invalid Python or implement a full Markdown parser.
+Behavioral controls live in
+`tests/scitex_dev/_ecosystem/_skills/test_skills_verify.py`.
+
 The CLI wrapper was added alongside this skill update; older installs,
 including 0.62.15, lack this route. Check `scitex dev docs --help` (or
 `scitex-dev docs --help`) before using it: a source checkout alone does not
@@ -112,6 +119,13 @@ Generation can use the wrong installed package, miss a page, reuse stale output
 or faithfully document a bug. A successful build does not prove content valid,
 and an exact bundle does not prove the live host serves it. Report those checks
 separately; fix the owning source/generator or document a genuine limitation.
+
+For Sphinx, check that authored guides and generated search/index pages have
+distinct output URLs. An authored `search.rst` can be overwritten by the
+built-in search page; use a distinct guide name such as `unified-search.rst`.
+Inspect both the guide content and the generated search form in the HTML,
+keeping strict build warnings enabled. This is a content check, not proof
+that an installed package or live host has adopted the new output.
 
 Report each outcome as verified-with-scope, drift/failure, unverified/manual or
 not-applicable-with-reason. Never flatten a skip, unavailable tool, failed read
