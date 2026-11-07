@@ -13,6 +13,15 @@ versions follow [Semantic Versioning](https://semver.org/).
 - Add vendor-neutral `skills install --directory`, preserving `--dest` and the
   canonical store default. Document explicit agent-readable destinations and
   package selection without making Claude projection part of the default flow.
+
+- Include the canonical CLI audit dictionary in installed packages, with one
+  source copy shared by checkout audits and the package's build backend.
+
+- Generate shared shell-completion scripts with the current interpreter's Click
+  instead of executing a same-named program from PATH. This avoids foreign
+  environment scripts and works when the console executable is not on PATH.
+- Quote cached completion paths in shell rc lines so activation works with
+  spaces and apostrophes in the home or relocated state directory.
 - Commit each local Store put/hide/unhide operation and its materialized row
   atomically. Rejected row writes no longer leave operations for peers to replay.
   Preserve explicit nested batch transactions and sequence-allocation retries.
