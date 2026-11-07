@@ -1,7 +1,7 @@
 ---
 description: |
-  [TOPIC] Release + Exact-Pin Doctrine (aggressive-publish, no-approval)
-  [DETAILS] The operator's standing release/versioning doctrine (2026-07-06), stated authoritatively so it can be referenced from the constitution. Two rules set the DEFAULT posture across the fleet: (1) publish scitex packages aggressively and often WITHOUT an approval gate — the release flow runs autonomously (develop→main→tag→PyPI) and a release is not disruptive, so fix-forward on any regression instead of hesitating; (2) the scitex-python umbrella is the SINGLE deterministic pin-point — it exact-pins (`==`) every scitex member package, so leaf packages may keep `>=` floors (the umbrella constrains resolution tightest-wins in any env that includes it: the SIF, fleet envs). Concentrating the pins at the umbrella gives determinism without the resolution conflicts blanket per-leaf exact-pinning would cause; volatile third-party deps (fastmcp) are exact-pinned at the umbrella/deployment layer on the same principle. Covers how to apply both, how scitex-dev (the version overseer) enforces the umbrella `==` rule via a CLI/audit check + pre-commit/CI + the container hook-set, and how the doctrine sits alongside the existing dependency-pinning guidance. Read before releasing any scitex-* package or editing the umbrella's member pins.
+  [TOPIC] Autonomous release and exact-pin doctrine
+  [DETAILS] Standing authorized release cadence with exact-head checks, leaf-owned publication stages and immutable tags. The umbrella exact-pins SciTeX members while leaves retain minimum floors; Dev enforces the pin contract.
 tags: [scitex-general-development-release-pin-doctrine]
 ---
 
@@ -29,24 +29,22 @@ operator approval. The time spent hesitating or asking "should I
 publish this?" is pure waste — it stalls every downstream host,
 container, and agent waiting on the change.
 
-- The release flow runs **autonomously**: develop → main → tag → PyPI,
-  no human in the loop for scitex-internal packages.
-- A release is **not disruptive** — publishing a wheel does not drop
-  sessions or break consumers who have not bumped; it just makes the
-  new version available to whoever pulls it.
-- **Fix-forward, always.** If a release has a problem, cut a bugfix
-  release *immediately* (patch bump, same flow) rather than yanking,
-  reverting, or pausing the cadence. A regression is one more release
-  away from fixed — never a reason to stop shipping.
+- Within the authorized scope, the release flow runs **autonomously**
+  through ordinary source promotion and the leaf's actual validation and
+  publication stages. Do not request confirmation already granted.
+- Publication makes an artifact available; installed profiles and live
+  services are separate adoption steps. Qualify the intended dependency
+  cohort before updating either one.
+- **Fix-forward.** Correct released source with a new version and normal
+  checks. Use the leaf's rollback procedure if a deployed profile needs to
+  return to a qualified version; never move a published tag.
 - **The autonomy is GATED, not unconditional.** "No approval gate"
   means no *operator* gate — it does NOT mean no gate. CI must be
   **green**, and the repo's release ritual must pass: a CHANGELOG
   entry, the version bump, and the packaging / import gates. Those
-  honest, deterministic gates — not a human ask — are what make a bad
-  publish a cheap yank instead of a silent breakage; that reversibility
-  is precisely what licenses publishing without asking. Keep the
-  import/packaging gates honest and they carry the safety the operator
-  gate used to.
+  honest, deterministic gates remain mandatory under autonomous release.
+  Publication is not reversible by deleting or replacing artifacts; a fix
+  uses a new version, and service rollback follows the leaf's procedure.
 
 **Re-ratified 2026-07-08 as a UNIVERSAL fleet rule** — the operator
 directed it be shared with every agent as a universal rule (普遍ルール):
@@ -125,20 +123,21 @@ umbrella (part of the coordinated wave,
 step 4). A leaf only raises its `>=` floor when it actually relies on a
 new API.
 
-**Autonomous release flow** (no approval gate) — run without a sign-off:
+**Authorized autonomous release flow.** Follow the user's current release
+scope and existing session authorization; do not infer publication permission
+from green CI alone or request confirmation already granted.
 
-```bash
-# develop green → open + auto-merge release PR → tag → PyPI on the v* tag
-gh pr create --base main --head develop --title "Release X.Y.Z — <summary>"
-gh pr merge <PR#> --merge --auto
-git -C <repo> tag -a vX.Y.Z origin/main -m "vX.Y.Z"
-git -C <repo> push origin vX.Y.Z        # publish-pypi.yml fires on the tag
-```
+Review every check at the exact release-PR head, including consent and security
+outcomes. Merge normally with the reviewed head guard; do not enable auto-merge
+or bypass a failed check. Tag only the accepted main commit, using an unused
+canonical version and an explicit single-tag push.
 
-Mechanics: [03_release-automation.md](03_release-automation.md). The
-*doctrine* is that you run this without an approval gate on
-scitex-internal packages, and **fix-forward** on any regression (patch
-bump → same flow; no yank, no retag).
+Inspect the leaf's workflow before publication. A tag may trigger only
+validation: Dev publishes through a separate protected-main workflow dispatch.
+Use [18_end-to-end-release-flow.md](18_end-to-end-release-flow.md) and the leaf's
+own instructions rather than a generic tag-to-PyPI recipe. Keep source,
+artifacts, installed interfaces and live adoption separate. Correct a released
+regression by qualifying a new version, never by moving a published tag.
 
 ## 4. Enforcement — scitex-dev is the version overseer
 

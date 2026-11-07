@@ -1,0 +1,223 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>scitex_dev._core.dispatch._docs_click &mdash; scitex-dev  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../../../../_static/copybutton.css?v=76b2166b" />
+
+  
+      <script src="../../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../../_static/documentation_options.js?v=5929fcd5"></script>
+      <script src="../../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script src="../../../../_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="../../../../_static/copybutton.js?v=f281be69"></script>
+    <script src="../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../../index.html" class="icon icon-home">
+            scitex-dev
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../quickstart.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api.html">API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../unified-search.html">Unified Search</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../cli.html">CLI Mixin</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../index.html">scitex-dev</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">scitex_dev._core.dispatch._docs_click</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for scitex_dev._core.dispatch._docs_click</h1><div class="highlight"><pre>
+<span></span><span class="ch">#!/usr/bin/env python3</span>
+<span class="c1"># -*- coding: utf-8 -*-</span>
+<span class="sd">"""``docs`` subcommand group (Click flavor).</span>
+
+<span class="sd">Shares its execution path with ``_docs_argparse.py`` -- both dispatch</span>
+<span class="sd">into ``_run_docs_command`` so the argparse and Click front-ends a</span>
+<span class="sd">downstream package might choose never drift in behavior.</span>
+<span class="sd">"""</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">argparse</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">._docs_argparse</span><span class="w"> </span><span class="kn">import</span> <span class="n">_run_docs_command</span>
+
+
+<div class="viewcode-block" id="docs_click_group">
+<a class="viewcode-back" href="../../../../cli.html#scitex_dev.cli.docs_click_group">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">docs_click_group</span><span class="p">(</span><span class="n">package</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"docs"</span><span class="p">):</span>  <span class="c1"># noqa: D401</span>
+<span class="w">    </span><span class="sd">"""Create a Click command group for docs (requires Click installed).</span>
+
+<span class="sd">    Usage::</span>
+<span class="sd">        from scitex_dev.cli import docs_click_group</span>
+<span class="sd">        cli.add_command(docs_click_group(package="scitex-writer"))</span>
+<span class="sd">    """</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">click</span>
+    <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ImportError</span><span class="p">(</span><span class="s2">"Click is required for docs_click_group. pip install click"</span><span class="p">)</span>
+
+    <span class="kn">from</span><span class="w"> </span><span class="nn">..._ecosystem.help_spec</span><span class="w"> </span><span class="kn">import</span> <span class="n">CliHelp</span><span class="p">,</span> <span class="n">Example</span><span class="p">,</span> <span class="n">SpecCommand</span><span class="p">,</span> <span class="n">SpecGroup</span>
+
+    <span class="nd">@click</span><span class="o">.</span><span class="n">group</span><span class="p">(</span>
+        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+        <span class="n">invoke_without_command</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="bp">cls</span><span class="o">=</span><span class="n">SpecGroup</span><span class="p">,</span>
+        <span class="n">help_spec</span><span class="o">=</span><span class="n">CliHelp</span><span class="p">(</span>
+            <span class="n">summary</span><span class="o">=</span><span class="s2">"View package documentation (list / get / search)."</span><span class="p">,</span>
+            <span class="n">examples</span><span class="o">=</span><span class="p">(</span>
+                <span class="n">Example</span><span class="p">(</span><span class="s2">"</span><span class="si">{prog}</span><span class="s2"> docs list"</span><span class="p">,</span> <span class="s2">"List doc pages."</span><span class="p">),</span>
+                <span class="n">Example</span><span class="p">(</span><span class="s2">"</span><span class="si">{prog}</span><span class="s2"> docs get"</span><span class="p">,</span> <span class="s2">"Show available pages."</span><span class="p">),</span>
+                <span class="n">Example</span><span class="p">(</span><span class="s2">"</span><span class="si">{prog}</span><span class="s2"> docs get api"</span><span class="p">,</span> <span class="s2">"Show a specific page."</span><span class="p">),</span>
+                <span class="n">Example</span><span class="p">(</span>
+                    <span class="s2">"</span><span class="si">{prog}</span><span class="s2"> docs search QUERY"</span><span class="p">,</span>
+                    <span class="s2">"Search across docs/APIs/CLI/MCP."</span><span class="p">,</span>
+                <span class="p">),</span>
+            <span class="p">),</span>
+        <span class="p">),</span>
+    <span class="p">)</span>
+    <span class="nd">@click</span><span class="o">.</span><span class="n">pass_context</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">docs_grp</span><span class="p">(</span><span class="n">ctx</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">ctx</span><span class="o">.</span><span class="n">invoked_subcommand</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">click</span><span class="o">.</span><span class="n">echo</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">get_help</span><span class="p">())</span>
+
+    <span class="nd">@docs_grp</span><span class="o">.</span><span class="n">command</span><span class="p">(</span>
+        <span class="s2">"list"</span><span class="p">,</span>
+        <span class="bp">cls</span><span class="o">=</span><span class="n">SpecCommand</span><span class="p">,</span>
+        <span class="n">help_spec</span><span class="o">=</span><span class="n">CliHelp</span><span class="p">(</span>
+            <span class="n">summary</span><span class="o">=</span><span class="s2">"List available documentation pages."</span><span class="p">,</span>
+            <span class="n">examples</span><span class="o">=</span><span class="p">(</span>
+                <span class="n">Example</span><span class="p">(</span><span class="s2">"</span><span class="si">{prog}</span><span class="s2"> docs list"</span><span class="p">,</span> <span class="s2">"Human-readable list."</span><span class="p">),</span>
+                <span class="n">Example</span><span class="p">(</span><span class="s2">"</span><span class="si">{prog}</span><span class="s2"> docs list --json"</span><span class="p">,</span> <span class="s2">"Structured JSON."</span><span class="p">),</span>
+            <span class="p">),</span>
+        <span class="p">),</span>
+    <span class="p">)</span>
+    <span class="nd">@click</span><span class="o">.</span><span class="n">option</span><span class="p">(</span><span class="s2">"--json"</span><span class="p">,</span> <span class="s2">"as_json"</span><span class="p">,</span> <span class="n">is_flag</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">"JSON output"</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">docs_list</span><span class="p">(</span><span class="n">as_json</span><span class="p">):</span>
+        <span class="n">ns</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">Namespace</span><span class="p">(</span>
+            <span class="n">list_pages</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">page</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+            <span class="n">as_json</span><span class="o">=</span><span class="n">as_json</span><span class="p">,</span>
+            <span class="n">tldr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+            <span class="nb">format</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">_run_docs_command</span><span class="p">(</span><span class="n">ns</span><span class="p">,</span> <span class="n">package</span><span class="o">=</span><span class="n">package</span><span class="p">)</span>
+
+    <span class="nd">@docs_grp</span><span class="o">.</span><span class="n">command</span><span class="p">(</span>
+        <span class="s2">"get"</span><span class="p">,</span>
+        <span class="bp">cls</span><span class="o">=</span><span class="n">SpecCommand</span><span class="p">,</span>
+        <span class="n">help_spec</span><span class="o">=</span><span class="n">CliHelp</span><span class="p">(</span>
+            <span class="n">summary</span><span class="o">=</span><span class="s2">"Show documentation. Without PAGE_NAME, shows package overview."</span><span class="p">,</span>
+            <span class="n">examples</span><span class="o">=</span><span class="p">(</span>
+                <span class="n">Example</span><span class="p">(</span><span class="s2">"</span><span class="si">{prog}</span><span class="s2"> docs get"</span><span class="p">,</span> <span class="s2">"Show the package overview."</span><span class="p">),</span>
+                <span class="n">Example</span><span class="p">(</span><span class="s2">"</span><span class="si">{prog}</span><span class="s2"> docs get api"</span><span class="p">,</span> <span class="s2">"Show a specific page."</span><span class="p">),</span>
+                <span class="n">Example</span><span class="p">(</span><span class="s2">"</span><span class="si">{prog}</span><span class="s2"> docs get api --format json"</span><span class="p">,</span> <span class="s2">"Page as JSON."</span><span class="p">),</span>
+            <span class="p">),</span>
+        <span class="p">),</span>
+    <span class="p">)</span>
+    <span class="nd">@click</span><span class="o">.</span><span class="n">argument</span><span class="p">(</span><span class="s2">"page_name"</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+    <span class="nd">@click</span><span class="o">.</span><span class="n">option</span><span class="p">(</span><span class="s2">"--json"</span><span class="p">,</span> <span class="s2">"as_json"</span><span class="p">,</span> <span class="n">is_flag</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">"JSON output"</span><span class="p">)</span>
+    <span class="nd">@click</span><span class="o">.</span><span class="n">option</span><span class="p">(</span><span class="s2">"--format"</span><span class="p">,</span> <span class="s2">"fmt"</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="n">click</span><span class="o">.</span><span class="n">Choice</span><span class="p">([</span><span class="s2">"html"</span><span class="p">,</span> <span class="s2">"json"</span><span class="p">]),</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">docs_get</span><span class="p">(</span><span class="n">page_name</span><span class="p">,</span> <span class="n">as_json</span><span class="p">,</span> <span class="n">fmt</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">page_name</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="c1"># No page given — show available pages</span>
+            <span class="n">ns</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">Namespace</span><span class="p">(</span>
+                <span class="n">list_pages</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                <span class="n">page</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                <span class="n">as_json</span><span class="o">=</span><span class="n">as_json</span><span class="p">,</span>
+                <span class="n">tldr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                <span class="nb">format</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">ns</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">Namespace</span><span class="p">(</span>
+                <span class="n">list_pages</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                <span class="n">page</span><span class="o">=</span><span class="n">page_name</span><span class="p">,</span>
+                <span class="n">as_json</span><span class="o">=</span><span class="n">as_json</span><span class="p">,</span>
+                <span class="n">tldr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                <span class="nb">format</span><span class="o">=</span><span class="n">fmt</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="n">_run_docs_command</span><span class="p">(</span><span class="n">ns</span><span class="p">,</span> <span class="n">package</span><span class="o">=</span><span class="n">package</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">docs_grp</span></div>
+
+
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"docs_click_group"</span><span class="p">]</span>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Yusuke Watanabe.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

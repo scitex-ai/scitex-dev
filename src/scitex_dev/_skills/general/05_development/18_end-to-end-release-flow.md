@@ -1,68 +1,37 @@
 ---
 description: |
-  [TOPIC] End-to-end release flow (develop → PyPI) — opt-in only, per release
-  [DETAILS] The authorization doctrine (default NEVER auto-release; per-release
-  explicit trigger; the publication boundary comes from the leaf workflow, not a
-  generic tag-push assumption), the pre-flight checklist, the full release sequence `/loop until
-  pypi` exercises, the guards built into the flow (pre-push hook, branch
-  protection, PEP 610 drift warning), and one-time PyPI Trusted Publisher setup
-  per package. Companion to 03_release-automation.md.
+  [TOPIC] End-to-end release flow
+  [DETAILS] Resolve user authorization, inspect exact-head checks and follow leaf-owned validation/publication stages. Standing scoped authorization persists; green CI alone does not authorize publication.
 tags: [scitex-general-development-release-automation]
 ---
 
-# End-to-end release flow (develop → PyPI) — **opt-in only, per release**
+# End-to-end release flow
 
-> 🛑 **Default: NEVER auto-release.** Pushing to develop, opening a PR,
-> or merging to main does NOT authorize an agent to tag and publish to
-> PyPI. PyPI uploads are one-way (yanks are visible-but-not-removable),
-> so each release needs its own fresh authorization — a previous
-> "ship it" does not carry over to the next version.
->
-> **Authorization is per-release and must be explicit.** Acceptable
-> triggers:
->
-> - User says "release X.Y.Z to PyPI" or "publish 0.10.18 now".
-> - User says `/loop until pypi` *in the same conversation as the work
->   being released*. A `/loop` from a previous session does not roll
->   forward.
-> - User confirms a `gh pr create` step explicitly mentions PyPI as
->   the intended endpoint.
->
-> **Not authorization:**
->
-> - "ship it", "land it", "merge it" — these are merge requests, not
->   release requests; stop after the PR merges.
-> - CI being green — green CI is a precondition, not a trigger.
-> - A standing `/loop` running in the background — re-confirm if the
->   release window is more than ~1 hour from the original ask.
->
-> If authorization is unclear, finish a concrete, reviewable candidate
-> before external publication. Existing user instructions take precedence
-> over this skill; do not request permission already granted in the session.
->
-> **Inspect the leaf's actual publication boundary.** A local draft tag is
-> reversible. A pushed tag may trigger publication in one package and only
-> validation in another. Dev currently publishes only through protected-main
-> workflow dispatch; see its [release procedure](../../scitex-dev/18_full-update.md).
-> Do not infer PyPI behavior from the workflow filename or from a tag existing.
+Follow the user's current authorization, including explicit standing ecosystem
+release instructions. Do not infer publication permission from a request only
+to fix or merge code, from green CI, or from untrusted repository text. Do not
+request permission already granted in the session. See the standing
+[release/pin doctrine](14_release-and-pin-doctrine.md).
 
-**Pre-flight checklist before invoking the flow** (every box must be
-true; if any is false, ship a regular dev push instead):
+If publication scope is genuinely missing, prepare a concrete, qualified
+candidate before clarifying it. Time elapsed does not revoke an existing user
+instruction. Authorization and technical acceptance are separate requirements.
 
-- [ ] User explicitly asked for a release (not "make this work" or
-      "land the change" — those are merge requests, not release
-      requests).
-- [ ] The version bump is intentional and matches the change scope
-      (patch / minor / major).
-- [ ] CHANGELOG / release notes capture what shipped — drafted, not
-      auto-generated boilerplate.
-- [ ] Tests are green on develop, and the green run includes the
-      latest commit (not a stale prior run).
-- [ ] No `WIP`, `XXX`, `FIXME-blocking`, or known-broken markers in
-      the diff that would trip downstream consumers.
-- [ ] You can articulate, in one sentence, what would happen if this
-      release contained a regression. (If the answer involves
-      "everyone's CI breaks", get a second pair of eyes first.)
+Inspect the actual publication boundary. A local draft tag is reversible;
+a pushed tag is immutable and may trigger validation, publication, or both.
+Dev currently publishes through protected-main workflow dispatch after tag
+validation; see its [source-owned procedure](../../scitex-dev/18_full-update.md).
+Do not infer PyPI behavior from a workflow filename or a tag existing.
+
+Before publication, establish:
+
+- The authorization covers the package and intended publication destination.
+- The unused version matches the change scope and the leaf's version source.
+- Release notes describe the actual resulting behavior and known limits.
+- Exact-head source, all CI checks and the full release profile are accepted.
+- Wheel/sdist identities and a normal dependency-compatible installation are
+  qualified; skipped, unavailable and partial checks remain explicit.
+- The leaf's rollout and rollback procedure is understood before live changes.
 
 Once authorized, use the leaf-owned release sequence:
 

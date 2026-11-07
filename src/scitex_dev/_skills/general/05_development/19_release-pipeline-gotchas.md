@@ -1,100 +1,64 @@
 ---
 description: |
-  [TOPIC] Gotchas across the release pipeline
-  [DETAILS] Recurring failure modes when releasing scitex-* packages, none
-  obvious from a green local audit: gh-CI is the only trustworthy merge gate
-  (local `audit-all` can lie when the editable install is behind the CI-pinned
-  auditor); `enforce_admins=true` cannot be bypassed by `gh pr merge --admin`;
-  the no-retag rule (burned/stale tag → PATCH bump); PyPI 400 duplicate-filename
-  (hatchling `force-include`); CLA allowlist must end with `,ywatanabe1989`; and
-  releasing under quota pressure (429 vs 529). Companion to 03_release-automation.md.
+  [TOPIC] Release qualification failure modes
+  [DETAILS] Exact-head CI coverage, declared consent policy, immutable tags, archive identity and bounded recovery. Source, published artifacts and running services require separate evidence.
 tags: [scitex-general-development-release-automation]
 ---
 
-# Gotchas across the release pipeline
+# Release qualification failure modes
 
-These are recurring failure modes when releasing scitex-* packages. None of
-them are obvious from a green local audit — keep this section handy.
+Use the leaf's checked-in workflow and
+[18_end-to-end-release-flow.md](18_end-to-end-release-flow.md). Publication
+triggers, native profiles and publisher identities differ between packages.
 
-### gh-CI is the ONLY trustworthy merge gate (local `audit-all` can lie)
+## Local checks and CI cover different environments
 
-An **editable** local `scitex-dev` install can be older than the PyPI build
-pinned by a target repo's CI (e.g. CI pins `scitex-dev[cli-audit]==<latest>`
-while local is two patches behind → missing audit rules like PA-306 no-mocks
-or PA-307 TQ). Local `audit-all` then reports green while CI fails the same
-checks.
+An editable auditor can differ from the version installed in CI. Record the
+actual interpreter, distribution versions, source tree and declared extras.
+A local audit is evidence for that context, not a substitute for the full
+native suite at the final PR head.
 
-Always verify the **gh-CI** state before merging:
+Inspect all checks and their underlying job outcomes. Required-check branch
+protection alone does not clear optional consent/security failures, and a
+successful relay does not establish that the intended tests ran. Retain failed
+runs, skipped scopes and unresolved infrastructure failures explicitly.
 
-```bash
-gh pr checks <PR#>           # required checks on the PR
-gh run list --branch develop --limit 3
-```
+## Protected branches and consent are release boundaries
 
-Subagents that report "local green" should re-verify in a throwaway venv
-with the CI-pinned auditor before claiming a clean state.
+Use the ordinary PR path and reviewed head guard. Do not escalate to an
+administrative merge, change protections or manufacture a successful status.
+If a check contradicts the intended contract, fix its source and qualify the
+change through normal review; do not suppress it just to release.
 
-### `enforce_admins=true` cannot be bypassed by `gh pr merge --admin`
+Read the caller's existing CLA policy and the complete commit range. Match
+contributors to that declared policy and real consent records. Do not add an
+allowlist entry, impersonate a signer or change the ledger to clear a release.
+A transport/baseline attribution rule requires its own existing proof; it is
+not permission to ignore an uncovered contributor.
 
-When a repo's `develop` (or `main`) has branch protection with
-`enforce_admins: true` (socialia, str, scholar, …), even `gh pr merge --admin`
-won't override a FAILING required check. The work must be genuinely complete
-(CI green), not "merged anyway". If a check is wrong, fix the check or the
-ruleset — don't escalate to admin-merge as a habit.
+## Published tags and artifact filenames are immutable
 
-### No-retag rule — burned/stale tag → PATCH bump
+Never delete, move or force-push a published release tag. When source or
+artifact bytes must change, qualify a new unused version. An unsuccessful
+upload does not by itself prove that PyPI reserved the whole version; inspect
+what actually reached the index and preserve the original failed run.
 
-If a tag push fired the publish workflow but the upload failed (e.g. the
-trusted-publisher save silently dropped above, or `pytest tests/ -x` red),
-**never delete and recreate the tag.** PyPI remembers the (project, version)
-pair as taken even on failed uploads; a deleted-then-recreated tag is
-effectively a burned slot. Re-release via a PATCH bump (`0.2.20` burned
-→ `0.2.21`). Same rule for filename-level collisions (different sdist/wheel
-hash for the same version).
+Use the leaf's declared validation/publication stages to resolve a publication
+failure. Do not assume that forcing a CI rerun, changing upload routes or
+replacing a tag is the next step.
 
-### PyPI 400 `Duplicate filename in local headers` (hatchling)
+## Inspect duplicate archive members before changing packaging
 
-If publishing throws
+A redundant Hatch `force-include` entry can include a resource already selected
+by its package configuration. Inspect the actual wheel/sdist entries and
+RECORD identities before removing the redundant declaration. Preserve intended
+resources and rerun the normal artifact checks after a packaging fix; a
+successful build alone does not prove a correct archive.
 
-```
-HTTPError: 400 Bad Request from https://upload.pypi.org/legacy/
-Duplicate filename in local headers
-```
+## Keep provider recovery separate from release qualification
 
-this is **hatchling-specific**: `force-include` of `_sphinx_html` (or any
-path already covered by the auto-discovered `packages=` setting) emits the
-file twice in the wheel header table. Drop the redundant
-`tool.hatch.build.targets.wheel.force-include` entry. setuptools-built
-packages are not affected.
-
-### CLA Assistant allowlist must end with `,ywatanabe1989`
-
-Bare `bot*` blocks **maintainer-authored release PRs** because the release
-flow opens the develop→main PR as a human commit, not a bot. The allowlist
-must read:
-
-```yaml
-allowlist: bot*,ywatanabe1989
-```
-
-`pull_request_target` reads `cla.yml` from the **base branch (main)**, so if
-the allowlist is correct on develop but stale on main the gate still fails
-on the release PR. Fix on main, not develop.
-
-### Releasing under quota pressure (parallel-publish bottleneck)
-
-When ~N packages need releasing in the same window and the lead's Anthropic
-Max account is rate-limited, **don't serialise the campaign as a "fix"** —
-that just stretches the wall-clock without addressing the cause. Spread the
-release work across the 3 Max accounts (lead session
-`ywatanabe@scitex.ai`; campaign agents `wyusuuke@gmail.com` /
-`ywata1989@gmail.com`) and stagger dispatches ~45 s apart to avoid a
-first-turn spike. Distinguish:
-
-- **429 / "out of extra usage"** → per-account; rotate the responsible
-  agent to a different account.
-- **529 overload** → Anthropic server-side, transient; switching accounts
-  does NOT help. Wait.
-
-These are operational notes; the structural release flow above is
-unaffected.
+A model account cap, provider outage and CI/storage failure have different
+causes. Do not rotate accounts, restart agents or launch billable probes as a
+release workaround. Use the responsible leaf's recovery skill and its evidence,
+admission and restart limits when that recovery is authorized. Keep credentials
+and operator account details out of general skills and release reports.

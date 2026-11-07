@@ -1,0 +1,396 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>scitex_dev.cli_providers &mdash; scitex-dev  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=5929fcd5"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="../../_static/copybutton.js?v=f281be69"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            scitex-dev
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../quickstart.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api.html">API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../unified-search.html">Unified Search</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../cli.html">CLI Mixin</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">scitex-dev</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">scitex_dev.cli_providers</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for scitex_dev.cli_providers</h1><div class="highlight"><pre>
+<span></span><span class="sd">"""Installed CLI declarations, independent of Python, MCP and skills policy.</span>
+
+<span class="sd">Discovery reads metadata only. ``declared`` means an owned entry-point target,</span>
+<span class="sd">not a callable or Click command; hosts must resolve those only on invocation.</span>
+<span class="sd">"""</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">collections</span><span class="w"> </span><span class="kn">import</span> <span class="n">Counter</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Sequence</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">replace</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">importlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">metadata</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">urllib.parse</span><span class="w"> </span><span class="kn">import</span> <span class="n">unquote</span><span class="p">,</span> <span class="n">urlsplit</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">tomllib</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>  <span class="c1"># Python 3.9/3.10</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">tomli</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">tomllib</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.._core.names</span><span class="w"> </span><span class="kn">import</span> <span class="n">normalize_distribution_name</span>
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"CliProvider"</span><span class="p">,</span> <span class="s2">"list_cli_providers"</span><span class="p">]</span>
+
+<span class="n">_NAME</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z"</span><span class="p">)</span>
+<span class="n">_TARGET</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span>
+    <span class="sa">r</span><span class="s2">"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*:[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*\Z"</span><span class="p">,</span> <span class="n">re</span><span class="o">.</span><span class="n">ASCII</span>
+<span class="p">)</span>
+<span class="n">_BRANDS</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">(</span>
+    <span class="p">{</span><span class="s2">"figrecipe"</span><span class="p">,</span> <span class="s2">"socialia"</span><span class="p">,</span> <span class="s2">"newb"</span><span class="p">,</span> <span class="s2">"crossref-local"</span><span class="p">,</span> <span class="s2">"openalex-local"</span><span class="p">}</span>
+<span class="p">)</span>
+
+
+<div class="viewcode-block" id="CliProvider">
+<a class="viewcode-back" href="../../api.html#scitex_dev.cli_providers.CliProvider">[docs]</a>
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">CliProvider</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""One declaration/evidence row; non-eligible rows must not be mounted.</span>
+
+<span class="sd">    Names on ``none``, ``invalid`` and ``ambiguous`` rows are reserved too:</span>
+<span class="sd">    wrapper/registry fallback must never resurrect them. Only ``declared`` and</span>
+<span class="sd">    ``legacy_unknown`` are candidates for lazy invocation-time validation.</span>
+<span class="sd">    """</span>
+
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span>
+    <span class="n">target</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span>
+    <span class="n">distribution</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span>
+    <span class="n">version</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span>
+    <span class="n">status</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">source</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">console_script</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">reason</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">""</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_editable_root</span><span class="p">(</span><span class="n">dist</span><span class="p">,</span> <span class="n">owner</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Validate a local editable source identity without executing .pth files."""</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">direct</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">dist</span><span class="o">.</span><span class="n">read_text</span><span class="p">(</span><span class="s2">"direct_url.json"</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">"null"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">direct</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span>
+            <span class="ow">or</span> <span class="n">direct</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"dir_info"</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"editable"</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">True</span>
+        <span class="p">):</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="n">url</span> <span class="o">=</span> <span class="n">urlsplit</span><span class="p">(</span><span class="n">direct</span><span class="p">[</span><span class="s2">"url"</span><span class="p">])</span>
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="n">url</span><span class="o">.</span><span class="n">scheme</span> <span class="o">!=</span> <span class="s2">"file"</span>
+            <span class="ow">or</span> <span class="n">url</span><span class="o">.</span><span class="n">netloc</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">""</span><span class="p">,</span> <span class="s2">"localhost"</span><span class="p">)</span>
+            <span class="ow">or</span> <span class="n">url</span><span class="o">.</span><span class="n">query</span>
+            <span class="ow">or</span> <span class="n">url</span><span class="o">.</span><span class="n">fragment</span>
+        <span class="p">):</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="n">root</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">unquote</span><span class="p">(</span><span class="n">url</span><span class="o">.</span><span class="n">path</span><span class="p">))</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">root</span><span class="o">.</span><span class="n">is_absolute</span><span class="p">():</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="n">root</span> <span class="o">=</span> <span class="n">root</span><span class="o">.</span><span class="n">resolve</span><span class="p">(</span><span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">project</span> <span class="o">=</span> <span class="n">root</span> <span class="o">/</span> <span class="s2">"pyproject.toml"</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">project</span><span class="o">.</span><span class="n">resolve</span><span class="p">(</span><span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">is_relative_to</span><span class="p">(</span><span class="n">root</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">tomllib</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">project</span><span class="o">.</span><span class="n">read_text</span><span class="p">())</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="n">root</span>
+            <span class="k">if</span> <span class="n">normalize_distribution_name</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">"project"</span><span class="p">][</span><span class="s2">"name"</span><span class="p">])</span> <span class="o">==</span> <span class="n">owner</span>
+            <span class="k">else</span> <span class="kc">None</span>
+        <span class="p">)</span>
+    <span class="k">except</span> <span class="p">(</span><span class="ne">AttributeError</span><span class="p">,</span> <span class="ne">KeyError</span><span class="p">,</span> <span class="ne">TypeError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">,</span> <span class="ne">OSError</span><span class="p">):</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_editable_owns_module</span><span class="p">(</span><span class="n">dist</span><span class="p">,</span> <span class="n">owner</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">module</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="n">root</span> <span class="o">=</span> <span class="n">_editable_root</span><span class="p">(</span><span class="n">dist</span><span class="p">,</span> <span class="n">owner</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">root</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">candidates</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">base</span> <span class="o">/</span> <span class="n">suffix</span>
+            <span class="k">for</span> <span class="n">base</span> <span class="ow">in</span> <span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">root</span> <span class="o">/</span> <span class="s2">"src"</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">suffix</span> <span class="ow">in</span> <span class="p">(</span><span class="n">module</span> <span class="o">+</span> <span class="s2">".py"</span><span class="p">,</span> <span class="n">module</span> <span class="o">+</span> <span class="s2">"/__init__.py"</span><span class="p">)</span>
+        <span class="p">]</span>
+        <span class="n">found</span> <span class="o">=</span> <span class="p">[</span><span class="n">file</span> <span class="k">for</span> <span class="n">file</span> <span class="ow">in</span> <span class="n">candidates</span> <span class="k">if</span> <span class="n">file</span><span class="o">.</span><span class="n">is_file</span><span class="p">()]</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">found</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="n">found</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">resolve</span><span class="p">(</span><span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">is_relative_to</span><span class="p">(</span><span class="n">root</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">OSError</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">False</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_metadata_origin</span><span class="p">(</span><span class="n">dist</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="c1"># PathDistribution exposes no public metadata-directory identity. Do not</span>
+    <span class="c1"># guess for other Distribution implementations; retain their ambiguity.</span>
+    <span class="n">origin</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">dist</span><span class="p">,</span> <span class="s2">"_path"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">Path</span><span class="p">(</span><span class="n">origin</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">()</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">origin</span><span class="p">,</span> <span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">Path</span><span class="p">))</span> <span class="k">else</span> <span class="kc">None</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_distinct_installs</span><span class="p">(</span><span class="n">distributions</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Dedup repeated origins and exactly proved editable source shadows only."""</span>
+    <span class="n">unique</span><span class="p">,</span> <span class="n">seen</span> <span class="o">=</span> <span class="p">[],</span> <span class="nb">set</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">dist</span> <span class="ow">in</span> <span class="n">distributions</span><span class="p">:</span>
+        <span class="n">origin</span> <span class="o">=</span> <span class="n">_metadata_origin</span><span class="p">(</span><span class="n">dist</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">origin</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">origin</span> <span class="ow">in</span> <span class="n">seen</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="k">if</span> <span class="n">origin</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">seen</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">origin</span><span class="p">)</span>
+        <span class="n">unique</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">dist</span><span class="p">)</span>
+    <span class="n">shadows</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">installed</span> <span class="ow">in</span> <span class="n">unique</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">owner</span> <span class="o">=</span> <span class="n">normalize_distribution_name</span><span class="p">(</span><span class="n">installed</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"Name"</span><span class="p">))</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="n">root</span> <span class="o">=</span> <span class="n">_editable_root</span><span class="p">(</span><span class="n">installed</span><span class="p">,</span> <span class="n">owner</span><span class="p">)</span>
+        <span class="n">origin</span> <span class="o">=</span> <span class="n">_metadata_origin</span><span class="p">(</span><span class="n">installed</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">root</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">origin</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">origin</span><span class="o">.</span><span class="n">suffix</span> <span class="o">!=</span> <span class="s2">".dist-info"</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="k">for</span> <span class="n">source</span> <span class="ow">in</span> <span class="n">unique</span><span class="p">:</span>
+            <span class="n">source_origin</span> <span class="o">=</span> <span class="n">_metadata_origin</span><span class="p">(</span><span class="n">source</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">source_origin</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">source_origin</span><span class="o">.</span><span class="n">suffix</span> <span class="o">!=</span> <span class="s2">".egg-info"</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">source_origin</span><span class="o">.</span><span class="n">parent</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">root</span> <span class="o">/</span> <span class="s2">"src"</span><span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="p">(</span>
+                <span class="n">source</span><span class="o">.</span><span class="n">read_text</span><span class="p">(</span><span class="s2">"PKG-INFO"</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+                <span class="ow">and</span> <span class="n">source</span><span class="o">.</span><span class="n">read_text</span><span class="p">(</span><span class="s2">"PKG-INFO"</span><span class="p">)</span> <span class="o">==</span> <span class="n">installed</span><span class="o">.</span><span class="n">read_text</span><span class="p">(</span><span class="s2">"METADATA"</span><span class="p">)</span>
+                <span class="ow">and</span> <span class="n">source</span><span class="o">.</span><span class="n">version</span> <span class="o">==</span> <span class="n">installed</span><span class="o">.</span><span class="n">version</span>
+                <span class="ow">and</span> <span class="nb">sorted</span><span class="p">((</span><span class="n">ep</span><span class="o">.</span><span class="n">group</span><span class="p">,</span> <span class="n">ep</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">ep</span><span class="o">.</span><span class="n">value</span><span class="p">)</span> <span class="k">for</span> <span class="n">ep</span> <span class="ow">in</span> <span class="n">source</span><span class="o">.</span><span class="n">entry_points</span><span class="p">)</span>
+                <span class="o">==</span> <span class="nb">sorted</span><span class="p">(</span>
+                    <span class="p">(</span><span class="n">ep</span><span class="o">.</span><span class="n">group</span><span class="p">,</span> <span class="n">ep</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">ep</span><span class="o">.</span><span class="n">value</span><span class="p">)</span> <span class="k">for</span> <span class="n">ep</span> <span class="ow">in</span> <span class="n">installed</span><span class="o">.</span><span class="n">entry_points</span>
+                <span class="p">)</span>
+            <span class="p">):</span>
+                <span class="n">shadows</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">source_origin</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">[</span><span class="n">dist</span> <span class="k">for</span> <span class="n">dist</span> <span class="ow">in</span> <span class="n">unique</span> <span class="k">if</span> <span class="n">_metadata_origin</span><span class="p">(</span><span class="n">dist</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">shadows</span><span class="p">]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_owns_module</span><span class="p">(</span><span class="n">dist</span><span class="p">,</span> <span class="n">owner</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">target</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Require exact wheel files or an owned conventional local editable source."""</span>
+    <span class="n">module</span> <span class="o">=</span> <span class="n">target</span><span class="o">.</span><span class="n">partition</span><span class="p">(</span><span class="s2">":"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">"."</span><span class="p">,</span> <span class="s2">"/"</span><span class="p">)</span>
+    <span class="n">candidates</span> <span class="o">=</span> <span class="p">{</span><span class="n">module</span> <span class="o">+</span> <span class="s2">".py"</span><span class="p">,</span> <span class="n">module</span> <span class="o">+</span> <span class="s2">"/__init__.py"</span><span class="p">}</span>
+    <span class="k">return</span> <span class="nb">any</span><span class="p">(</span>
+        <span class="nb">str</span><span class="p">(</span><span class="n">file</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">"</span><span class="se">\\</span><span class="s2">"</span><span class="p">,</span> <span class="s2">"/"</span><span class="p">)</span> <span class="ow">in</span> <span class="n">candidates</span> <span class="k">for</span> <span class="n">file</span> <span class="ow">in</span> <span class="p">(</span><span class="n">dist</span><span class="o">.</span><span class="n">files</span> <span class="ow">or</span> <span class="p">())</span>
+    <span class="p">)</span> <span class="ow">or</span> <span class="n">_editable_owns_module</span><span class="p">(</span><span class="n">dist</span><span class="p">,</span> <span class="n">owner</span><span class="p">,</span> <span class="n">module</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_rows</span><span class="p">(</span><span class="n">dist</span><span class="p">,</span> <span class="n">owner</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">CliProvider</span><span class="p">]:</span>
+    <span class="n">entries</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">dist</span><span class="o">.</span><span class="n">entry_points</span><span class="p">)</span>
+    <span class="n">explicit</span> <span class="o">=</span> <span class="p">[</span><span class="n">ep</span> <span class="k">for</span> <span class="n">ep</span> <span class="ow">in</span> <span class="n">entries</span> <span class="k">if</span> <span class="n">ep</span><span class="o">.</span><span class="n">group</span> <span class="o">==</span> <span class="s2">"scitex.cli"</span><span class="p">]</span>
+    <span class="n">base</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"distribution"</span><span class="p">:</span> <span class="n">owner</span><span class="p">,</span> <span class="s2">"version"</span><span class="p">:</span> <span class="n">dist</span><span class="o">.</span><span class="n">version</span><span class="p">}</span>
+    <span class="k">if</span> <span class="n">explicit</span><span class="p">:</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">ep</span> <span class="ow">in</span> <span class="n">explicit</span><span class="p">:</span>
+            <span class="n">reason</span> <span class="o">=</span> <span class="s2">""</span>
+            <span class="n">status</span> <span class="o">=</span> <span class="s2">"declared"</span>
+            <span class="n">target</span> <span class="o">=</span> <span class="n">ep</span><span class="o">.</span><span class="n">value</span>
+            <span class="k">if</span> <span class="n">owner</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">_NAME</span><span class="o">.</span><span class="n">fullmatch</span><span class="p">(</span><span class="n">ep</span><span class="o">.</span><span class="n">name</span><span class="p">):</span>
+                <span class="n">status</span><span class="p">,</span> <span class="n">reason</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="s2">"invalid"</span><span class="p">,</span>
+                    <span class="s2">"invalid declaring distribution or command name"</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="k">elif</span> <span class="n">target</span> <span class="o">==</span> <span class="s2">"none"</span><span class="p">:</span>
+                <span class="n">status</span><span class="p">,</span> <span class="n">target</span> <span class="o">=</span> <span class="s2">"none"</span><span class="p">,</span> <span class="kc">None</span>
+            <span class="k">elif</span> <span class="ow">not</span> <span class="n">_TARGET</span><span class="o">.</span><span class="n">fullmatch</span><span class="p">(</span><span class="n">target</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">_owns_module</span><span class="p">(</span><span class="n">dist</span><span class="p">,</span> <span class="n">owner</span><span class="p">,</span> <span class="n">target</span><span class="p">):</span>
+                <span class="n">status</span><span class="p">,</span> <span class="n">reason</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="s2">"invalid"</span><span class="p">,</span>
+                    <span class="s2">"target syntax or installed file ownership is unproven"</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="n">rows</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="n">CliProvider</span><span class="p">(</span>
+                    <span class="n">ep</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                    <span class="n">target</span><span class="p">,</span>
+                    <span class="o">**</span><span class="n">base</span><span class="p">,</span>
+                    <span class="n">status</span><span class="o">=</span><span class="n">status</span><span class="p">,</span>
+                    <span class="n">source</span><span class="o">=</span><span class="s2">"scitex.cli"</span><span class="p">,</span>
+                    <span class="n">reason</span><span class="o">=</span><span class="n">reason</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">rows</span>
+    <span class="n">consoles</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">ep</span> <span class="k">for</span> <span class="n">ep</span> <span class="ow">in</span> <span class="n">entries</span> <span class="k">if</span> <span class="n">ep</span><span class="o">.</span><span class="n">group</span> <span class="o">==</span> <span class="s2">"console_scripts"</span> <span class="ow">and</span> <span class="n">ep</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="n">owner</span>
+    <span class="p">]</span>
+    <span class="k">if</span> <span class="n">owner</span> <span class="ow">and</span> <span class="p">(</span><span class="n">owner</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"scitex-"</span><span class="p">)</span> <span class="ow">or</span> <span class="n">owner</span> <span class="ow">in</span> <span class="n">_BRANDS</span><span class="p">)</span> <span class="ow">and</span> <span class="n">consoles</span><span class="p">:</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="n">owner</span><span class="o">.</span><span class="n">removeprefix</span><span class="p">(</span><span class="s2">"scitex-"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">"socialia"</span><span class="p">:</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="s2">"social"</span>
+        <span class="k">return</span> <span class="p">[</span>
+            <span class="p">(</span>
+                <span class="n">CliProvider</span><span class="p">(</span>
+                    <span class="n">name</span><span class="p">,</span>
+                    <span class="n">ep</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+                    <span class="o">**</span><span class="n">base</span><span class="p">,</span>
+                    <span class="n">status</span><span class="o">=</span><span class="s2">"legacy_unknown"</span><span class="p">,</span>
+                    <span class="n">source</span><span class="o">=</span><span class="s2">"console_scripts"</span><span class="p">,</span>
+                    <span class="n">console_script</span><span class="o">=</span><span class="n">ep</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                    <span class="n">reason</span><span class="o">=</span><span class="s2">"legacy canonical console; invocation not verified"</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="k">if</span> <span class="n">_TARGET</span><span class="o">.</span><span class="n">fullmatch</span><span class="p">(</span><span class="n">ep</span><span class="o">.</span><span class="n">value</span><span class="p">)</span> <span class="ow">and</span> <span class="n">_owns_module</span><span class="p">(</span><span class="n">dist</span><span class="p">,</span> <span class="n">owner</span><span class="p">,</span> <span class="n">ep</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+                <span class="k">else</span> <span class="n">CliProvider</span><span class="p">(</span>
+                    <span class="n">name</span><span class="p">,</span>
+                    <span class="n">ep</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+                    <span class="o">**</span><span class="n">base</span><span class="p">,</span>
+                    <span class="n">status</span><span class="o">=</span><span class="s2">"invalid"</span><span class="p">,</span>
+                    <span class="n">source</span><span class="o">=</span><span class="s2">"console_scripts"</span><span class="p">,</span>
+                    <span class="n">console_script</span><span class="o">=</span><span class="n">ep</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                    <span class="n">reason</span><span class="o">=</span><span class="s2">"legacy target syntax or installed file ownership is unproven"</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+            <span class="k">for</span> <span class="n">ep</span> <span class="ow">in</span> <span class="n">consoles</span>
+        <span class="p">]</span>
+    <span class="k">return</span> <span class="p">[</span>
+        <span class="n">CliProvider</span><span class="p">(</span>
+            <span class="kc">None</span><span class="p">,</span>
+            <span class="kc">None</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">base</span><span class="p">,</span>
+            <span class="n">status</span><span class="o">=</span><span class="s2">"absent"</span><span class="p">,</span>
+            <span class="n">source</span><span class="o">=</span><span class="s2">"installed_metadata"</span><span class="p">,</span>
+            <span class="n">reason</span><span class="o">=</span><span class="s2">"no CLI declaration or eligible canonical console"</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="p">]</span>
+
+
+<div class="viewcode-block" id="list_cli_providers">
+<a class="viewcode-back" href="../../api.html#scitex_dev.cli_providers.list_cli_providers">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">list_cli_providers</span><span class="p">(</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">package</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">path</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">CliProvider</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Read installed declarations without loading entry points or leaf modules.</span>
+
+<span class="sd">    Explicit declarations suppress legacy fallback for their entire owner.</span>
+<span class="sd">    Duplicated owners and command names are ambiguous, including opt-out names.</span>
+<span class="sd">    Ambiguity is determined BEFORE an optional owner filter. ``path`` limits the</span>
+<span class="sd">    metadata search (useful for isolated environments and real dist-info tests).</span>
+<span class="sd">    """</span>
+    <span class="n">selected</span> <span class="o">=</span> <span class="n">normalize_distribution_name</span><span class="p">(</span><span class="n">package</span><span class="p">)</span> <span class="k">if</span> <span class="n">package</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="n">distributions</span> <span class="o">=</span> <span class="n">_distinct_installs</span><span class="p">(</span>
+        <span class="n">metadata</span><span class="o">.</span><span class="n">distributions</span><span class="p">(</span>
+            <span class="o">**</span><span class="p">({</span><span class="s2">"path"</span><span class="p">:</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">p</span><span class="p">)</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">path</span><span class="p">]}</span> <span class="k">if</span> <span class="n">path</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">{})</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+    <span class="n">rows</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">owners</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">dist</span> <span class="ow">in</span> <span class="n">distributions</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">owner</span> <span class="o">=</span> <span class="n">normalize_distribution_name</span><span class="p">(</span><span class="n">dist</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"Name"</span><span class="p">))</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="n">owner</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="n">owners</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">owner</span><span class="p">)</span>
+        <span class="n">rows</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">_rows</span><span class="p">(</span><span class="n">dist</span><span class="p">,</span> <span class="n">owner</span><span class="p">))</span>
+    <span class="n">owner_counts</span> <span class="o">=</span> <span class="n">Counter</span><span class="p">(</span><span class="n">owner</span> <span class="k">for</span> <span class="n">owner</span> <span class="ow">in</span> <span class="n">owners</span> <span class="k">if</span> <span class="n">owner</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="n">name_counts</span> <span class="o">=</span> <span class="n">Counter</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">rows</span> <span class="k">if</span> <span class="n">row</span><span class="o">.</span><span class="n">name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="n">rows</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">(</span>
+            <span class="n">replace</span><span class="p">(</span>
+                <span class="n">row</span><span class="p">,</span>
+                <span class="n">status</span><span class="o">=</span><span class="s2">"ambiguous"</span><span class="p">,</span>
+                <span class="n">reason</span><span class="o">=</span><span class="s2">"duplicate installed owner or command name"</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">owner_counts</span><span class="p">[</span><span class="n">row</span><span class="o">.</span><span class="n">distribution</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">1</span>
+            <span class="ow">or</span> <span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">name_counts</span><span class="p">[</span><span class="n">row</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">)</span>
+            <span class="k">else</span> <span class="n">row</span>
+        <span class="p">)</span>
+        <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">rows</span>
+    <span class="p">]</span>
+    <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span>
+        <span class="nb">sorted</span><span class="p">(</span>
+            <span class="p">(</span><span class="n">row</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">rows</span> <span class="k">if</span> <span class="n">selected</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">row</span><span class="o">.</span><span class="n">distribution</span> <span class="o">==</span> <span class="n">selected</span><span class="p">),</span>
+            <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">row</span><span class="p">:</span> <span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">name</span> <span class="ow">or</span> <span class="s2">""</span><span class="p">,</span> <span class="n">row</span><span class="o">.</span><span class="n">distribution</span> <span class="ow">or</span> <span class="s2">""</span><span class="p">,</span> <span class="n">row</span><span class="o">.</span><span class="n">target</span> <span class="ow">or</span> <span class="s2">""</span><span class="p">),</span>
+        <span class="p">)</span>
+    <span class="p">)</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Yusuke Watanabe.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

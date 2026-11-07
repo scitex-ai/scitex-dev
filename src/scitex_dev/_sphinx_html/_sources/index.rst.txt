@@ -9,7 +9,7 @@ Shared developer utilities for the SciTeX ecosystem.
 
    quickstart
    api
-   search
+   unified-search
    cli
 
 Indices and tables
