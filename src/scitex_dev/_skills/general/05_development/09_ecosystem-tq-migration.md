@@ -1,196 +1,108 @@
 ---
 description: |
-  [TOPIC] Migrate a peer package's test tree to TQ-compliant shape
-  [DETAILS] After NM (no-mocks) and TQ (test-quality, AAA + ≥3-word names + 1-assert) landed at error severity in scitex-dev 2026-05-14, every peer package's test tree will surface hundreds-to-thousands of PA-306 / PA-307 violations on `audit-python-apis`. This playbook documents the canonical migration sequence (NM → TQ003 → TQ002 → TQ007) so each peer takes the same shape. Each step is mechanical and amenable to subagent dispatch. Tracking: the playbook itself, the per-peer ordering, the verification gate, and the rollback contract are all here.
+  [TOPIC] Test quality and fixture isolation
+  [DETAILS] Use current Dev auditors and linter commands, retain discriminating cases and observations, isolate real collaborators and runtime settings, and clean up owned fixture resources. Distinguish focused checks, full native validation and service acceptance; do not hide failures or weaken gates.
 tags: [scitex-general-development-tq-migration]
 ---
 
-# Ecosystem TQ migration playbook
+# Test quality and fixture isolation
 
-## When to run this
+Use this guide when a package's Python API audit reports PA-306/PA-307 or its
+linter reports NM/TQ findings. Read the actual findings in the selected checkout;
+a historical package count or migration report does not establish current state.
 
-A peer package's `scitex-dev ecosystem audit-python-apis <pkg>` reports
-PA-306 or PA-307 violations. Almost every peer will, because the rules
-shipped 2026-05-14 at error severity — but no peer has been cleaned yet.
+## 1. Establish the source and failure
 
-## What "done" looks like
+Use the installed umbrella route when available:
 
-```
-$ scitex-dev ecosystem audit-python-apis <pkg>
-SUCC: <pkg>: no Python API violations
-```
-
-Exit code 0. Audit-all headline `SUCC:` instead of `ERRO:`. The full
-test suite still passes (with `pytest-randomly` enabled, since
-ordering bugs surface in random order).
-
-## The canonical sequence
-
-Four passes. Each is mechanical; the only judgement is "what does this
-test actually verify". Each pass is amenable to subagent dispatch
-because the in-place edit is well-defined.
-
-### Pass 1 — NM (no-mocks)
-
-Remove every `unittest.mock` / `mock` / `pytest_mock` import,
-`mocker` / `monkeypatch` fixture parameter, and mock symbol use.
-
-For each violation:
-
-- Replace `monkeypatch.setenv(X, Y)` with a `yield`-based fixture that
-  sets `os.environ[X]` and pops on teardown.
-- Replace `monkeypatch.setattr(mod, attr, val)` with: refactor the
-  production function to accept `attr` as a kwarg, default to the
-  module global, pass the test value explicitly.
-- Replace `patch("mod.X")` with the same pattern.
-- Replace `MagicMock()` with a hand-rolled fake class exposing only the
-  methods the SUT calls.
-- Replace `pytest.importorskip(...)` placeholders with
-  `__import__(...)` + a real assertion on the returned module's
-  identity / behaviour (or use importorskip + a real assertion).
-
-For subprocess collaborators (`gh`, `ssh`, `git`), write a real shell
-shim script into `tmp_path/bin/`, prepend to `$PATH`, drop any
-injection. See `scitex_dev._creds._rotate` + its test for the
-canonical gh-shim, and `scitex_dev._sync._local` + its test for the
-ssh-shim.
-
-Verification: `scitex-linter check-files tests --no-color | grep
-STX-NM | wc -l` → 0. Full suite passes.
-
-### Pass 2 — TQ003 (descriptive names)
-
-Rename every test whose name has <3 word-tokens after `test_`.
-
-For each `def test_<short>():`:
-
-- Read the body. The name should describe *what the test asserts*,
-  not what the SUT is called.
-- Format: `test_<subject>_<condition>_<expected>`.
-- Class-grouped tests can lean on class context but each method
-  itself still needs ≥3 tokens.
-
-Verification: `scitex-linter check-files tests --no-color | grep
-STX-TQ003 | wc -l` → 0.
-
-### Pass 3 — TQ002 (AAA markers)
-
-Insert `# Arrange`, `# Act`, `# Assert` comments into every `test_*`
-function body, **at the right phase boundaries**.
-
-The mechanical (`# Arrange / # Act / # Assert` stacked at the top)
-passes the rule but defeats its purpose. Place each marker before its
-phase:
-
-```python
-def test_register_creates_active_user():
-    # Arrange
-    service = UserService(db=db)
-    user_data = {"name": "Alice"}
-    # Act
-    user = service.register(user_data)
-    # Assert
-    assert user.is_active is True
+```bash
+scitex dev ecosystem audit-python-apis scitex-dev --path . --json
+scitex dev linter validate-files tests/ --json
 ```
 
-Empty Arrange / Act sections are fine when the test has none of
-that phase.
+Substitute the owning distribution and its actual checkout. Standalone bootstrap
+uses `scitex-dev ecosystem ...` and `scitex-dev linter ...`. `scitex-linter` is a
+retired standalone package, not the recommended command. Inspect installed help
+before applying instructions to another version.
 
-Verification: `STX-TQ002` → 0.
+Keep the original failing output and identify the behavior at risk. A zero
+finding count is structural evidence, not proof that a feature works. The
+forbidden `--new-only` mode must not be used to downgrade existing errors.
 
-### Pass 4 — TQ007 (one assert per test)
+## 2. Exercise the real boundary
 
-Split every multi-assert test into N single-assert tests.
+Prefer an owned Git repository, temporary filesystem, in-process server or actual
+local subprocess. Keep dependency-injection seams explicit. An injected test
+collaborator or protocol fixture can qualify its stated local contract; it does
+not establish that a remote provider, credential, scheduler or deployment works.
+Do not manufacture native acceptance by making a shell shim print success.
 
-For each test with N assertions:
+The NM rules reject mock-library imports, mock fixture parameters and mock
+symbol use. Their definitions are in `linter/_rules/_no_mocks.py`. Replacing a
+mock with another imitation is not sufficient evidence of correct behavior.
 
-1. If they assert on the result of a single Act, lift the
-   Arrange+Act into a `@pytest.fixture` (or a private `_helper`
-   method on the class) and have each new test pull from it.
-2. If they assert on multiple Acts (workflow test), split per Act.
-   That signals a hidden integration test — consider whether the
-   split tests belong as unit tests or as `tests/integration/`.
+## 3. Preserve cases and observations
 
-Each split keeps the prior pass's AAA markers and name discipline.
-Names get more specific: `test_register_user` becomes
-`test_register_sets_user_name_from_input` +
-`test_register_marks_returned_user_active`.
+The TQ rules are defined in `linter/_rules/_test_quality.py` and checked by
+`linter/_checks/_test_quality.py`. They cover meaningful assertions, descriptive
+names, Arrange/Act/Assert phases, fixture lifetime, parameterized branches and
+assertion structure. Inspect the implemented rule rather than inferring a
+waiver from this page.
 
-Verification: `STX-TQ007` → 0. Test count typically 2–3× the
-original.
+Keep every discriminating input, expected error, returned value and state check.
+One assertion may compare a complete tuple of observations from one operation;
+do not discard checks merely to reduce the assertion count. Put shared setup in
+fixtures and retain the original cases when splitting tests. Increasing the
+number of test functions is not itself an improvement.
 
-## Subagent dispatch template
+An assertion that a function is callable, or a flag set unconditionally by the
+test, does not replace validation of the operation's actual result. A genuine
+unavailable dependency remains unavailable; do not turn it into a fabricated
+success or add a skip to make the suite green.
 
-The four passes are amenable to dispatch in this order. Each subagent
-prompt should include the explicit CI-hook ack ("ignore the develop
-CI failure flag — it's pre-existing and unrelated") to avoid the
-subagent pausing on the recurring warning.
+## 4. Own configuration and teardown
 
-```text
-Mechanical batch task: [pass description]
-Working directory: /home/ywatanabe/proj/<peer>
-Goal: scitex-linter check-files tests --no-color | grep <RULE> | wc -l → 0
-Constraints: ...
-Verification: ...
-```
+Use an owned HOME, runtime directory and working directory when testing defaults
+or file mutations. Place the active interpreter first on PATH for existing
+subprocess consumers and prefer `sys.executable` in new Python subprocess calls.
+Do not inherit an operator's terminal, service or credential preferences and
+then mistake them for library defaults. Preserve the failed observation and
+state the environment used for the clean check.
 
-See the scitex-dev session 2026-05-14 for the prompts used; they
-landed cleanly across 91 files in scitex-dev.
+Register cleanup with a fixture's `yield`/`finally` or `request.addfinalizer`.
+Remove only resources that fixture created, including files created for unusual
+filename tests. Keep raw-byte, newline and Unicode cases: the test owner should
+handle teardown with the same filesystem API that created the resource. Do not
+assume a CI runner implemented in another runtime can remove every valid name.
+Verify that teardown leaves no unsupported names in the owned test tree.
 
-## Verification gate (per-peer)
+For example, the source test
+`scitex-logging/tests/scitex_logging/_output/test__inventory.py` exercises seven
+filename forms, including an undecodable byte. Its Git inventory and auditor
+assertions are useful coverage; removing that case or weakening its assertion
+would hide the behavior rather than repair fixture lifetime.
 
-After all four passes:
+Runner cleanup is a separate operational concern. Diagnose the actual failed
+path and ownership before touching it. Preserve positively identified stale
+artifacts outside the runner's temporary tree when recovery needs quarantine.
+An unprivileged process listing may not reveal a service worker; inability to
+inspect a process is not evidence that a runner is idle. Do not recursively
+change permissions or move a current job's whole environment on that assumption.
 
-1. `scitex-dev ecosystem audit-python-apis <peer>` → `SUCC:`, exit 0.
-2. `python -m pytest tests/ -q -p no:randomly` → all pass.
-3. `python -m pytest tests/ -q` (with randomly enabled) → all pass.
-   Step 3 is the real gate — ordering bugs only surface in random
-   order. The scitex-dev session caught one (`find_matching_files`
-   non-deterministic ripgrep output drifting `file_id` between
-   preview and execute) only via the random-order suite.
+## Validation and reporting
 
-## Common gotchas
+Run the package's declared full test profile and mandatory audit after focused
+controls. Some Dev-integrated projects deliberately reject a partial session
+when their audit gate was not collected; retain that exit status. Selected test
+passes are not a complete green suite.
 
-- **Importorskip placeholders.** `pytest.importorskip(module_name)` as
-  the whole test body counts as empty-assertion under TQ001. Add a
-  real assertion on the returned module's `__name__` and `__spec__`.
+Preserve exact-head CI failures, including failures outside the changed files.
+Do not instruct another maintainer to ignore a red CI flag. Keep deadlines,
+coverage thresholds, admitted profiles and original test expectations intact.
+Report what passed, what failed or was skipped, and which real services remain
+unverified. Source, installed artifacts and live adoption are separate scopes.
 
-- **Smoke-import tests.** `def test_module_imports(): importlib.import_module(...)`
-  is theater. Replace with assertions on the module's public API
-  surface (e.g. `assert callable(mod.expected_fn)`).
-
-- **Watchdog / no-raise tests.** Tests that verify "no exception"
-  pass under TQ001 if you add an explicit flag:
-  ```python
-  completed = False
-  with watchdog(2.0):
-      completed = True
-  assert completed
-  ```
-
-- **State-leak across tests.** When TQ007 splits surface flaky
-  tests in full-suite order, the culprit is usually module-level
-  state in the production code (e.g. `rename_io._sudo_password`,
-  ripgrep's non-deterministic output ordering). Fix the production
-  state, don't paper over with fixtures.
-
-## Rollback
-
-If a TQ007 split makes a previously-stable test flaky AND the
-underlying production state is hard to fix:
-
-1. First: try to fix the production-state bug. The scitex-dev
-   `find_matching_files` fix took 3 lines (add `sorted(...)`).
-2. If the fix is genuinely out-of-scope, revert the split for that
-   one test, leave a `# stx-allow:` comment explaining why, and
-   open a tracking issue.
-3. **Never** revert the four-pass framework for a whole peer.
-   Each rule is independently load-bearing.
-
-## Related skills
-
-- [02_package/12_no-mocks.md](../02_package/12_no-mocks.md) — NM rationale.
-- [02_package/13_test-quality.md](../02_package/13_test-quality.md) — TQ
-  rationale.
-- [02_package/06_project-structure-tests.md](../02_package/06_project-structure-tests.md) —
-  Where tests live.
+Related: [no mocks](../02_package/12_no-mocks.md),
+[test quality](../02_package/13_test-quality.md),
+[test layout](../02_package/06_project-structure-tests.md), and
+[documentation drift](22_documentation-drift.md).

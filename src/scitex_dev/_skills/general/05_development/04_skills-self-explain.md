@@ -1,107 +1,79 @@
 ---
 description: |
-  [TOPIC] Development Skills Self Explain
-  [DETAILS] .
+  [TOPIC] Skill explanations and evidence
+  [DETAILS] The current skills explain-self command resolves an authored SciTeX skills directory and delegates evaluation to installed newb. Inspect help without running an agent; distinguish generated editorial drafts, observed skill reads and source-backed behavioral verification.
 tags: [scitex-general-development-skills-self-explain]
 ---
 
-<!-- ---
-!-- Tags: scitex-general, scitex-package, skills, self-explain, docs
-!-- ---->
+# Skill explanations and evidence
 
-# Skills Self-Explain
+A fresh agent's explanation can reveal unclear skill documentation. It is
+editorial evidence, not proof that the package works, that the agent read a
+particular skill, or that generated README claims match the implementation.
+Leaf skills remain owned documentation and must be checked against source and
+installed behavior.
 
-## Concept
+## Current command
 
-Skills are the single source of truth for what a SciTeX package does. The
-README, the docs, the agent's "what is this for?" answer — they should all
-derive from the same `_skills/<pkg>/` tree.
-
-`scitex-dev skills self-explain <pkg>` mounts ONLY that package's skill
-directory into a fresh Claude Code container (no other skills, no project
-context, no auth baggage) and asks the agent three canonical questions.
-The answers serve **two** purposes:
-
-1. **Quality measure for the skills.** If a fresh agent — given nothing
-   but the skills — can't say what the package is for, the skills need
-   work. Vague answers are evidence of vague skills.
-2. **Auto-generated README content.** Once the answers are good, they
-   can be dropped straight into the README's "what does this package
-   do?" / "Problem-Solution" / "Quick Start" sections, eliminating the
-   "did we update the README too?" sync gap.
-
-## The three canonical prompts
-
-| # | Prompt name      | Question                                              |
-|---|------------------|-------------------------------------------------------|
-| 1 | `_PROMPT_WHAT_FOR`    | "What is this package for?" — one sentence.      |
-| 2 | `_PROMPT_PROBLEMS`    | "What 3-5 problems does it solve?" — markdown table. |
-| 3 | `_PROMPT_QUICK_START` | "Show the canonical Quick Start." — Python code block. |
-
-The prompts live as module constants in
-`scitex_dev._cli.skills._self_explain` so they are greppable and can be
-overridden by callers if needed.
-
-## Output schema
-
-```json
-{
-  "package": "scitex-io",
-  "what_for": "<one sentence>",
-  "problems_solved": "| # | Problem | Solution |\n|---|---------|----------|\n| 1 | ... | ... |",
-  "quick_start": "```python\nimport scitex.io as sio\n...\n```"
-}
-```
-
-## How to invoke
+Inspect the installed interface without starting an evaluation:
 
 ```bash
-# Default: 1 run per prompt, claude-haiku-4-5, JSON output
-scitex-dev skills self-explain scitex-io
-
-# Take the median of 3 runs per prompt (more robust, 3x cost)
-scitex-dev skills self-explain scitex-stats --runs 3
-
-# Use a stronger model
-scitex-dev skills self-explain scitex-writer --model claude-sonnet-4-5
+scitex dev skills explain-self --help
+scitex dev skills list --package scitex-dev --json
 ```
 
-## When to re-run
+Standalone bootstrap is `scitex-dev dev skills explain-self --help`. The hidden
+`self-explain` spelling is a compatibility alias. The current command syntax is
+shown here as a reference, not an instruction to run a provider:
 
-- After editing any skill under `_skills/<pkg>/`
-- Before tagging a release (catch skill drift early)
-- When auditing a package whose README feels stale
+```text
+explain-self DISTRIBUTION [--model MODEL] [--runs N] [--format json|markdown]
+```
 
-## Cost considerations
+An evaluation can start an agent/container and consume provider quota. Inspect
+the installed `newb` implementation, runtime requirements, credentials, mounts,
+model route and permissions before an authorized run. Help inspection and skill
+inventory do not establish that those requirements are satisfied. Do not run a
+paid evaluation merely to check these instructions.
 
-Each invocation spends real Claude API credits on **your account**. The
-container is configured with `ANTHROPIC_API_KEY`, not Claude Code plan
-quota. Cost = `N_prompts × runs_per_prompt` API calls.
+## Ownership and source resolution
 
-Order-of-magnitude (Haiku 4.5, single run per prompt):
+The CLI is registered in `_cli/skills/_manage/_explain_self_cmd.py`.
+`_cli/skills/_self_explain.py` resolves the distribution through the ecosystem
+registry and local checkout lookup. Its expected directory is:
 
-| Runs | Calls | Approx cost (Haiku) |
-|------|-------|---------------------|
-| 1    | 3     | ~$0.01-0.03         |
-| 3    | 9     | ~$0.05-0.10         |
+```text
+<local-checkout>/src/<import-name>/_skills/<distribution>/
+```
 
-Use `--runs 1` for routine drift checks; `--runs 3` only when the
-content will be committed (e.g. README regeneration).
+Unknown distributions, absent local checkouts and missing directories are
+reported as errors. This resolver is distinct from installed skill discovery and
+from an exported agent-readable store; installing skill files alone does not
+create the required authored checkout.
 
-## Implementation
+Dev lazily imports the declared `newb` dependency and selects its `test` callable
+when present, otherwise `run`. For example, the normally installed `newb`
+0.26.7 exposes `run`, not `test` or `self_explain`; do not infer a public upstream
+function from the Dev wrapper's name. The retired
+`scitex_dev._agentic_testing.NewbieDockerRunner` is not this implementation.
 
-`self_explain` reuses `scitex_dev._agentic_testing._core.NewbieDockerRunner`
-with `skills_mount` pointing at a temp directory shaped as
-`<tmp>/.claude/skills/<pkg>/`. The mount is read-only, so the agent
-genuinely sees only the curated skill files.
+## Output and validation limits
 
-## Follow-ups (not in MVP)
+The CLI forwards the model and run count, then emits JSON or delegates Markdown
+rendering to `newb.render_markdown`. The result schema, prompts, runtime behavior
+and aggregation semantics belong to the installed `newb` version. Do not promise
+a median selection, a fixed number of prompts, a fixed cost, credential isolation
+or a cache based on the earlier design sketch.
 
-- `scitex-dev readme regen <pkg>` — splice the answers into README
-  region markers (e.g. `<!-- self-explain:what_for -->`).
-- Cache the answers in `~/.scitex/dev/self_explain/<pkg>.json` so the
-  README regen doesn't re-spend credits when nothing changed.
-- A "median wins" reducer for `--runs > 1` (currently the multi-run
-  path returns all answers; the caller picks).
+Review generated explanations as drafts. Verify installation instructions,
+Python imports, CLI paths, results and side effects through the actual supported
+interfaces before using them in README or documentation. Correct answer text
+alone does not show which skills or other context the agent loaded.
 
-<!-- EOF -->
+Source-wiring tests live in `_cli/skills/test__self_explain.py` and
+`_cli/skills/_manage/test__explain_self_cmd.py` under `tests/scitex_dev/`.
+Controls using an injected runner qualify their stated local wrapper behavior;
+they do not establish provider access or an actual agent's skill selection.
+See [31_agentic-test-skills.md](../../scitex-dev/31_agentic-test-skills.md) for the
+retired harness boundary and [22_documentation-drift.md](22_documentation-drift.md)
+for broader documentation acceptance.
