@@ -46,7 +46,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quick Start</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../api.html">API Reference</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../search.html">Search Page</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../unified-search.html">Unified Search</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../cli.html">CLI Mixin</a></li>
 </ul>
 
@@ -79,11 +79,15 @@
 <span class="c1"># Timestamp: 2026-02-02</span>
 <span class="c1"># File: scitex_dev/dashboard/app.py</span>
 
-<span class="sd">&quot;&quot;&quot;Flask application factory for the dashboard.&quot;&quot;&quot;</span>
+<span class="sd">"""Flask application factory for the dashboard."""</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">scitex_logging</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">slogging</span>
+
+<span class="n">console</span> <span class="o">=</span> <span class="n">slogging</span><span class="o">.</span><span class="n">getConsole</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">flask</span><span class="w"> </span><span class="kn">import</span> <span class="n">Flask</span>
@@ -92,24 +96,24 @@
 <div class="viewcode-block" id="create_app">
 <a class="viewcode-back" href="../../../api.html#scitex_dev.dashboard.create_app">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">create_app</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Flask</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create and configure the Flask application.</span>
+<span class="w">    </span><span class="sd">"""Create and configure the Flask application.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
 <span class="sd">    Flask</span>
 <span class="sd">        Configured Flask application.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="k">try</span><span class="p">:</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">flask</span><span class="w"> </span><span class="kn">import</span> <span class="n">Flask</span>
     <span class="k">except</span> <span class="ne">ImportError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">ImportError</span><span class="p">(</span>
-            <span class="s2">&quot;Flask is required for the dashboard. Install with: pip install flask&quot;</span>
+            <span class="s2">"Flask is required for the dashboard. Install with: pip install flask"</span>
         <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span>
 
     <span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 
-    <span class="n">static_folder</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="s2">&quot;static&quot;</span>
-    <span class="n">app</span> <span class="o">=</span> <span class="n">Flask</span><span class="p">(</span><span class="vm">__name__</span><span class="p">,</span> <span class="n">static_folder</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">static_folder</span><span class="p">),</span> <span class="n">static_url_path</span><span class="o">=</span><span class="s2">&quot;/static&quot;</span><span class="p">)</span>
+    <span class="n">static_folder</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="s2">"static"</span>
+    <span class="n">app</span> <span class="o">=</span> <span class="n">Flask</span><span class="p">(</span><span class="vm">__name__</span><span class="p">,</span> <span class="n">static_folder</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">static_folder</span><span class="p">),</span> <span class="n">static_url_path</span><span class="o">=</span><span class="s2">"/static"</span><span class="p">)</span>
 
     <span class="c1"># Disable JSON key sorting to preserve insertion order (Flask 2.2+)</span>
     <span class="n">app</span><span class="o">.</span><span class="n">json</span><span class="o">.</span><span class="n">sort_keys</span> <span class="o">=</span> <span class="kc">False</span>
@@ -124,68 +128,68 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_kill_process_on_port</span><span class="p">(</span><span class="n">port</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Kill any process using the specified port.</span>
+<span class="w">    </span><span class="sd">"""Kill any process using the specified port.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
 <span class="sd">    port : int</span>
 <span class="sd">        Port number to free up.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="kn">import</span><span class="w"> </span><span class="nn">subprocess</span>
     <span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
 
     <span class="k">try</span><span class="p">:</span>
-        <span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">platform</span> <span class="o">==</span> <span class="s2">&quot;win32&quot;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">platform</span> <span class="o">==</span> <span class="s2">"win32"</span><span class="p">:</span>
             <span class="c1"># Windows: use netstat and taskkill</span>
             <span class="n">result</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
-                <span class="p">[</span><span class="s2">&quot;netstat&quot;</span><span class="p">,</span> <span class="s2">&quot;-ano&quot;</span><span class="p">],</span>
+                <span class="p">[</span><span class="s2">"netstat"</span><span class="p">,</span> <span class="s2">"-ano"</span><span class="p">],</span>
                 <span class="n">capture_output</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
                 <span class="n">text</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
                 <span class="n">check</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
             <span class="p">)</span>
             <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">result</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">splitlines</span><span class="p">():</span>
-                <span class="k">if</span> <span class="sa">f</span><span class="s2">&quot;:</span><span class="si">{</span><span class="n">port</span><span class="si">}</span><span class="s2">&quot;</span> <span class="ow">in</span> <span class="n">line</span> <span class="ow">and</span> <span class="s2">&quot;LISTENING&quot;</span> <span class="ow">in</span> <span class="n">line</span><span class="p">:</span>
+                <span class="k">if</span> <span class="sa">f</span><span class="s2">":</span><span class="si">{</span><span class="n">port</span><span class="si">}</span><span class="s2">"</span> <span class="ow">in</span> <span class="n">line</span> <span class="ow">and</span> <span class="s2">"LISTENING"</span> <span class="ow">in</span> <span class="n">line</span><span class="p">:</span>
                     <span class="n">pid</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">()[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
                     <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
-                        <span class="p">[</span><span class="s2">&quot;taskkill&quot;</span><span class="p">,</span> <span class="s2">&quot;/F&quot;</span><span class="p">,</span> <span class="s2">&quot;/PID&quot;</span><span class="p">,</span> <span class="n">pid</span><span class="p">],</span>
+                        <span class="p">[</span><span class="s2">"taskkill"</span><span class="p">,</span> <span class="s2">"/F"</span><span class="p">,</span> <span class="s2">"/PID"</span><span class="p">,</span> <span class="n">pid</span><span class="p">],</span>
                         <span class="n">capture_output</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
                         <span class="n">check</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
                     <span class="p">)</span>
-                    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Killed process </span><span class="si">{</span><span class="n">pid</span><span class="si">}</span><span class="s2"> on port </span><span class="si">{</span><span class="n">port</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                    <span class="n">console</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Killed process </span><span class="si">{</span><span class="n">pid</span><span class="si">}</span><span class="s2"> on port </span><span class="si">{</span><span class="n">port</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="c1"># Unix: use lsof</span>
             <span class="n">result</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
-                <span class="p">[</span><span class="s2">&quot;lsof&quot;</span><span class="p">,</span> <span class="s2">&quot;-ti&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;:</span><span class="si">{</span><span class="n">port</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">],</span>
+                <span class="p">[</span><span class="s2">"lsof"</span><span class="p">,</span> <span class="s2">"-ti"</span><span class="p">,</span> <span class="sa">f</span><span class="s2">":</span><span class="si">{</span><span class="n">port</span><span class="si">}</span><span class="s2">"</span><span class="p">],</span>
                 <span class="n">capture_output</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
                 <span class="n">text</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
                 <span class="n">check</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
             <span class="p">)</span>
             <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">strip</span><span class="p">():</span>
-                <span class="n">pids</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">pids</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="p">)</span>
                 <span class="k">for</span> <span class="n">pid</span> <span class="ow">in</span> <span class="n">pids</span><span class="p">:</span>
                     <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
-                        <span class="p">[</span><span class="s2">&quot;kill&quot;</span><span class="p">,</span> <span class="s2">&quot;-9&quot;</span><span class="p">,</span> <span class="n">pid</span><span class="p">],</span> <span class="n">capture_output</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">check</span><span class="o">=</span><span class="kc">False</span>
+                        <span class="p">[</span><span class="s2">"kill"</span><span class="p">,</span> <span class="s2">"-9"</span><span class="p">,</span> <span class="n">pid</span><span class="p">],</span> <span class="n">capture_output</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">check</span><span class="o">=</span><span class="kc">False</span>
                     <span class="p">)</span>
-                    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Killed process </span><span class="si">{</span><span class="n">pid</span><span class="si">}</span><span class="s2"> on port </span><span class="si">{</span><span class="n">port</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                    <span class="n">console</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Killed process </span><span class="si">{</span><span class="n">pid</span><span class="si">}</span><span class="s2"> on port </span><span class="si">{</span><span class="n">port</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Warning: Could not kill process on port </span><span class="si">{</span><span class="n">port</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">console</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Warning: Could not kill process on port </span><span class="si">{</span><span class="n">port</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="run_dashboard">
 <a class="viewcode-back" href="../../../api.html#scitex_dev.dashboard.run_dashboard">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">run_dashboard</span><span class="p">(</span>
-    <span class="n">host</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;0.0.0.0&quot;</span><span class="p">,</span>
+    <span class="n">host</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"0.0.0.0"</span><span class="p">,</span>
     <span class="n">port</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5000</span><span class="p">,</span>
     <span class="n">debug</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">open_browser</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">force</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Run the Flask dashboard server.</span>
+<span class="w">    </span><span class="sd">"""Run the Flask dashboard server.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
 <span class="sd">    host : str</span>
-<span class="sd">        Host to bind to. Default &quot;127.0.0.1&quot;.</span>
+<span class="sd">        Host to bind to. Default "127.0.0.1".</span>
 <span class="sd">    port : int</span>
 <span class="sd">        Port to listen on. Default 5000.</span>
 <span class="sd">    debug : bool</span>
@@ -194,15 +198,15 @@
 <span class="sd">        Open browser automatically.</span>
 <span class="sd">    force : bool</span>
 <span class="sd">        Kill existing process using the port if any.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="k">if</span> <span class="n">force</span><span class="p">:</span>
         <span class="n">_kill_process_on_port</span><span class="p">(</span><span class="n">port</span><span class="p">)</span>
 
     <span class="n">app</span> <span class="o">=</span> <span class="n">create_app</span><span class="p">()</span>
 
-    <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;http://</span><span class="si">{</span><span class="n">host</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">port</span><span class="si">}</span><span class="s2">&quot;</span>
-    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Starting SciTeX Version Dashboard at </span><span class="si">{</span><span class="n">url</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Press Ctrl+C to stop.&quot;</span><span class="p">)</span>
+    <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"http://</span><span class="si">{</span><span class="n">host</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">port</span><span class="si">}</span><span class="s2">"</span>
+    <span class="n">console</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Starting SciTeX Version Dashboard at </span><span class="si">{</span><span class="n">url</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="n">console</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Press Ctrl+C to stop."</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">open_browser</span><span class="p">:</span>
         <span class="kn">import</span><span class="w"> </span><span class="nn">threading</span>
@@ -219,26 +223,26 @@
     <span class="k">try</span><span class="p">:</span>
         <span class="n">app</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="n">port</span><span class="p">,</span> <span class="n">debug</span><span class="o">=</span><span class="n">debug</span><span class="p">,</span> <span class="n">threaded</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
     <span class="k">except</span> <span class="ne">KeyboardInterrupt</span><span class="p">:</span>
-        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Dashboard stopped.&quot;</span><span class="p">)</span></div>
+        <span class="n">console</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"</span><span class="se">\n</span><span class="s2">Dashboard stopped."</span><span class="p">)</span></div>
 
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">run_background</span><span class="p">(</span>
-    <span class="n">host</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;0.0.0.0&quot;</span><span class="p">,</span>
+    <span class="n">host</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"0.0.0.0"</span><span class="p">,</span>
     <span class="n">port</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5000</span><span class="p">,</span>
     <span class="n">force</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Launch the dashboard as a detached background subprocess.</span>
+<span class="w">    </span><span class="sd">"""Launch the dashboard as a detached background subprocess.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
 <span class="sd">    host : str</span>
-<span class="sd">        Host to bind to. Default &quot;127.0.0.1&quot;.</span>
+<span class="sd">        Host to bind to. Default "127.0.0.1".</span>
 <span class="sd">    port : int</span>
 <span class="sd">        Port to listen on. Default 5000.</span>
 <span class="sd">    force : bool</span>
 <span class="sd">        Kill existing process using the port if any.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="kn">import</span><span class="w"> </span><span class="nn">subprocess</span>
     <span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
 
@@ -247,19 +251,19 @@
     <span class="c1"># Runtime-only (per 01_arch_06_local-state-directories.md §1):</span>
     <span class="c1"># logs + pid files go under `runtime/`, never committed to git.</span>
     <span class="c1"># local_state.runtime_path() auto-creates runtime/ + .gitkeep + README.md.</span>
-    <span class="n">runtime_dir</span> <span class="o">=</span> <span class="n">local_state</span><span class="o">.</span><span class="n">runtime_path</span><span class="p">(</span><span class="s2">&quot;dev&quot;</span><span class="p">)</span>
+    <span class="n">runtime_dir</span> <span class="o">=</span> <span class="n">local_state</span><span class="o">.</span><span class="n">runtime_path</span><span class="p">(</span><span class="s2">"dev"</span><span class="p">)</span>
 
-    <span class="n">log_path</span> <span class="o">=</span> <span class="n">runtime_dir</span> <span class="o">/</span> <span class="s2">&quot;dashboard.log&quot;</span>
-    <span class="n">pid_path</span> <span class="o">=</span> <span class="n">runtime_dir</span> <span class="o">/</span> <span class="s2">&quot;dashboard.pid&quot;</span>
+    <span class="n">log_path</span> <span class="o">=</span> <span class="n">runtime_dir</span> <span class="o">/</span> <span class="s2">"dashboard.log"</span>
+    <span class="n">pid_path</span> <span class="o">=</span> <span class="n">runtime_dir</span> <span class="o">/</span> <span class="s2">"dashboard.pid"</span>
 
     <span class="n">inline_script</span> <span class="o">=</span> <span class="p">(</span>
-        <span class="sa">f</span><span class="s2">&quot;from scitex_dev.dashboard.app import run_dashboard; &quot;</span>
-        <span class="sa">f</span><span class="s2">&quot;run_dashboard(host=</span><span class="si">{</span><span class="n">host</span><span class="si">!r}</span><span class="s2">, port=</span><span class="si">{</span><span class="n">port</span><span class="si">!r}</span><span class="s2">, debug=False, open_browser=False, force=</span><span class="si">{</span><span class="n">force</span><span class="si">!r}</span><span class="s2">)&quot;</span>
+        <span class="sa">f</span><span class="s2">"from scitex_dev.dashboard.app import run_dashboard; "</span>
+        <span class="sa">f</span><span class="s2">"run_dashboard(host=</span><span class="si">{</span><span class="n">host</span><span class="si">!r}</span><span class="s2">, port=</span><span class="si">{</span><span class="n">port</span><span class="si">!r}</span><span class="s2">, debug=False, open_browser=False, force=</span><span class="si">{</span><span class="n">force</span><span class="si">!r}</span><span class="s2">)"</span>
     <span class="p">)</span>
 
-    <span class="n">log_file</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">log_path</span><span class="p">,</span> <span class="s2">&quot;a&quot;</span><span class="p">)</span>
+    <span class="n">log_file</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">log_path</span><span class="p">,</span> <span class="s2">"a"</span><span class="p">)</span>
     <span class="n">proc</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">Popen</span><span class="p">(</span>
-        <span class="p">[</span><span class="n">sys</span><span class="o">.</span><span class="n">executable</span><span class="p">,</span> <span class="s2">&quot;-c&quot;</span><span class="p">,</span> <span class="n">inline_script</span><span class="p">],</span>
+        <span class="p">[</span><span class="n">sys</span><span class="o">.</span><span class="n">executable</span><span class="p">,</span> <span class="s2">"-c"</span><span class="p">,</span> <span class="n">inline_script</span><span class="p">],</span>
         <span class="n">stdout</span><span class="o">=</span><span class="n">log_file</span><span class="p">,</span>
         <span class="n">stderr</span><span class="o">=</span><span class="n">log_file</span><span class="p">,</span>
         <span class="n">start_new_session</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
@@ -269,35 +273,37 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">stop_dashboard</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Stop a running background dashboard process.</span>
+<span class="w">    </span><span class="sd">"""Stop a running background dashboard process.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
 <span class="sd">    bool</span>
 <span class="sd">        True if the process was successfully stopped, False otherwise.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
     <span class="kn">import</span><span class="w"> </span><span class="nn">signal</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 
-    <span class="n">pid_path</span> <span class="o">=</span> <span class="n">Path</span><span class="o">.</span><span class="n">home</span><span class="p">()</span> <span class="o">/</span> <span class="s2">&quot;.scitex&quot;</span> <span class="o">/</span> <span class="s2">&quot;dev&quot;</span> <span class="o">/</span> <span class="s2">&quot;runtime&quot;</span> <span class="o">/</span> <span class="s2">&quot;dashboard.pid&quot;</span>
+    <span class="n">pid_path</span> <span class="o">=</span> <span class="n">Path</span><span class="o">.</span><span class="n">home</span><span class="p">()</span> <span class="o">/</span> <span class="s2">".scitex"</span> <span class="o">/</span> <span class="s2">"dev"</span> <span class="o">/</span> <span class="s2">"runtime"</span> <span class="o">/</span> <span class="s2">"dashboard.pid"</span>
 
     <span class="k">if</span> <span class="ow">not</span> <span class="n">pid_path</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
-        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No dashboard PID file found. Is the dashboard running in background?&quot;</span><span class="p">)</span>
+        <span class="n">console</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+            <span class="s2">"No dashboard PID file found. Is the dashboard running in background?"</span><span class="p">,</span>
+        <span class="p">)</span>
         <span class="k">return</span> <span class="kc">False</span>
 
     <span class="k">try</span><span class="p">:</span>
         <span class="n">pid</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">pid_path</span><span class="o">.</span><span class="n">read_text</span><span class="p">()</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
         <span class="n">os</span><span class="o">.</span><span class="n">kill</span><span class="p">(</span><span class="n">pid</span><span class="p">,</span> <span class="n">signal</span><span class="o">.</span><span class="n">SIGTERM</span><span class="p">)</span>
         <span class="n">pid_path</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
-        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Dashboard (PID </span><span class="si">{</span><span class="n">pid</span><span class="si">}</span><span class="s2">) stopped.&quot;</span><span class="p">)</span>
+        <span class="n">console</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Dashboard (PID </span><span class="si">{</span><span class="n">pid</span><span class="si">}</span><span class="s2">) stopped."</span><span class="p">)</span>
         <span class="k">return</span> <span class="kc">True</span>
     <span class="k">except</span> <span class="ne">ProcessLookupError</span><span class="p">:</span>
-        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Process not found. Removing stale PID file.&quot;</span><span class="p">)</span>
+        <span class="n">console</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"Process not found. Removing stale PID file."</span><span class="p">)</span>
         <span class="n">pid_path</span><span class="o">.</span><span class="n">unlink</span><span class="p">(</span><span class="n">missing_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
         <span class="k">return</span> <span class="kc">False</span>
     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error stopping dashboard: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">console</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Error stopping dashboard: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
         <span class="k">return</span> <span class="kc">False</span>
 
 

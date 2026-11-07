@@ -46,7 +46,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quick Start</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../api.html">API Reference</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../search.html">Search Page</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../unified-search.html">Unified Search</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../cli.html">CLI Mixin</a></li>
 </ul>
 
@@ -77,7 +77,7 @@
   <h1>Source code for scitex_dev._cli._utils</h1><div class="highlight"><pre>
 <span></span><span class="ch">#!/usr/bin/env python3</span>
 <span class="c1"># -*- coding: utf-8 -*-</span>
-<span class="sd">&quot;&quot;&quot;CLI utilities for consuming Result objects.&quot;&quot;&quot;</span>
+<span class="sd">"""CLI utilities for consuming Result objects."""</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
@@ -86,6 +86,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">.._core.types</span><span class="w"> </span><span class="kn">import</span> <span class="n">Result</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.._core.streams</span><span class="w"> </span><span class="kn">import</span> <span class="n">write_stream</span>
 
 
 <div class="viewcode-block" id="handle_result">
@@ -95,7 +96,7 @@
     <span class="n">as_json</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">file</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Format and print a Result, return the exit code.</span>
+<span class="w">    </span><span class="sd">"""Format and print a Result, return the exit code.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
@@ -110,24 +111,24 @@
 <span class="sd">    -------</span>
 <span class="sd">    int</span>
 <span class="sd">        Exit code suitable for ``sys.exit()``.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="k">if</span> <span class="n">as_json</span><span class="p">:</span>
         <span class="n">out</span> <span class="o">=</span> <span class="n">file</span> <span class="ow">or</span> <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span>
-        <span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">to_json</span><span class="p">(),</span> <span class="n">file</span><span class="o">=</span><span class="n">out</span><span class="p">)</span>
+        <span class="n">write_stream</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">to_json</span><span class="p">(),</span> <span class="n">out</span><span class="p">)</span>
     <span class="k">elif</span> <span class="n">result</span><span class="o">.</span><span class="n">success</span><span class="p">:</span>
         <span class="n">out</span> <span class="o">=</span> <span class="n">file</span> <span class="ow">or</span> <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span>
         <span class="n">data</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">data</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="p">(</span><span class="nb">dict</span><span class="p">,</span> <span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)):</span>
-            <span class="nb">print</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="nb">str</span><span class="p">),</span> <span class="n">file</span><span class="o">=</span><span class="n">out</span><span class="p">)</span>
+            <span class="n">write_stream</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="nb">str</span><span class="p">),</span> <span class="n">out</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="nb">print</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">file</span><span class="o">=</span><span class="n">out</span><span class="p">)</span>
+            <span class="n">write_stream</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="n">out</span> <span class="o">=</span> <span class="n">file</span> <span class="ow">or</span> <span class="n">sys</span><span class="o">.</span><span class="n">stderr</span>
-        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">error</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">file</span><span class="o">=</span><span class="n">out</span><span class="p">)</span>
+        <span class="n">write_stream</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Error: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">error</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">hints_on_error</span><span class="p">:</span>
-            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">file</span><span class="o">=</span><span class="n">out</span><span class="p">)</span>
+            <span class="n">write_stream</span><span class="p">(</span><span class="s2">""</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
             <span class="k">for</span> <span class="n">hint</span> <span class="ow">in</span> <span class="n">result</span><span class="o">.</span><span class="n">hints_on_error</span><span class="p">:</span>
-                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  - </span><span class="si">{</span><span class="n">hint</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">file</span><span class="o">=</span><span class="n">out</span><span class="p">)</span>
+                <span class="n">write_stream</span><span class="p">(</span><span class="sa">f</span><span class="s2">"  - </span><span class="si">{</span><span class="n">hint</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="n">result</span><span class="o">.</span><span class="n">exit_code</span></div>
 
@@ -140,7 +141,7 @@
     <span class="n">as_json</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Call a ``@supports_return_as`` function and exit with proper code.</span>
+<span class="w">    </span><span class="sd">"""Call a ``@supports_return_as`` function and exit with proper code.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
@@ -150,8 +151,8 @@
 <span class="sd">        If True, output full JSON.</span>
 <span class="sd">    **kwargs</span>
 <span class="sd">        Arguments to pass to ``fn``.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">result</span> <span class="o">=</span> <span class="n">fn</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">,</span> <span class="n">return_as</span><span class="o">=</span><span class="s2">&quot;result&quot;</span><span class="p">)</span>
+<span class="sd">    """</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">fn</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">,</span> <span class="n">return_as</span><span class="o">=</span><span class="s2">"result"</span><span class="p">)</span>
     <span class="n">code</span> <span class="o">=</span> <span class="n">handle_result</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">as_json</span><span class="o">=</span><span class="n">as_json</span><span class="p">)</span>
     <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="n">code</span><span class="p">)</span></div>
 
@@ -164,7 +165,7 @@
     <span class="n">as_json</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Call any function and display its result via CLI.</span>
+<span class="w">    </span><span class="sd">"""Call any function and display its result via CLI.</span>
 
 <span class="sd">    Like ``wrap_as_mcp`` but for terminal output. Wraps any plain</span>
 <span class="sd">    function in Result, formats based on ``as_json``, and exits</span>
@@ -178,7 +179,7 @@
 <span class="sd">        If True, output full JSON Result. If False, human-friendly text.</span>
 <span class="sd">    **kwargs</span>
 <span class="sd">        Arguments to pass to ``fn``.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">.._core.errors</span><span class="w"> </span><span class="kn">import</span> <span class="n">classify_exception</span>
 
     <span class="k">try</span><span class="p">:</span>
@@ -187,13 +188,13 @@
     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
         <span class="n">error_code</span> <span class="o">=</span> <span class="n">classify_exception</span><span class="p">(</span><span class="n">exc</span><span class="p">)</span>
         <span class="n">hints_on_error</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="n">suggestion</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">exc</span><span class="p">,</span> <span class="s2">&quot;suggestion&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">suggestion</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">exc</span><span class="p">,</span> <span class="s2">"suggestion"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">suggestion</span><span class="p">:</span>
             <span class="n">hints_on_error</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">suggestion</span><span class="p">)</span>
-        <span class="n">suggestions</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">exc</span><span class="p">,</span> <span class="s2">&quot;suggestions&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">suggestions</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">exc</span><span class="p">,</span> <span class="s2">"suggestions"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">suggestions</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">suggestions</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
             <span class="n">hints_on_error</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">suggestions</span><span class="p">)</span>
-        <span class="n">context</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">exc</span><span class="p">,</span> <span class="s2">&quot;context&quot;</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="n">context</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">exc</span><span class="p">,</span> <span class="s2">"context"</span><span class="p">,</span> <span class="p">{})</span>
         <span class="n">result</span> <span class="o">=</span> <span class="n">Result</span><span class="p">(</span>
             <span class="n">success</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
             <span class="n">error</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">exc</span><span class="p">),</span>
@@ -213,17 +214,17 @@
 <div class="viewcode-block" id="json_option">
 <a class="viewcode-back" href="../../../api.html#scitex_dev._cli.json_option">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">json_option</span><span class="p">(</span><span class="n">fn</span><span class="p">:</span> <span class="n">Callable</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Click decorator: adds ``--json`` flag as ``as_json`` parameter.</span>
+<span class="w">    </span><span class="sd">"""Click decorator: adds ``--json`` flag as ``as_json`` parameter.</span>
 
 <span class="sd">    Uses lazy ``import click`` so scitex-dev stays stdlib-only.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="kn">import</span><span class="w"> </span><span class="nn">click</span>
 
     <span class="k">return</span> <span class="n">click</span><span class="o">.</span><span class="n">option</span><span class="p">(</span>
-        <span class="s2">&quot;--json&quot;</span><span class="p">,</span>
-        <span class="s2">&quot;as_json&quot;</span><span class="p">,</span>
+        <span class="s2">"--json"</span><span class="p">,</span>
+        <span class="s2">"as_json"</span><span class="p">,</span>
         <span class="n">is_flag</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Output as structured JSON (Result envelope).&quot;</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">"Output as structured JSON (Result envelope)."</span><span class="p">,</span>
     <span class="p">)(</span><span class="n">fn</span><span class="p">)</span></div>
 
 
@@ -231,16 +232,16 @@
 <div class="viewcode-block" id="dry_run_option">
 <a class="viewcode-back" href="../../../api.html#scitex_dev._cli.dry_run_option">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">dry_run_option</span><span class="p">(</span><span class="n">fn</span><span class="p">:</span> <span class="n">Callable</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Click decorator: adds ``--dry-run`` flag.</span>
+<span class="w">    </span><span class="sd">"""Click decorator: adds ``--dry-run`` flag.</span>
 
 <span class="sd">    Uses lazy ``import click`` so scitex-dev stays stdlib-only.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="kn">import</span><span class="w"> </span><span class="nn">click</span>
 
     <span class="k">return</span> <span class="n">click</span><span class="o">.</span><span class="n">option</span><span class="p">(</span>
-        <span class="s2">&quot;--dry-run&quot;</span><span class="p">,</span>
+        <span class="s2">"--dry-run"</span><span class="p">,</span>
         <span class="n">is_flag</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Preview changes without executing.&quot;</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">"Preview changes without executing."</span><span class="p">,</span>
     <span class="p">)(</span><span class="n">fn</span><span class="p">)</span></div>
 
 
@@ -248,13 +249,13 @@
 <div class="viewcode-block" id="add_json_argument">
 <a class="viewcode-back" href="../../../api.html#scitex_dev._cli.add_json_argument">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">add_json_argument</span><span class="p">(</span><span class="n">parser</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Add ``--json`` flag to an argparse parser.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Add ``--json`` flag to an argparse parser."""</span>
     <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
-        <span class="s2">&quot;--json&quot;</span><span class="p">,</span>
-        <span class="n">dest</span><span class="o">=</span><span class="s2">&quot;as_json&quot;</span><span class="p">,</span>
-        <span class="n">action</span><span class="o">=</span><span class="s2">&quot;store_true&quot;</span><span class="p">,</span>
+        <span class="s2">"--json"</span><span class="p">,</span>
+        <span class="n">dest</span><span class="o">=</span><span class="s2">"as_json"</span><span class="p">,</span>
+        <span class="n">action</span><span class="o">=</span><span class="s2">"store_true"</span><span class="p">,</span>
         <span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Output as structured JSON (Result envelope).&quot;</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">"Output as structured JSON (Result envelope)."</span><span class="p">,</span>
     <span class="p">)</span></div>
 
 
@@ -262,13 +263,13 @@
 <div class="viewcode-block" id="add_dry_run_argument">
 <a class="viewcode-back" href="../../../api.html#scitex_dev._cli.add_dry_run_argument">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">add_dry_run_argument</span><span class="p">(</span><span class="n">parser</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Add ``--dry-run`` flag to an argparse parser.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Add ``--dry-run`` flag to an argparse parser."""</span>
     <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
-        <span class="s2">&quot;--dry-run&quot;</span><span class="p">,</span>
-        <span class="n">dest</span><span class="o">=</span><span class="s2">&quot;dry_run&quot;</span><span class="p">,</span>
-        <span class="n">action</span><span class="o">=</span><span class="s2">&quot;store_true&quot;</span><span class="p">,</span>
+        <span class="s2">"--dry-run"</span><span class="p">,</span>
+        <span class="n">dest</span><span class="o">=</span><span class="s2">"dry_run"</span><span class="p">,</span>
+        <span class="n">action</span><span class="o">=</span><span class="s2">"store_true"</span><span class="p">,</span>
         <span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Preview changes without executing.&quot;</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">"Preview changes without executing."</span><span class="p">,</span>
     <span class="p">)</span></div>
 
 

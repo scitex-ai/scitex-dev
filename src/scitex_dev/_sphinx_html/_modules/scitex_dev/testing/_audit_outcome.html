@@ -1,0 +1,627 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>scitex_dev.testing._audit_outcome &mdash; scitex-dev  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=5929fcd5"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="../../../_static/copybutton.js?v=f281be69"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            scitex-dev
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api.html">API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../unified-search.html">Unified Search</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../cli.html">CLI Mixin</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">scitex-dev</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">scitex_dev.testing._audit_outcome</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for scitex_dev.testing._audit_outcome</h1><div class="highlight"><pre>
+<span></span><span class="ch">#!/usr/bin/env python3</span>
+<span class="c1"># -*- coding: utf-8 -*-</span>
+<span class="sd">"""Grade one `audit-all` run as PASS / FAIL / UNKNOWN, and say so in words.</span>
+
+<span class="sd">THREE ANSWERS, NOT TWO. A gate can say three things and they are not</span>
+<span class="sd">interchangeable:</span>
+
+<span class="sd">  * ``PASS``     — the audit ran and found nothing.</span>
+<span class="sd">  * ``FAIL``     — the audit ran and FOUND VIOLATIONS.</span>
+<span class="sd">  * ``UNKNOWN``  — the audit COULD NOT RUN, so it found nothing and also</span>
+<span class="sd">                   established nothing.</span>
+
+<span class="sd">For most of its life :mod:`scitex_dev.testing._audit_conformance` said one</span>
+<span class="sd">sentence for the last two — *"audit-all reported violations for &lt;pkg&gt;"*.</span>
+<span class="sd">That sentence is FALSE for UNKNOWN, and falsely SPECIFIC in a way that costs</span>
+<span class="sd">real time: it sends the reader hunting for a lint violation that does not</span>
+<span class="sd">exist, while the actual cause (a missing dependency, an auditor that crashed</span>
+<span class="sd">on import) sits unread further down a several-hundred-line dump. Measured</span>
+<span class="sd">2026-08-11 on scitex-dev PR #567 — a DOC-ONLY diff whose gate said</span>
+<span class="sd">"reported violations" and took a full CI-log dive to attribute.</span>
+
+<span class="sd">Collapsing UNKNOWN into the failure pole is the same three-valued-signal</span>
+<span class="sd">error the constitution names, and the same one ``§10w`` (import-budget</span>
+<span class="sd">"could not measure") and ``MaskReport.unreadable`` already fixed one layer</span>
+<span class="sd">down. This module is that fix at the pytest-gate layer.</span>
+
+<span class="sd">UNKNOWN STILL FAILS. "Could not run" must never be green — that is</span>
+<span class="sd">green-by-absence. What changes is only what the message CLAIMS.</span>
+
+<span class="sd">AND THE FAILING CLAIM HAS TO NAME A RULE. Saying FAIL rather than UNKNOWN</span>
+<span class="sd">fixed the wrong-KIND-of-failure problem; it left every FAIL reading</span>
+<span class="sd">identically, because the first line — the only line pytest's short summary</span>
+<span class="sd">shows — was a constant. Seventeen unrelated red PRs then looked like one</span>
+<span class="sd">outage (scitex-dev#593, measured 2026-08-12). :func:`headline_codes` puts</span>
+<span class="sd">the rule ids that are ALREADY in the captured output onto that first line.</span>
+<span class="sd">Nothing is removed: the digest and the full stdout/stderr still follow.</span>
+
+<span class="sd">Deliberately free of the `_cli` tree (and therefore of click): this module</span>
+<span class="sd">is reached from every ecosystem package's test suite, so its import cost and</span>
+<span class="sd">its dependency surface are everyone's.</span>
+<span class="sd">"""</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
+
+
+<span class="c1">#: The three answers a gate can give. ``UNKNOWN`` is a FAILING verdict — it</span>
+<span class="c1">#: is separated from ``FAIL`` to fix what the message SAYS, never to let a</span>
+<span class="c1">#: broken auditor report success.</span>
+<span class="n">VERDICT_PASS</span> <span class="o">=</span> <span class="s2">"pass"</span>
+<span class="n">VERDICT_FAIL</span> <span class="o">=</span> <span class="s2">"fail"</span>
+<span class="n">VERDICT_UNKNOWN</span> <span class="o">=</span> <span class="s2">"unknown"</span>
+
+<span class="c1">#: scitex-logging colours its console output, so every membership test below</span>
+<span class="c1">#: runs on de-escaped text. Without this a ``\x1b[33m``-prefixed line has no</span>
+<span class="c1">#: parseable level word and slips past the notice guard.</span>
+<span class="n">_ANSI_RE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">"\x1b\[[0-9;]*[A-Za-z]"</span><span class="p">)</span>
+
+<span class="c1">#: A bracketed token carrying a RULE ID — mirrors</span>
+<span class="c1">#: ``_cli.ecosystem._cmds._audit_masking._RULE_ID_RE``. The discriminator is</span>
+<span class="c1">#: "contains a digit or §": every rule id in the corpus does (``PS-103``,</span>
+<span class="c1">#: ``STX-IO001``, ``§10w``, ``SK-401``) and the bare severity markers</span>
+<span class="c1">#: (``[E]``, ``[W]``) do not.</span>
+<span class="n">_RULE_ID_RE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">"\[[^\]]*(?:\d|§)[^\]]*\]"</span><span class="p">)</span>
+
+<span class="c1">#: Substrings meaning THE AUDIT DID NOT RUN — an environment/plumbing</span>
+<span class="c1">#: failure, not a finding about the code under audit.</span>
+<span class="c1">#:</span>
+<span class="c1">#: ``Error: No module named 'requests'`` is the measured instance:</span>
+<span class="c1">#: scitex-hub's CI carried it from 2026-08-05 and it reached every reader</span>
+<span class="c1">#: through a message that said "reported violations".</span>
+<span class="n">_COULD_NOT_RUN_MARKERS</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="s2">"no module named"</span><span class="p">,</span>
+    <span class="s2">"modulenotfounderror"</span><span class="p">,</span>
+    <span class="s2">"importerror"</span><span class="p">,</span>
+    <span class="s2">"traceback (most recent call last)"</span><span class="p">,</span>
+    <span class="s2">"failed to launch"</span><span class="p">,</span>
+    <span class="s2">"command not found"</span><span class="p">,</span>
+    <span class="s2">"no such file or directory"</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1">#: Words marking a line as a NOTICE rather than the thing that stopped the</span>
+<span class="c1">#: run. A degraded-but-running auditor announces itself exactly this way, and</span>
+<span class="c1">#: it is common: scitex-dev's own audit output opens with</span>
+<span class="c1">#:</span>
+<span class="c1">#:     [scitex-dev linter] WARNING: failed to load plugin 'io':</span>
+<span class="c1">#:     ModuleNotFoundError: No module named 'scitex_io._linter'</span>
+<span class="c1">#:</span>
+<span class="c1">#: on EVERY invocation, clean runs included (verified 2026-08-11 against</span>
+<span class="c1">#: `ecosystem audit-skills scitex-dev`). Treating that as could-not-run would</span>
+<span class="c1">#: relabel every genuine violation report as UNKNOWN — the same collapse as</span>
+<span class="c1">#: before, pointed the other way.</span>
+<span class="n">_NOTICE_TOKENS</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="s2">"WARN"</span><span class="p">,</span>
+    <span class="s2">"WARNING"</span><span class="p">,</span>
+    <span class="s2">"INFO"</span><span class="p">,</span>
+    <span class="s2">"NOTE"</span><span class="p">,</span>
+    <span class="s2">"NOTICE"</span><span class="p">,</span>
+    <span class="s2">"DEBUG"</span><span class="p">,</span>
+    <span class="s2">"SUCC"</span><span class="p">,</span>
+<span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_looks_like_a_notice</span><span class="p">(</span><span class="n">prefix</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Is the text LEADING UP TO a could-not-run marker a warn/info notice?</span>
+
+<span class="sd">    Only the prefix is examined, deliberately. Searching the whole line would</span>
+<span class="sd">    let a crash whose message happens to contain "note" or "warning" disguise</span>
+<span class="sd">    itself; searching the prefix asks the narrower and correct question —</span>
+<span class="sd">    *how did the emitter label this line before it said the scary thing?*</span>
+<span class="sd">    """</span>
+    <span class="n">upper</span> <span class="o">=</span> <span class="n">prefix</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
+    <span class="k">return</span> <span class="nb">any</span><span class="p">(</span><span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">rf</span><span class="s2">"\b</span><span class="si">{</span><span class="n">token</span><span class="si">}</span><span class="s2">\b"</span><span class="p">,</span> <span class="n">upper</span><span class="p">)</span> <span class="k">for</span> <span class="n">token</span> <span class="ow">in</span> <span class="n">_NOTICE_TOKENS</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_is_finding_line</span><span class="p">(</span><span class="n">line</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Is this an auditor FINDING — a rule id at the START of the payload?</span>
+
+<span class="sd">    The rule id must LEAD the payload, not merely appear somewhere on the</span>
+<span class="sd">    line. Measured while writing this module: the launch-failure line</span>
+
+<span class="sd">        error: audit-cli on scitex-io failed to launch: [Errno 2] ...</span>
+
+<span class="sd">    carries a trailing ``[Errno 2]``, which satisfies "contains a bracketed</span>
+<span class="sd">    token with a digit" exactly as well as ``[SK-401]`` does. A whole-line</span>
+<span class="sd">    search therefore classified the clearest could-not-run signal in the</span>
+<span class="sd">    codebase as a finding — the very collapse this module removes, restored</span>
+<span class="sd">    by a lazy regex. Position is what separates a rule id from a bracketed</span>
+<span class="sd">    aside.</span>
+<span class="sd">    """</span>
+    <span class="n">stripped</span> <span class="o">=</span> <span class="n">_ANSI_RE</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s2">""</span><span class="p">,</span> <span class="n">line</span><span class="p">)</span><span class="o">.</span><span class="n">lstrip</span><span class="p">()</span>
+    <span class="n">head</span> <span class="o">=</span> <span class="n">stripped</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">":"</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">has_level</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">head</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span> <span class="ow">and</span> <span class="n">head</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">isalpha</span><span class="p">()</span>
+    <span class="n">payload</span> <span class="o">=</span> <span class="n">head</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">lstrip</span><span class="p">()</span> <span class="k">if</span> <span class="n">has_level</span> <span class="k">else</span> <span class="n">stripped</span>
+    <span class="k">return</span> <span class="n">payload</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"["</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">bool</span><span class="p">(</span><span class="n">_RULE_ID_RE</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">payload</span><span class="p">))</span>
+
+
+<div class="viewcode-block" id="could_not_run_evidence">
+<a class="viewcode-back" href="../../../api.html#scitex_dev.testing.could_not_run_evidence">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">could_not_run_evidence</span><span class="p">(</span><span class="n">output</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Lines showing the audit COULD NOT RUN, in the order they appeared.</span>
+
+<span class="sd">    An empty list means "nothing in this output says the audit was prevented</span>
+<span class="sd">    from running" — which, paired with a non-zero exit, licenses FAIL.</span>
+
+<span class="sd">    Two filters keep this from crying wolf:</span>
+
+<span class="sd">    * A line carrying a RULE ID is an attributable FINDING, whatever words it</span>
+<span class="sd">      contains. An auditor is entitled to report</span>
+<span class="sd">      ``[STX-NET001] ... requests.get(...)`` without that being a crash.</span>
+<span class="sd">    * A line whose text BEFORE the marker labels it a warning/info notice is a</span>
+<span class="sd">      degraded-but-running announcement. See :data:`_NOTICE_TOKENS`.</span>
+<span class="sd">    """</span>
+    <span class="n">hits</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">raw</span> <span class="ow">in</span> <span class="n">output</span><span class="o">.</span><span class="n">splitlines</span><span class="p">():</span>
+        <span class="n">line</span> <span class="o">=</span> <span class="n">_ANSI_RE</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s2">""</span><span class="p">,</span> <span class="n">raw</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">line</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="n">lowered</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="n">at</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span>
+            <span class="p">(</span>
+                <span class="n">lowered</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="n">marker</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">marker</span> <span class="ow">in</span> <span class="n">_COULD_NOT_RUN_MARKERS</span>
+                <span class="k">if</span> <span class="n">marker</span> <span class="ow">in</span> <span class="n">lowered</span>
+            <span class="p">),</span>
+            <span class="n">default</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">at</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="k">if</span> <span class="n">_is_finding_line</span><span class="p">(</span><span class="n">line</span><span class="p">):</span>
+            <span class="k">continue</span>
+        <span class="k">if</span> <span class="n">_looks_like_a_notice</span><span class="p">(</span><span class="n">line</span><span class="p">[:</span><span class="n">at</span><span class="p">]):</span>
+            <span class="k">continue</span>
+        <span class="n">hits</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">hits</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">finding_lines</span><span class="p">(</span><span class="n">output</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""The auditor's own finding lines — the ones that drive a FAIL.</span>
+
+<span class="sd">    Used to build a DIGEST at the top of the failure message. The full</span>
+<span class="sd">    stdout+stderr is still printed underneath; this exists because the</span>
+<span class="sd">    interesting five lines were arriving buried in several hundred, which is</span>
+<span class="sd">    how a warn-tier finding stayed unread while the reader chased an error</span>
+<span class="sd">    that the summary line said did not exist.</span>
+<span class="sd">    """</span>
+    <span class="k">return</span> <span class="p">[</span>
+        <span class="n">_ANSI_RE</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s2">""</span><span class="p">,</span> <span class="n">raw</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">raw</span> <span class="ow">in</span> <span class="n">output</span><span class="o">.</span><span class="n">splitlines</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">_is_finding_line</span><span class="p">(</span><span class="n">raw</span><span class="p">)</span>
+    <span class="p">]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">rule_code</span><span class="p">(</span><span class="n">line</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""The rule id one finding line is attributable to, e.g. ``PS-207``.</span>
+
+<span class="sd">    The first WORD inside the first bracketed token that carries a rule id.</span>
+<span class="sd">    Both emitted shapes land on the same answer::</span>
+
+<span class="sd">        WARN:   [SK-302 §3 leaf-not-linked-from-skill-md] ...  -&gt; "SK-302"</span>
+<span class="sd">        ERRO:   [E] [PS-207 §2 empty-test-dir] ...             -&gt; "PS-207"</span>
+
+<span class="sd">    The legacy `[E]` marker is stepped over rather than special-cased: it</span>
+<span class="sd">    carries neither a digit nor a ``§``, so :data:`_RULE_ID_RE` does not</span>
+<span class="sd">    match it. That is the same structural discriminator the masking</span>
+<span class="sd">    classifier uses, so a new rule FAMILY needs no edit here — as opposed to</span>
+<span class="sd">    a list of known prefixes, which is a second place to forget.</span>
+
+<span class="sd">    ``None`` when the line is not a finding, or is one whose bracket carries</span>
+<span class="sd">    no rule id. A finding nobody can attribute is exactly what</span>
+<span class="sd">    ``MaskReport.unreadable`` calls UNKNOWN, and it must not be rendered as</span>
+<span class="sd">    though it named a rule.</span>
+<span class="sd">    """</span>
+    <span class="n">stripped</span> <span class="o">=</span> <span class="n">_ANSI_RE</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s2">""</span><span class="p">,</span> <span class="n">line</span><span class="p">)</span><span class="o">.</span><span class="n">lstrip</span><span class="p">()</span>
+    <span class="n">head</span> <span class="o">=</span> <span class="n">stripped</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">":"</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">has_level</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">head</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span> <span class="ow">and</span> <span class="n">head</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">isalpha</span><span class="p">()</span>
+    <span class="n">payload</span> <span class="o">=</span> <span class="n">head</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">lstrip</span><span class="p">()</span> <span class="k">if</span> <span class="n">has_level</span> <span class="k">else</span> <span class="n">stripped</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">payload</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"["</span><span class="p">):</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="n">match</span> <span class="o">=</span> <span class="n">_RULE_ID_RE</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">payload</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">match</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="n">words</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">0</span><span class="p">)[</span><span class="mi">1</span><span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">words</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="n">words</span> <span class="k">else</span> <span class="kc">None</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">rule_codes</span><span class="p">(</span><span class="n">findings</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""The DISTINCT rule ids across ``findings``, sorted, de-duplicated.</span>
+
+<span class="sd">    SORTED, not first-seen. The entire use for this list is comparing one</span>
+<span class="sd">    failing run against another at a glance — "are these seventeen red PRs</span>
+<span class="sd">    the same failure?" — and that comparison only works if two runs that</span>
+<span class="sd">    tripped the same rules produce the same string. First-seen order does</span>
+<span class="sd">    not survive: `audit-all` fans its sub-auditors out across a thread pool,</span>
+<span class="sd">    and a rule's position in the output is a race, not a fact about the</span>
+<span class="sd">    code.</span>
+
+<span class="sd">    De-duplicated for the same reason: ``PS-140`` firing on four modules is</span>
+<span class="sd">    ONE thing to go fix, and a headline that says it four times crowds out</span>
+<span class="sd">    the second rule.</span>
+<span class="sd">    """</span>
+    <span class="k">return</span> <span class="nb">sorted</span><span class="p">({</span><span class="n">code</span> <span class="k">for</span> <span class="n">code</span> <span class="ow">in</span> <span class="nb">map</span><span class="p">(</span><span class="n">rule_code</span><span class="p">,</span> <span class="n">findings</span><span class="p">)</span> <span class="k">if</span> <span class="n">code</span><span class="p">})</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">is_error_tier</span><span class="p">(</span><span class="n">line</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Did this finding line come in at ERROR tier rather than WARN/INFO?</span>
+
+<span class="sd">    Both emitted shapes are covered::</span>
+
+<span class="sd">        ERRO:   [E] [PS-207 §2 empty-test-dir] ...   -&gt; True</span>
+<span class="sd">        WARN:   [SK-302 §3 leaf-not-linked] ...      -&gt; False</span>
+
+<span class="sd">    NOT A GATING PREDICATE, and the distinction is the whole reason this</span>
+<span class="sd">    function is named for the TIER. We run outside the audited process and</span>
+<span class="sd">    hold exactly two things: its stdout and one exit code. WHICH findings</span>
+<span class="sd">    drove that exit is not in either. Deriving "did not gate" from "warn</span>
+<span class="sd">    tier" is refuted by this module's own note below: some sub-auditors</span>
+<span class="sd">    (audit-skills, audit-project) exit NON-ZERO on WARN-tier findings.</span>
+
+<span class="sd">    Reported by figrecipe, 2026-08-18, who read the headline's code census</span>
+<span class="sd">    as the causal list, concluded their gate could not go green until a rule</span>
+<span class="sd">    they could not influence stopped firing, and told their product lead the</span>
+<span class="sd">    repo was structurally blocked — which reached two teams. They proposed</span>
+<span class="sd">    labelling the split `gating` / `non-gating`. That label would be a</span>
+<span class="sd">    confident answer to a question this process cannot see, which is the</span>
+<span class="sd">    defect being fixed rather than a fix for it. So the split ships, and the</span>
+<span class="sd">    word does not.</span>
+<span class="sd">    """</span>
+    <span class="n">stripped</span> <span class="o">=</span> <span class="n">_ANSI_RE</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s2">""</span><span class="p">,</span> <span class="n">line</span><span class="p">)</span><span class="o">.</span><span class="n">lstrip</span><span class="p">()</span>
+    <span class="n">head</span> <span class="o">=</span> <span class="n">stripped</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">":"</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">head</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span> <span class="ow">and</span> <span class="n">head</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">isalpha</span><span class="p">():</span>
+        <span class="n">level</span> <span class="o">=</span> <span class="n">head</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">level</span><span class="o">.</span><span class="n">startswith</span><span class="p">((</span><span class="s2">"ERR"</span><span class="p">,</span> <span class="s2">"CRIT"</span><span class="p">,</span> <span class="s2">"FATAL"</span><span class="p">)):</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">if</span> <span class="n">level</span><span class="o">.</span><span class="n">startswith</span><span class="p">((</span><span class="s2">"WARN"</span><span class="p">,</span> <span class="s2">"INFO"</span><span class="p">,</span> <span class="s2">"NOTIC"</span><span class="p">,</span> <span class="s2">"DEBUG"</span><span class="p">)):</span>
+            <span class="k">return</span> <span class="kc">False</span>
+    <span class="k">return</span> <span class="s2">"[E]"</span> <span class="ow">in</span> <span class="n">stripped</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">rule_codes_by_tier</span><span class="p">(</span><span class="n">findings</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">"""``(error_tier_codes, warn_or_info_only_codes)``, both sorted + distinct.</span>
+
+<span class="sd">    A code that appears at BOTH tiers counts as error-tier and is absent from</span>
+<span class="sd">    the second list: the point of the split is "what should I go fix first",</span>
+<span class="sd">    and a rule with any error-tier finding belongs in that answer once.</span>
+<span class="sd">    """</span>
+    <span class="n">error</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+    <span class="n">other</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">findings</span><span class="p">:</span>
+        <span class="n">code</span> <span class="o">=</span> <span class="n">rule_code</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">code</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="p">(</span><span class="n">error</span> <span class="k">if</span> <span class="n">is_error_tier</span><span class="p">(</span><span class="n">line</span><span class="p">)</span> <span class="k">else</span> <span class="n">other</span><span class="p">)</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">code</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">error</span><span class="p">),</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">other</span> <span class="o">-</span> <span class="n">error</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="classify_audit_outcome">
+<a class="viewcode-back" href="../../../api.html#scitex_dev.testing.classify_audit_outcome">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">classify_audit_outcome</span><span class="p">(</span><span class="n">returncode</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">"""Grade one `audit-all` run. Returns ``(verdict, evidence)``.</span>
+
+<span class="sd">    ``evidence`` is the could-not-run lines for :data:`VERDICT_UNKNOWN`, the</span>
+<span class="sd">    finding digest for :data:`VERDICT_FAIL`, and empty for</span>
+<span class="sd">    :data:`VERDICT_PASS`.</span>
+
+<span class="sd">    The rule:</span>
+
+<span class="sd">    * exit 0 -&gt; PASS.</span>
+<span class="sd">    * exit != 0 AND the output says it could not run -&gt; UNKNOWN.</span>
+<span class="sd">    * exit 2 -&gt; UNKNOWN even with no marker. Exit 2 is `audit-all` declining</span>
+<span class="sd">      to grade (usage error, unreadable skip-rule config) or a sub-auditor</span>
+<span class="sd">      reporting "could not locate the tree" — by construction "I did not</span>
+<span class="sd">      grade", never "I graded and found something".</span>
+<span class="sd">    * anything else non-zero -&gt; FAIL.</span>
+
+<span class="sd">    UNKNOWN is still a FAILING verdict for the caller. It changes the claim,</span>
+<span class="sd">    not the colour.</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="n">returncode</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">VERDICT_PASS</span><span class="p">,</span> <span class="p">[]</span>
+    <span class="n">evidence</span> <span class="o">=</span> <span class="n">could_not_run_evidence</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">evidence</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">VERDICT_UNKNOWN</span><span class="p">,</span> <span class="n">evidence</span>
+    <span class="k">if</span> <span class="n">returncode</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">VERDICT_UNKNOWN</span><span class="p">,</span> <span class="p">[]</span>
+    <span class="k">return</span> <span class="n">VERDICT_FAIL</span><span class="p">,</span> <span class="n">finding_lines</span><span class="p">(</span><span class="n">output</span><span class="p">)</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_digest</span><span class="p">(</span><span class="n">lines</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">12</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Render at most ``limit`` evidence lines, saying how many were elided."""</span>
+    <span class="n">body</span> <span class="o">=</span> <span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">"    </span><span class="si">{</span><span class="n">line</span><span class="si">}</span><span class="s2">"</span> <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">lines</span><span class="p">[:</span><span class="n">limit</span><span class="p">])</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">lines</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">limit</span><span class="p">:</span>
+        <span class="n">body</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">"</span><span class="se">\n</span><span class="s2">    ... (+</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">lines</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">limit</span><span class="si">}</span><span class="s2"> more)"</span>
+    <span class="k">return</span> <span class="n">body</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">unknown_message</span><span class="p">(</span>
+    <span class="n">distribution</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">cmd</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">returncode</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">evidence</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+    <span class="n">tail</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">audited_by</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""The UNKNOWN report — says COULD NOT RUN and quotes the underlying error."""</span>
+    <span class="n">quoted</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">_digest</span><span class="p">(</span><span class="n">evidence</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">evidence</span>
+        <span class="k">else</span> <span class="s2">"    (none quoted — exit=2 is `audit-all` declining to grade;</span><span class="se">\n</span><span class="s2">"</span>
+        <span class="s2">"     see the usage/config error in the output below)"</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="p">(</span>
+        <span class="sa">f</span><span class="s2">"audit-all COULD NOT RUN for </span><span class="si">{</span><span class="n">distribution</span><span class="si">!r}</span><span class="s2"> — UNKNOWN, not a "</span>
+        <span class="sa">f</span><span class="s2">"violation report (exit=</span><span class="si">{</span><span class="n">returncode</span><span class="si">}</span><span class="s2">).</span><span class="se">\n</span><span class="s2">"</span>
+        <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">_audited_by_line</span><span class="p">(</span><span class="n">audited_by</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
+        <span class="s2">"  The audit was PREVENTED from grading, so it neither found "</span>
+        <span class="s2">"violations nor established that there are none.</span><span class="se">\n</span><span class="s2">"</span>
+        <span class="s2">"  Do NOT go looking for a lint violation: fix the environment / "</span>
+        <span class="s2">"dependency / launch failure quoted here, then re-run.</span><span class="se">\n</span><span class="s2">"</span>
+        <span class="sa">f</span><span class="s2">"  underlying error(s):</span><span class="se">\n</span><span class="si">{</span><span class="n">quoted</span><span class="si">}</span><span class="se">\n</span><span class="s2">"</span>
+        <span class="sa">f</span><span class="s2">"  $ </span><span class="si">{</span><span class="n">cmd</span><span class="si">}</span><span class="se">\n</span><span class="si">{</span><span class="n">tail</span><span class="si">}</span><span class="s2">"</span>
+    <span class="p">)</span>
+
+
+<span class="c1">#: How many rule codes fit on the headline before it stops being scannable.</span>
+<span class="c1">#: pytest's short summary is ONE line and terminals truncate it, so the</span>
+<span class="c1">#: budget is real. Six codes is ~50 characters — measured against a run that</span>
+<span class="c1">#: produced exactly six.</span>
+<span class="n">_MAX_HEADLINE_CODES</span> <span class="o">=</span> <span class="mi">6</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_listed</span><span class="p">(</span><span class="n">codes</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Comma-joined, truncated, and SAYING how many it dropped.</span>
+
+<span class="sd">    Truncation that does not announce itself turns "six rules fired" into</span>
+<span class="sd">    "four rules fired" for every downstream reader of the one-line summary.</span>
+<span class="sd">    """</span>
+    <span class="n">shown</span> <span class="o">=</span> <span class="s2">", "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">codes</span><span class="p">[:</span><span class="n">_MAX_HEADLINE_CODES</span><span class="p">])</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">codes</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">_MAX_HEADLINE_CODES</span><span class="p">:</span>
+        <span class="n">shown</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">" (+</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">codes</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">_MAX_HEADLINE_CODES</span><span class="si">}</span><span class="s2"> more)"</span>
+    <span class="k">return</span> <span class="n">shown</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">headline_codes</span><span class="p">(</span><span class="n">findings</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""The `: PS-207, SK-302` suffix for the failure message's FIRST line.</span>
+
+<span class="sd">    THE FIRST LINE IS THE WHOLE PRODUCT HERE. pytest's `short test summary</span>
+<span class="sd">    info` — and every CI notification and `gh pr checks` triage built on it —</span>
+<span class="sd">    shows that line and nothing else. Without the codes it is a constant</span>
+<span class="sd">    string: identical for every rule in the corpus, so unrelated failures are</span>
+<span class="sd">    indistinguishable without downloading each job log.</span>
+
+<span class="sd">    Measured 2026-08-12 on scitex-agent-container (scitex-dev#593). Seventeen</span>
+<span class="sd">    PRs were red, all showing that one sentence, and were escalated as a P1</span>
+<span class="sd">    fleet-wide CI outage. They were four DIFFERENT rules — ``PS-140`` twice</span>
+<span class="sd">    for different new modules, ``PS-207``, ``SK-302`` — every one of them</span>
+<span class="sd">    PR-local and a one-line fix by its own author. There was no outage:</span>
+<span class="sd">    ``audit-all`` on develop exited 0 throughout. Two wrong root causes were</span>
+<span class="sd">    published before anyone opened a raw log.</span>
+
+<span class="sd">    Over-long lists are truncated rather than dropped: knowing SIX rules</span>
+<span class="sd">    fired and being shown six of them beats being shown none.</span>
+<span class="sd">    """</span>
+    <span class="n">errors</span><span class="p">,</span> <span class="n">others</span> <span class="o">=</span> <span class="n">rule_codes_by_tier</span><span class="p">(</span><span class="n">findings</span><span class="p">)</span>
+    <span class="n">n_error_lines</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">findings</span> <span class="k">if</span> <span class="n">is_error_tier</span><span class="p">(</span><span class="n">line</span><span class="p">))</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">errors</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">others</span><span class="p">:</span>
+        <span class="c1"># Say the words rather than emit a bare `(exit=1)`. An empty suffix</span>
+        <span class="c1"># is indistinguishable from the old rule-agnostic headline, and this</span>
+        <span class="c1"># case is not "no information" — it is the specific, reportable</span>
+        <span class="c1"># shape the `else` digest below explains.</span>
+        <span class="k">return</span> <span class="s2">": (no rule-attributable finding line — see below)"</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">errors</span><span class="p">:</span>
+        <span class="c1"># Exit non-zero with nothing at error tier. This is the shape the</span>
+        <span class="c1"># digest's note describes, and naming it here stops a reader from</span>
+        <span class="c1"># hunting for an error that the summary line correctly says is not</span>
+        <span class="c1"># there.</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">": </span><span class="si">{</span><span class="n">_listed</span><span class="p">(</span><span class="n">others</span><span class="p">)</span><span class="si">}</span><span class="s2"> (all at warn/info tier — see note below)"</span>
+    <span class="c1"># The COUNT travels with the codes deliberately. figrecipe reconstructed</span>
+    <span class="c1"># the causal set after the fact by noticing that a `summary: 6 unmasked</span>
+    <span class="c1"># error(s)` line elsewhere in the output was exactly PS-231x5 + PS-140x1</span>
+    <span class="c1"># — the report already held the answer, in a different sentence and a</span>
+    <span class="c1"># different unit. Putting both in one line means nobody has to notice.</span>
+    <span class="n">lead</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">_listed</span><span class="p">(</span><span class="n">errors</span><span class="p">)</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">n_error_lines</span><span class="si">}</span><span class="s2"> finding line(s))"</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">others</span><span class="p">:</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">": </span><span class="si">{</span><span class="n">lead</span><span class="si">}</span><span class="s2">"</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">": </span><span class="si">{</span><span class="n">lead</span><span class="si">}</span><span class="s2"> — also reported at warn/info tier: </span><span class="si">{</span><span class="n">_listed</span><span class="p">(</span><span class="n">others</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
+
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_audited_by_line</span><span class="p">(</span><span class="n">audited_by</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""The "which ruler measured this" line, or nothing.</span>
+
+<span class="sd">    Optional rather than required because call sites outside this</span>
+<span class="sd">    package construct these messages too, and a KeyError in a failure</span>
+<span class="sd">    formatter would replace a real finding with a traceback.</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">audited_by</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">""</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">"  audited by </span><span class="si">{</span><span class="n">audited_by</span><span class="si">}</span><span class="se">\n</span><span class="s2">"</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">violations_message</span><span class="p">(</span>
+    <span class="n">distribution</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">cmd</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">returncode</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">findings</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+    <span class="n">tail</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">audited_by</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""The FAIL report — names the RULES on line one, then digests the findings."""</span>
+    <span class="k">if</span> <span class="n">findings</span><span class="p">:</span>
+        <span class="n">digest</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">"  </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">findings</span><span class="p">)</span><span class="si">}</span><span class="s2"> finding line(s) drove the failure:</span><span class="se">\n</span><span class="s2">"</span>
+            <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">_digest</span><span class="p">(</span><span class="n">findings</span><span class="p">)</span><span class="si">}</span><span class="se">\n</span><span class="s2">"</span>
+            <span class="s2">"  note: `summary: ... 0 unmasked error(s)` WITH exit=1 is a "</span>
+            <span class="s2">"real and common shape.</span><span class="se">\n</span><span class="s2">"</span>
+            <span class="s2">"        It means something OUTSIDE the unmasked-error count "</span>
+            <span class="s2">"caused the exit. It does NOT</span><span class="se">\n</span><span class="s2">"</span>
+            <span class="s2">"        identify what. At least two causes produce it, and the "</span>
+            <span class="s2">"message cannot tell them apart:</span><span class="se">\n</span><span class="s2">"</span>
+            <span class="s2">"          (a) a sub-auditor (audit-skills, audit-project) "</span>
+            <span class="s2">"exiting non-zero on a WARN-tier</span><span class="se">\n</span><span class="s2">"</span>
+            <span class="s2">"              finding, or</span><span class="se">\n</span><span class="s2">"</span>
+            <span class="s2">"          (b) an ERROR-tier finding that is not counted as "</span>
+            <span class="s2">"unmasked — e.g.</span><span class="se">\n</span><span class="s2">"</span>
+            <span class="s2">"              `CLI conventions: not-auditable: unknown`, which "</span>
+            <span class="s2">"appears when the</span><span class="se">\n</span><span class="s2">"</span>
+            <span class="s2">"              distribution is not installed where the auditor "</span>
+            <span class="s2">"can introspect it.</span><span class="se">\n</span><span class="s2">"</span>
+            <span class="s2">"        READ THE FINDINGS ABOVE, NOT THE COUNT, AND NOT THIS "</span>
+            <span class="s2">"NOTE. Measured 2026-08-18:</span><span class="se">\n</span><span class="s2">"</span>
+            <span class="s2">"        sac read an earlier version of this note as naming (a) "</span>
+            <span class="s2">"and concluded warnings</span><span class="se">\n</span><span class="s2">"</span>
+            <span class="s2">"        gate. Their cause was (b). They nearly relaxed the "</span>
+            <span class="s2">"gate for 83 packages on it.</span><span class="se">\n</span><span class="s2">"</span>
+            <span class="s2">"        The headline splits codes by TIER, which is what this process can see.</span><span class="se">\n</span><span class="s2">"</span>
+            <span class="s2">"        TIER IS NOT GATING: a code listed under `warn/info tier` may still be</span><span class="se">\n</span><span class="s2">"</span>
+            <span class="s2">"        what failed the run. Only the sub-auditor that emitted it knows, and</span><span class="se">\n</span><span class="s2">"</span>
+            <span class="s2">"        it does not say so in this output.</span><span class="se">\n</span><span class="s2">"</span>
+        <span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">digest</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="s2">"  No rule-attributable finding line appears in the output, yet "</span>
+            <span class="s2">"the audit exited non-zero and</span><span class="se">\n</span><span class="s2">"</span>
+            <span class="s2">"  did not report being unable to run. Read the full output below "</span>
+            <span class="s2">"— this shape is itself a defect</span><span class="se">\n</span><span class="s2">"</span>
+            <span class="s2">"  in whichever sub-auditor produced it.</span><span class="se">\n</span><span class="s2">"</span>
+        <span class="p">)</span>
+    <span class="k">return</span> <span class="p">(</span>
+        <span class="sa">f</span><span class="s2">"audit-all reported violations for </span><span class="si">{</span><span class="n">distribution</span><span class="si">!r}</span><span class="s2"> "</span>
+        <span class="sa">f</span><span class="s2">"(exit=</span><span class="si">{</span><span class="n">returncode</span><span class="si">}</span><span class="s2">)</span><span class="si">{</span><span class="n">headline_codes</span><span class="p">(</span><span class="n">findings</span><span class="p">)</span><span class="si">}</span><span class="se">\n</span><span class="s2">"</span>
+        <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">_audited_by_line</span><span class="p">(</span><span class="n">audited_by</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
+        <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">digest</span><span class="si">}</span><span class="s2">"</span>
+        <span class="sa">f</span><span class="s2">"  $ </span><span class="si">{</span><span class="n">cmd</span><span class="si">}</span><span class="se">\n</span><span class="si">{</span><span class="n">tail</span><span class="si">}</span><span class="s2">"</span>
+    <span class="p">)</span>
+
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">"VERDICT_FAIL"</span><span class="p">,</span>
+    <span class="s2">"VERDICT_PASS"</span><span class="p">,</span>
+    <span class="s2">"VERDICT_UNKNOWN"</span><span class="p">,</span>
+    <span class="s2">"classify_audit_outcome"</span><span class="p">,</span>
+    <span class="s2">"could_not_run_evidence"</span><span class="p">,</span>
+    <span class="s2">"finding_lines"</span><span class="p">,</span>
+    <span class="s2">"headline_codes"</span><span class="p">,</span>
+    <span class="s2">"is_error_tier"</span><span class="p">,</span>
+    <span class="s2">"rule_code"</span><span class="p">,</span>
+    <span class="s2">"rule_codes"</span><span class="p">,</span>
+    <span class="s2">"rule_codes_by_tier"</span><span class="p">,</span>
+    <span class="s2">"unknown_message"</span><span class="p">,</span>
+    <span class="s2">"violations_message"</span><span class="p">,</span>
+<span class="p">]</span>
+
+<span class="c1"># EOF</span>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Yusuke Watanabe.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

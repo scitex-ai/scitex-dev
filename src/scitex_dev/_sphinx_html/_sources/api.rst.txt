@@ -89,3 +89,9 @@ Dashboard
 .. automodule:: scitex_dev.dashboard
    :members:
    :undoc-members:
+
+Installed CLI providers
+-----------------------
+
+.. automodule:: scitex_dev.cli_providers
+   :members:

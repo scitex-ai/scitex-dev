@@ -10,6 +10,19 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.62.17] - 2026-11-07
+
+- Regenerate the bundled Sphinx documentation from source and check shipped
+  guide titles plus the generated search form, preventing a missing guide from
+  passing unnoticed when the source-only documentation build succeeds.
+- Align release skills and their index entries with existing authorization,
+  exact-head review, immutable tags, protected-main publication, declared
+  consent and leaf-owned deployment.
+- Correct error-handling and MCP skill examples to match implemented imports,
+  result envelopes and available helpers; keep unimplemented helpers explicit.
+- Require a real zombie state in process-only GUI test fixtures and isolate
+  their child interpreters from unrelated site startup hooks. Preserve deadlines.
+
 - Keep the Unified Search guide at a distinct documentation URL instead of
   colliding with Sphinx's generated search page and removing its built-in label.
 
