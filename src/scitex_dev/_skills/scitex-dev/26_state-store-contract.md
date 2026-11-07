@@ -53,6 +53,8 @@ A leaf's state store is valid when all of these hold:
    store gets mistaken for the live board.
 4. **An unresolvable store raises**, never returns empty. Empty and
    unreachable are different answers and must not render identically.
+5. **Local writes are atomic:** `put`, `hide`, `unhide` commit log and row together.
+   Rejection leaves no replayable op; see `tests/scitex_dev/store/test__store_atomic.py`.
 
 Point 4 is most often skipped, and turns a five-minute outage into a
 wrong decision: a board rendering empty because it could not connect
