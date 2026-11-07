@@ -1,16 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""``Store.batch`` — one transaction instead of one per statement.
+"""Store.batch preserves all-or-nothing behavior across local writes and replay.
 
-Both dialects connect in autocommit, which is right for a single interactive
-write and wrong for bulk work: one logical op costs three statements and so
-three durable commits. Measured adopting the real 3,712-card board, that is
-18.59 ms/op against 2.06 ms/op — a 9.0x difference paid again on every
-replay catch-up.
-
-The tests here are about BEHAVIOUR, not speed. A timing assertion would be
-flaky on a shared machine and would not catch the thing that actually
-matters: that a failed batch leaves nothing behind.
+Local mutations already commit their operation and materialized row together.
+Explicit batching groups multiple operations into one durable transaction.
+These tests assert rollback and nesting behavior without timing thresholds.
 """
 
 from __future__ import annotations
@@ -89,9 +83,7 @@ def test_nested_batches_do_not_raise(local):
     def _nested() -> None:
         with local.batch():
             with local.batch():
-                local.put(
-                    {"id": "b4", "status": "open"}, expected_revision=NEW_RECORD
-                )
+                local.put({"id": "b4", "status": "open"}, expected_revision=NEW_RECORD)
 
     # Act
     caught = _error_from(_nested)
@@ -104,9 +96,7 @@ def test_the_inner_batch_does_not_commit_early(local):
     def _inner_ok_outer_fails() -> None:
         with local.batch():
             with local.batch():
-                local.put(
-                    {"id": "b5", "status": "open"}, expected_revision=NEW_RECORD
-                )
+                local.put({"id": "b5", "status": "open"}, expected_revision=NEW_RECORD)
             raise RuntimeError("deliberate")
 
     # Act
@@ -171,5 +161,6 @@ def test_replay_advances_the_cursor_to_the_last_entry(local, peer):
     replay(local, peer.node, entries)
     # Assert
     assert local.cursor(peer.node) == 5
+
 
 # EOF

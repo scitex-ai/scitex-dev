@@ -208,40 +208,16 @@ class Store(SchemaEvolution, PeerState, IdentityState, ReadDoor):
 
     @contextmanager
     def batch(self) -> "Iterator[Store]":
-        """Group many writes into ONE transaction instead of one each.
+        """Group local writes and replay into one durable transaction.
 
-        Both dialects connect in autocommit, which is the right default for
-        interactive single writes and the wrong one for bulk work: a single
-        logical op here costs three statements (oplog insert, row upsert,
-        cursor advance) and therefore three commits, each a durable write.
+        Each local put/hide/unhide already commits its operation log and
+        materialized row atomically. Explicit batching extends that boundary
+        across multiple operations and avoids a durable commit for each one.
 
-        Measured twice, because one large batch and many small ones could
-        plausibly have had opposite signs. They do not.
-
-            3,712-op adoption      18.59 -> 2.06 ms/op      9.0x
-            60 replays of 5 ops     8.99 -> 1.04 ms/op      8.65x
-
-        The second run alternated the two variants three times, because the
-        host was under load 9.3 and a sequential A-then-B comparison had
-        already produced a misleading result in the opposite direction. Run
-        medians were 1.69/4.88/2.70 against 0.31/1.32/0.24 — noisy, but with
-        no overlap between the two sets, which is what licenses the claim.
-
-        READ THE RATIO AS DIRECTIONAL, NOT PORTABLE. Both were taken on a
-        FUSE-backed filesystem where an fsync is dearer than on local disk,
-        so this is near a best case. What generalises is the SHAPE: cost is
-        per COMMIT rather than per row, so it does not shrink as the data
-        does, and it is paid again on every replay during catch-up.
-
-        Nesting is a no-op rather than an error: `install_genesis` batches and
-        calls `replay`, which batches too. A second BEGIN would raise, and
-        making the caller track whether someone above already opened one is
-        exactly the bookkeeping this is meant to remove.
-
-        On any exception the transaction is rolled back, so a failed batch
-        applies NOTHING. See :func:`~._replication.replay` for what that
-        means for cursor resumability — it is a deliberate change, and a
-        safer one.
+        Nested batches reuse the active transaction under the same reentrant
+        lock; they do not start a second SQL transaction. An exception escaping
+        the outermost batch rolls the whole batch back. Replication replay
+        relies on that boundary for safe cursor resumability.
         """
         with self._lock:
             if self._batch_depth:
@@ -290,7 +266,7 @@ class Store(SchemaEvolution, PeerState, IdentityState, ReadDoor):
         :data:`~._guards.NEW_RECORD`, an ``int``, or
         :data:`~._guards.ANY_REVISION`.
         """
-        with self._lock:
+        with self.batch():
             record = record_key(self.schema, values)
             current = self._read(record, include_hidden=True)
             check_revision(record, current, self._revision(record), expected_revision)
@@ -303,9 +279,7 @@ class Store(SchemaEvolution, PeerState, IdentityState, ReadDoor):
                 if self.schema.fields[name].role is not FieldRole.IDENTITY
             }
             identity = {n: values[n] for n in self.schema.identity_fields}
-            entry = self._append(
-                record, OpKind.UPSERT, {**identity, **payload}, actor
-            )
+            entry = self._append(record, OpKind.UPSERT, {**identity, **payload}, actor)
             return self._materialise(entry, current, owner=owner)
 
     def hide(
@@ -537,7 +511,7 @@ class Store(SchemaEvolution, PeerState, IdentityState, ReadDoor):
         expected_revision: Any,
         actor: "str | None",
     ) -> PutResult:
-        with self._lock:
+        with self.batch():
             record = record_key_from(self.schema, key)
             current = self._require(record, verb="hide" if hidden else "unhide")
             check_revision(record, current, self._revision(record), expected_revision)
@@ -553,5 +527,6 @@ class Store(SchemaEvolution, PeerState, IdentityState, ReadDoor):
             f"policy={self.writer_policy.value}, "
             f"target={self.target.describe()})"
         )
+
 
 # EOF
