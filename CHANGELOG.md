@@ -10,6 +10,11 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Enforce literal workflow integrity through the normal project auditor:
+  PS-235 rejects local install profiles changed after failure, and PS-236
+  rejects `gh pr merge --admin`. Keep quoted examples and heredoc data outside
+  command detection, and document that indirect scripts need separate review.
+
 - Check generated audit-gate dependency availability in the test interpreter.
   A missing console script on shell PATH no longer silently skips an installed
   auditor. Preserve the existing missing-package exception and explicit local
