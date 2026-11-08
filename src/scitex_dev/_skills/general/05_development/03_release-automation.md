@@ -82,6 +82,31 @@ A tool listed in source need not be advertised by every client configuration.
 Listing a mutation tool does not authorize invoking it. Keep source registration,
 actual server discovery and execution results as separate evidence.
 
+## Workflow integrity checks
+
+The normal project auditor checks local GitHub workflow shell steps:
+
+- **PS-235** reports literal `pip`, `python -m pip`, or `uv pip` install chains
+  that select a different local extras profile after `||`. Use one explicitly
+  selected profile and stop when it fails. A successful smaller install does
+  not qualify the originally requested profile.
+- **PS-236** reports literal `gh pr merge --admin` commands. Keep protection
+  enabled and leave a PR open until normal checks and reviews allow merging.
+
+These checks inspect literal commands in Bash-compatible `run` steps. Quoted
+examples, comments and heredoc data are not executed commands. Indirect scripts,
+generated commands and reusable workflow implementations need their own review;
+zero findings here are not complete release acceptance.
+
+From the Dev checkout, an umbrella installation can select these checks with:
+
+```bash
+scitex dev ecosystem audit-project scitex-dev --path . --rule PS-235 --rule PS-236
+```
+
+Implementation: `_cli/audit/_project/_check_workflow_integrity.py`, registered
+through the existing project-audit dispatcher and rule registry.
+
 ## Qualify and publish
 
 1. Inspect the requested package, source state, published versions and unused
