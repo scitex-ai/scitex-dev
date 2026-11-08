@@ -18,6 +18,8 @@ from pathlib import Path
 
 import click
 
+from ._callback_source import bound_callback_module, loaded_bootstrap_module
+
 RESOURCE_NAME = "_cli_audit_dict.yaml"
 
 
@@ -81,9 +83,14 @@ def _loaded_command(ep):
 
 def _recorded_owner(ep, module, dist) -> MountedOwner:
     """Validate the entry-point source and exact packaged dictionary."""
+    return _recorded_module_owner(ep.module, module, dist)
+
+
+def _recorded_module_owner(module_name, module, dist, source_kind="entry-point"):
+    """Apply the same RECORD and containment checks to a loaded CLI module."""
     name = dist.metadata["Name"] or "<unnamed>"
     version = dist.metadata["Version"] or ""
-    namespace = ep.module.split(".")[0]
+    namespace = module_name.split(".")[0]
     install_root = Path(dist.locate_file("")).resolve()
     package_root = Path(dist.locate_file(namespace)).resolve()
     origin = _metadata_origin(dist)
@@ -117,17 +124,17 @@ def _recorded_owner(ep, module, dist) -> MountedOwner:
     files = {str(member): member for member in dist.files or ()}
     source = vars(module).get("__file__")
     if not source:
-        return rejected("entry-point module has no source path")
+        return rejected(f"{source_kind} module has no source path")
     source = Path(source).resolve()
     source_members = (
-        ep.module.replace(".", "/") + ".py",
-        ep.module.replace(".", "/") + "/__init__.py",
+        module_name.replace(".", "/") + ".py",
+        module_name.replace(".", "/") + "/__init__.py",
     )
     if not source.is_relative_to(package_root) or not any(
         member in files and Path(dist.locate_file(member)).resolve() == source
         for member in source_members
     ):
-        return rejected("entry-point source is not owned by distribution RECORD")
+        return rejected(f"{source_kind} source is not owned by distribution RECORD")
     source_record_owned = True
     member = files.get(resource_rel)
     if member is None:
@@ -162,7 +169,9 @@ class MountedOwners:
 
     def __init__(self):
         self._entries: dict[int, list] = {}
+        self._bootstraps: dict[str, list] = {}
         self._owners: dict[int, MountedOwner | None] = {}
+        self._lexicons: dict[tuple, MountedOwner] = {}
         self.sources: list[str] = []
         self._reported: set[tuple[str, tuple[str, str, str, str, str]]] = set()
         # Keep the distribution alongside its own entry points. This also
@@ -173,6 +182,11 @@ class MountedOwners:
                     continue
                 loaded = _loaded_command(ep)
                 if loaded is None:
+                    module = loaded_bootstrap_module(ep)
+                    if module is not None:
+                        self._bootstraps.setdefault(ep.module.split(".")[0], []).append(
+                            (ep, module, dist)
+                        )
                     continue
                 module, callback = loaded
                 self._entries.setdefault(id(callback), []).append((ep, module, dist))
@@ -185,6 +199,10 @@ class MountedOwners:
             _recorded_owner(ep, module, dist)
             for ep, module, dist in self._entries.get(key, ())
         ]
+        # Exact console claims keep precedence, including invalid ones. A
+        # nested binding cannot rescue a rejected entry-point claim.
+        if not claims:
+            claims = self._callback_claims(cmd)
         recorded = {
             owner.identity: owner for owner in claims if owner.source_record_owned
         }
@@ -198,7 +216,14 @@ class MountedOwners:
         owners = recorded or {owner.identity: owner for owner in claims}
         if len(owners) == 1:
             selected = next(iter(owners.values()))
-            self._owners[key] = replace(selected, unowned_source_claims=rejected)
+            selected = replace(selected, unowned_source_claims=rejected)
+            if selected.source_record_owned:
+                # Freeze the first resource verdict/bytes for this metadata
+                # origin. A nested lookup cannot swap in later file contents.
+                original = self._lexicons.setdefault(selected.identity, selected)
+                selected = replace(selected, resource=original.resource,
+                                   payload=original.payload, reason=original.reason)
+            self._owners[key] = selected
             return self._owners[key]
         if not owners:
             self._owners[key] = None
@@ -220,6 +245,27 @@ class MountedOwners:
             unowned_source_claims=rejected,
         )
         return self._owners[key]
+
+    def _callback_claims(self, cmd):
+        binding = bound_callback_module(cmd)
+        if binding is None:
+            return []
+        name, module = binding
+        namespace = name.split(".")[0]
+        candidates = list(self._bootstraps.get(namespace, ()))
+        for entries in self._entries.values():
+            candidates.extend(entry for entry in entries
+                              if entry[0].module.split(".")[0] == namespace)
+        claims = []
+        for ep, console_module, dist in candidates:
+            qualification = _recorded_owner(ep, console_module, dist)
+            # Namespace spelling alone never establishes ownership. First
+            # prove the loaded console source, then this callback's module.
+            claims.append(
+                _recorded_module_owner(name, module, dist, "bound callback")
+                if qualification.source_record_owned else qualification
+            )
+        return claims
 
     def report(self, owner: MountedOwner, full: str) -> None:
         key = (full, owner.identity)

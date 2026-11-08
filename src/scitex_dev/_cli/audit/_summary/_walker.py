@@ -79,6 +79,10 @@ def _walk(
     owner = owners.owner(cmd)
     is_mount = bool(path) and owner is not None and (
         parent_owner is None or owner.identity != parent_owner.identity
+        or owner.resource != parent_owner.resource
+        or owner.payload != parent_owner.payload
+        or owner.source_record_owned != parent_owner.source_record_owned
+        or owner.ambiguous != parent_owner.ambiguous
     )
     if is_mount:
         full = " ".join([*path, registered_name or cmd.name or "<root>"])
