@@ -113,23 +113,25 @@ def test_definite_source_or_example_failures_are_visible(tmp_path, snippet):
 
 
 @pytest.mark.parametrize(
-    "source",
+    "source,expected",
     [
-        "from .backend import public\n",
-        "def __getattr__(name):\n    raise AttributeError(name)\n",
-        "if True:\n    def public():\n        pass\n",
+        ("from .backend import public\n", "needs_update"),
+        ("def __getattr__(name):\n    raise AttributeError(name)\n", "incomplete"),
+        ("if True:\n    def public():\n        pass\n", "incomplete"),
     ],
 )
-def test_reexports_and_dynamic_or_conditional_names_are_unverified(tmp_path, source):
+def test_missing_reexports_and_dynamic_bindings_have_distinct_outcomes(
+    tmp_path, source, expected
+):
     # Arrange
     root = _project(tmp_path, source=source)
     # Act
     report = verify_docs_and_skills(root)
     # Assert
-    assert (
-        report["status"] == "incomplete"
-        and report["unverified"]
-        and not report["issues"]
+    assert (report["status"], bool(report["unverified"]), bool(report["issues"])) == (
+        expected,
+        expected == "incomplete",
+        expected == "needs_update",
     )
 
 
