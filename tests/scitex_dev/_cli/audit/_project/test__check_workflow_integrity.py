@@ -9,7 +9,7 @@ from click.testing import CliRunner
 from scitex_dev._cli import main
 
 
-def _run(root, script):
+def _run(root, script, *, workflow_shell=None, job_shell=None, step_shell=None):
     (root / "pyproject.toml").write_text(
         '[project]\nname="workflow-integrity-fixture"\n'
     )
@@ -19,6 +19,13 @@ def _run(root, script):
         "on": {"push": {"tags": ["v*"]}},
         "jobs": {"test": {"runs-on": "ubuntu-latest", "steps": [{"run": script}]}},
     }
+    if workflow_shell is not None:
+        workflow["defaults"] = {"run": {"shell": workflow_shell}}
+    job = workflow["jobs"]["test"]
+    if job_shell is not None:
+        job["defaults"] = {"run": {"shell": job_shell}}
+    if step_shell is not None:
+        job["steps"][0]["shell"] = step_shell
     (directory / "release.yml").write_text(yaml.safe_dump(workflow))
     result = CliRunner().invoke(
         main,
@@ -116,3 +123,25 @@ def test_explicit_profiles_and_nonexecuted_examples_do_not_trigger_rules(
     found = [v["rule"] for v in payload["violations"] if v["rule"] in guarded]
     # Assert
     assert found == []
+
+
+@pytest.mark.parametrize(
+    "shells,expected",
+    [
+        ({"workflow_shell": "python"}, False),
+        ({"job_shell": "python"}, False),
+        ({"step_shell": "python"}, False),
+        ({"workflow_shell": "python", "job_shell": "bash"}, True),
+        ({"job_shell": "python", "step_shell": "bash"}, True),
+    ],
+)
+def test_workflow_and_job_shell_defaults_respect_step_overrides(
+    tmp_path, shells, expected
+):
+    # Arrange
+    script = "gh pr merge 1 --admin"
+    # Act
+    _, payload = _run(tmp_path, script, **shells)
+    found = any(v["rule"] == "PS-236" for v in payload["violations"])
+    # Assert
+    assert found is expected

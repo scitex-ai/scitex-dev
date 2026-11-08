@@ -154,6 +154,12 @@ def _inspect(script):
         previous, operator = target, following
 
 
+def _default_shell(mapping, fallback):
+    defaults = mapping.get("defaults", {})
+    run = defaults.get("run", {}) if isinstance(defaults, dict) else {}
+    return run.get("shell", fallback) if isinstance(run, dict) else fallback
+
+
 def check_workflow_integrity(repo_root, violation_cls, out):
     """Append known unsafe literal shell patterns from active workflow files."""
     directory = Path(repo_root) / ".github/workflows"
@@ -176,11 +182,12 @@ def check_workflow_integrity(repo_root, violation_cls, out):
         for job_name, job in data["jobs"].items():
             if not isinstance(job, dict):
                 continue
+            default_shell = _default_shell(job, _default_shell(data, "bash"))
             for index, step in enumerate(job.get("steps", [])):
                 if not isinstance(step, dict) or not isinstance(step.get("run"), str):
                     continue
-                shell = str(step.get("shell", "bash")).split()[0]
-                if shell not in {"bash", "sh"}:
+                shell = str(step.get("shell", default_shell)).split()
+                if not shell or Path(shell[0]).name not in {"bash", "sh"}:
                     continue
                 for code, line, detail in _inspect(step["run"]):
                     out.append(
