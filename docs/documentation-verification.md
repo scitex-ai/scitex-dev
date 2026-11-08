@@ -10,7 +10,7 @@ from pathlib import Path
 from scitex_dev import verify_docs_and_skills
 
 report = verify_docs_and_skills(
-    Path("."), documents=[Path("docs/guide.md"), Path("README.md")]
+    Path("."), documents=[Path("README.md")]
 )
 ```
 
