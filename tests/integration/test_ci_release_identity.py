@@ -14,6 +14,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+from ._release_command import run_release_command
+
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / ".github/ci/release-identity.py"
 spec = importlib.util.spec_from_file_location("dev_release_identity", SCRIPT)
@@ -63,11 +65,12 @@ def repository(tmp_path):
                    "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "Owned release fixture",
                    "GIT_COMMITTER_NAME": "Owned release fixture",
                    "GIT_AUTHOR_EMAIL": "release-fixture@example.invalid",
-                   "GIT_COMMITTER_EMAIL": "release-fixture@example.invalid"}
+                   "GIT_COMMITTER_EMAIL": "release-fixture@example.invalid",
+                   "GIT_TRACE2_EVENT": str(tmp_path / "git-trace.jsonl")}
     for command in (["git", "init", "-q"], ["git", "commit", "--allow-empty", "-qm", "Owned fixture"]):
-        subprocess.run(command, cwd=root, env=environment, check=True, capture_output=True, timeout=5)
-    commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root,
-                                     env=environment, text=True, timeout=5).strip()
+        run_release_command(command, root, environment, check=True)
+    commit = run_release_command(["git", "rev-parse", "HEAD"], root, environment,
+                                 text=True, check=True).stdout.strip()
     dist = root / "dist"
     dist.mkdir()
     (dist / "scitex_dev-0.62.3-py3-none-any.whl").write_bytes(wheel())
@@ -78,10 +81,9 @@ def repository(tmp_path):
 def execute(case, operation="write", commit=None, tag="v0.62.3"):
     root, environment, head = case
     # The actual validator is stdlib-only; unrelated site hooks are not inputs.
-    return subprocess.run([sys.executable, "-I", "-S", "-B", str(SCRIPT), operation,
+    return run_release_command([sys.executable, "-I", "-S", "-B", str(SCRIPT), operation,
                            "--tag", tag, "--commit", commit or head],
-                          cwd=root, env=environment, text=True, capture_output=True, timeout=5,
-                          check=False)
+                          root, environment, text=True, check=False)
 
 
 def test_real_disposable_git_wheel_sdist_manifest_roundtrip(repository):
