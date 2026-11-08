@@ -10,6 +10,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Correct embedded install and release guidance: newb is a base dependency,
+  PyPI supports pending Trusted Publishers, and a tag or index entry alone
+  does not qualify a release. Preserve failed checks and single-tag publishing.
+
 - Trace explicit local Python re-exports in static documentation checks,
   including aliases and relative source imports. Report missing or invalid
   local targets as drift while retaining incomplete outcomes for cycles,
