@@ -10,6 +10,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Correct embedded install and release guidance: newb is a base dependency,
+  PyPI supports pending Trusted Publishers, and a tag or index entry alone
+  does not qualify a release. Preserve failed checks and single-tag publishing.
+
 - Attach bounded Git Trace2 and local resource evidence when disposable
   release-identity test commands time out. Preserve the five-second deadline,
   real Git commands, original exceptions and all artifact validation gates.

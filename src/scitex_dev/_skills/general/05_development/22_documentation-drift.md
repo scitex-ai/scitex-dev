@@ -55,7 +55,10 @@ appropriate; creating this check does not require a new scheduling framework.
 
 ## Existing tools and their limits
 
-Available in **public Dev 0.62.15**:
+The base helper is available in **public Dev 0.62.15**. The behavior described
+below follows the current source; later additions such as local re-export
+traversal are not established merely because an older installation exposes
+this function. Check its installed version and applicable behavioral evidence.
 
 ```python
 from pathlib import Path

@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] Packaging and release failures — the repo is right, the published artifact is wrong
-  [DETAILS] Recipes §3, §4, §6, §7, §8, §10 and §11 of the failure playbook: PyPI trusted-publisher setup and its silent-save gotcha, wheel-content drift (git has the module, PyPI doesn't), extras-completeness for umbrella bridges, Doc-Drift CI installing from PyPI instead of the checkout, the implicit-transitive-dep class-action that only a fresh-venv install catches, the PostToolUse CI watcher that closes the loop, and the orphan License classifier that blocks setuptools 80+ builds. Triage table in the sibling `01_failure-playbook.md`; the in-tree counterpart is `06_compat-and-refactor-drift.md`. Use when a consumer install fails but the checkout looks fine.
+  [DETAILS] Recipes §3, §4, §6, §7, §8, §10 and §11: publisher identity, artifact contents, complete install profiles, source-versus-installed documentation, runtime dependencies, CI evidence and license metadata. Use owning source and actual release gates; preserve failures instead of forcing reruns or changing upload routes.
 tags: [scitex-general-quality-packaging-failures]
 ---
 
@@ -25,15 +25,29 @@ something the code references moved — is
 
 ## 3. PyPI trusted-publisher setup (silent-save gotcha)
 
-The **first** release of any new PyPI project must be `twine upload` from a local build — trusted publishing cannot create a new project. Afterwards, configure the trusted publisher at:
+PyPI supports a pending Trusted Publisher that creates a project on its first
+successful publication. A manual first upload is not required, and a pending
+publisher does not reserve the name. See the
+[official PyPI guide](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/).
+
+For an existing project, inspect the configured publisher at:
 
 ```
 https://pypi.org/manage/project/<pkg>/settings/publishing/
 ```
 
-Fields: owner `ywatanabe1989`, repo `<pkg>`, workflow `publish-pypi.yml`, environment `pypi`.
+Match the repository owner/name, workflow filename and environment to the leaf's
+actual workflow. Do not copy a historical account or workflow name. Dev's
+current boundary is declared in
+`.github/workflows/pypi-publish-and-github-release-on-tag.yml` and checked by
+`.github/ci/release-identity.py`.
 
-**Silent-save gotcha** — after submit, the "Manage current publishers" list must actually show the new entry. If it still says *"No publishers are currently configured"*, the form didn't persist. Re-enter it. This is the single most common cause of `invalid-publisher` errors on a tag-triggered publish when the package already exists on PyPI. Once configured, `gh run rerun <id>` — no retag needed.
+After authorized configuration, verify that the intended publisher is listed.
+For `invalid-publisher`, compare its fields with the actual OIDC claims and
+workflow; do not infer that an unsaved form is the cause. Preserve unsuccessful
+qualification evidence. This recipe does not authorize forced CI reruns,
+moving tags or an alternate uploader. Follow the
+[current release flow](../05_development/18_end-to-end-release-flow.md).
 
 **Probe** (tag ↔ PyPI alignment):
 
@@ -57,40 +71,45 @@ pip download <pkg>==<pypi-version> --no-deps -d /tmp/check
 python3 -c "import zipfile,os;p='/tmp/check';w=[f for f in os.listdir(p) if f.endswith('.whl')][0];z=zipfile.ZipFile(os.path.join(p,w));print([n for n in z.namelist() if 'submodule_name' in n])"
 ```
 
-**Fix:** bump the package version, tag, push — publishes the current state. Never "fix" downstream by pinning to an older version; fix the upstream release.
+**Fix:** repair the owning package's source or packaging configuration, then
+qualify a new unused version through its actual release stages. A tag push
+alone does not establish publication or artifact correctness. Keep consumers
+on a compatible qualified release until its replacement is verified; do not
+replace a failed candidate with relaxed gates or dependency overrides.
 
 Session hit: `scitex-dev 0.6.1` on PyPI lacked `_skills_quality_pytest.py`; released 0.7.0 to unblock 10 downstream CIs.
 
 ## 6. Extras-completeness (empty `[foo]` breaks umbrella bridges)
 
-Every bridge directory under `src/scitex/<name>/` that re-exports a standalone package must have its extra populated. Empty `[container] = []` leaves `stx.container.apptainer` unreachable from `pip install scitex[all]`; Doc-Drift flags every chain.
+A bridge in the checkout does not establish that the normal installed profile
+supplies its provider. Inspect core dependencies, public extras and guarded
+optional imports before changing them. Do not prescribe a new per-feature
+extra from a directory name alone.
 
-**Probe (inside scitex-python):**
+PS-221 checks public-extra closure in
+`src/scitex_dev/_cli/audit/_project/_check_extras_all_closure.py`: public
+requirements must be included in `all`, including through valid self-references.
+This static check does not resolve dependency compatibility or establish that
+every advertised operation works. Its original controls are in
+`tests/scitex_dev/_cli/audit/_project/test__check_extras_all_closure.py`.
 
-```bash
-python3 -c "
-import tomllib, pathlib
-d = tomllib.loads(open('pyproject.toml','rb').read())
-extras = d['project']['optional-dependencies']
-bridges = [p.name for p in pathlib.Path('src/scitex').iterdir()
-           if p.is_dir() and not p.name.startswith('_')]
-for b in bridges:
-    if b in extras and extras[b] == []:
-        print(f'EMPTY: scitex[{b}] but src/scitex/{b}/ exists')
-"
-```
-
-**Fix:** `container = ["scitex-container"]`, `dataset = ["scitex-dataset"]`, etc.
-
-A stricter form of this check — *every canonical ecosystem package must appear
-in some named extra AND in `[all]`* — is §14 of
-[07_release-gate-probes.md](07_release-gate-probes.md).
+Repair the owning declarations and qualify the complete normal profile in a
+fresh environment. Do not retry a failed `all,dev` install with a smaller extra,
+bare install, `--no-deps` or overrides and report it as the same acceptance.
 
 ## 7. Doc-Drift CI install source
 
-`doc-drift-nightly.yml` must install scitex from **the current checkout** (`pip install ".[all]"`) rather than from PyPI (`pip install "scitex[all]"`). Otherwise a pyproject.toml fix in the same push won't take effect until a PyPI release catches up.
+Distinguish checks of the changed checkout from checks of an installed or
+published distribution. A source change cannot repair a stale public wheel
+being imported by that check. Record the module path, source SHA and installed
+version; use the workflow's complete declared profile.
 
-The workflow's `on: push: paths:` filter also excludes `pyproject.toml` — force a run with `gh workflow run "Doc-Drift Nightly" --ref develop` after the push.
+Dev's actual quality workflow is
+`.github/workflows/scitex-dev-quality-audit-on-ubuntu-latest.yml`. It audits the
+editable checkout; its path filters include `pyproject.toml`. Inspect the leaf's
+current triggers instead of assuming a historical nightly name or forcing
+another run. Build success is not content acceptance; follow the
+[documentation drift skill](../05_development/22_documentation-drift.md).
 
 ## 8. Implicit transitive dep after a refactor (the 2026-04-28 class-action)
 
@@ -105,21 +124,24 @@ scitex_config._ecosystem import local_state` but doesn't audit
 `pyproject.toml` for the new transitive dep. The package now imports
 something it doesn't declare, so PyPI consumers hit ModuleNotFoundError.
 
-**Detection** is automated in
-`scitex-dev/scripts/quality/audit_ecosystem.py` (`§C5 src imports
-scitex_config but pyproject does not declare scitex-config`). The
-nightly `quality-audit.yml` workflow opens a tracking GitHub issue
-tagged `quality-audit` if any CRITICAL findings appear.
+**Detection:** PS-233 checks runtime import locations against declarations;
+see the final section below. Dev dispatches owning audit providers. Retain
+fresh normal install and actual import/operation checks: an AST finding alone
+cannot qualify the resolved installed graph.
 
 **Fix recipe.**
 
-1. Add the dep to `dependencies = [...]` (NOT `optional-dependencies`).
-2. Bump the patch version (`0.1.9 → 0.1.10`).
-3. `git tag v<new>` and push tags. If the publish workflow uses
-   `event: release` instead of `push: tags: ['v*']`, also create a
-   `gh release create v<new>` so PyPI publish actually fires.
-4. Verify on PyPI with `pip index versions <pkg>` — a pushed tag without
-   a corresponding release is invisible to consumers.
+1. Add an unguarded runtime dependency to `dependencies`. A genuinely optional
+   guarded capability follows its owning package's declared extra instead;
+   retain the location-sensitive PS-233 controls described below.
+2. Select an unused version and follow the owning
+   [release procedure](../05_development/18_end-to-end-release-flow.md), including
+   all checks for the candidate commit, the complete declared profile and artifact identity.
+3. Inspect the leaf's actual validation and publication triggers. Push only the
+   intended immutable tag. Do not create a second GitHub release or uploader
+   when the workflow already owns that operation.
+4. Verify wheel/sdist contents and a normal dependency-compatible installation
+   from the published artifacts. Index visibility alone is not acceptance.
 
 **Affected on 2026-04-28 (all fixed + republished):** scitex-core 0.2.5,
 scitex-container 0.1.10, scitex-browser 0.1.11, scitex-dataset 0.3.5,
@@ -129,36 +151,31 @@ Its silent twin — the same migration breaking *tests* rather than the
 install — is §9 of
 [06_compat-and-refactor-drift.md](06_compat-and-refactor-drift.md).
 
-## 10. PostToolUse CI watcher closes the loop end-to-end
+## 10. CI feedback must reach the maintainer
 
-`~/.claude/hooks/post-tool-use/check_ci_status.sh` emits
-`WARN  CI FAILURE  ...` to stderr + `exit 2` so Claude Code forwards the
-message to the assistant on every tool call inside a git repo. Pair it
-with the `speak-and-call` directive ("don't continue past a WARN").
-Without the watcher, the bugs from §8 and §9 stay silent until a human
-notices PyPI is broken.
+Inspect every check run, workflow run and commit status for the exact candidate
+head, including consent and security checks. Required-check protection alone
+does not cover all outcomes. A local watcher can help notice failures, but a
+personal vendor-specific hook path is not an installed SciTeX guarantee.
 
-The companion `audit_ecosystem.py` script runs nightly, opens a
-GitHub issue tagged `quality-audit` on CRITICAL/HIGH, and uploads the
-full JSON as an artifact.
+Dev's source quality workflow and `tests/develop/test_audit.py` provide separate
+audit entry points. Neither proves that a nightly job executed, an alert was
+delivered, or a release passed. Keep unsuccessful and incomplete evidence
+visible; follow the owning release procedure before merging or publishing.
 
-## 11. Orphan License classifier blocks setuptools 80+ build (the 2026-04-28b class-action)
+## 11. Conflicting license metadata blocks the build
 
 **Symptom.** ``pip install -e .`` fails with
 ``setuptools.errors.InvalidConfigError: License classifiers have been
 superseded by license expressions``. CI's *Test* / *Tests* job aborts
 before any test runs.
 
-**Root cause.** PEP 639 deprecated the legacy
-``"License :: OSI Approved :: ..."`` classifier in favour of the
-``license = "AGPL-3.0-only"`` SPDX expression. setuptools 80+ refuses
-the build when *both* are present. After our 2026-04-28a normalization
-to SPDX (REL-11), 41 ecosystem packages still carried the legacy
-classifier alongside the new SPDX form.
-
-**Detection** is automated in
-`scitex_dev._pyproject_lint.check_orphan_license_classifier`
-(rule ``E5C13_orphan_license_classifier``, severity HIGH).
+**Source check.**
+`scitex_dev._ecosystem._release.pyproject_lint.check_orphan_license_classifier`
+reports a `License :: ...` classifier as
+`E5C13_orphan_license_classifier` (HIGH). Its behavioral controls are in
+`tests/scitex_dev/_ecosystem/_release/test_pyproject_lint.py`. This metadata
+finding is separate from actually building with the declared backend.
 
 **Fix.** Remove the classifier line; SPDX is authoritative now:
 
@@ -171,16 +188,6 @@ classifiers = [
     # "License :: OSI Approved :: GNU Affero General Public License v3",  ← drop
 ]
 ```
-
-**Affected on 2026-04-28 (all 31 fixed + republished):** crossref-local,
-figrecipe, openalex-local, scitex-agent-container, scitex-audio,
-scitex-audit, scitex-browser, scitex-clew, scitex-compat, scitex-core,
-scitex-dataset, scitex-db, scitex-dict, scitex-etc, scitex-gists,
-scitex-io, scitex-logging, scitex-notification, scitex-orochi,
-scitex-parallel, scitex-path, scitex-plt, scitex-repro, scitex-scholar,
-scitex-stats, scitex-str, scitex-template, scitex-types, scitex-writer,
-socialia, scitex-python.
-
 
 ## Runtime import locations (PS-233)
 

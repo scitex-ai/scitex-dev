@@ -1,170 +1,150 @@
 ---
 description: |
   [TOPIC] Version Control Management
-  [DETAILS] Core version-control workflow across the SciTeX ecosystem — branch model (`main` stable + `develop` integration + `feature/*`), semver tagging and `vX.Y.Z` annotated tags, ecosystem release waves (upstream packages published before downstream consumers), release gates (tests + audits + docs build green, no dirty working tree, version bumped in pyproject.toml and `__init__.__version__`), and conflict-resolution policy for multi-repo feature branches. Use when cutting a release, auditing branch hygiene, or planning a cross-package version bump.
+  [DETAILS] Plan source integration, version selection, publication and host adoption as distinct stages. Follow the leaf-owned release flow, preserve unrelated work and immutable tags, inspect CI for the candidate commit, and verify published artifacts before rollout. Use when reviewing branch hygiene or coordinating package versions; this skill does not replace the canonical release procedure.
 tags: [scitex-general-development-version-control]
 ---
 
 # SciTeX Version Management (Core Workflow)
 
-For automation commands and ecosystem-sync CLI details, see the companion skill [05_development/03_release-automation.md](03_release-automation.md).
+Use this skill to establish scope and inspect version state. The
+[current end-to-end release flow](18_end-to-end-release-flow.md) owns the release
+sequence, authorization boundaries and publisher setup. The
+[release and pin doctrine](14_release-and-pin-doctrine.md) covers dependency
+adoption. Follow the selected leaf's source-owned procedure rather than copying
+one package's workflow into another.
 
 ## Version Management Levels
 
-| Level | Scope | Actions | When |
-|-------|-------|---------|------|
-| 1 | **Local** | Edit `pyproject.toml` → commit → `git tag vX.Y.Z` → push | Every release |
-| 2 | **GitHub Release** | Level 1 + `gh release create vX.Y.Z --generate-notes` | Every release |
-| 3 | **PyPI** | Level 2 + verify `publish-pypi.yml` triggered (or manual twine) | Public packages |
-| 4 | **Hosts** | Level 3 + `scitex dev versions sync --confirm` (NAS, Spartan) | Multi-host packages |
-| 5 | **Skills** | Level 4 + `scitex-dev skills export` (stamps MANIFEST.md version) | Packages with `_skills/` |
+Treat these as separate acceptance stages, not an automatic command chain.
 
-Pick the highest applicable level. Most packages need Level 4. Packages with `_skills/` directories need Level 5.
+| Stage | Scope | Evidence |
+|-------|-------|----------|
+| Source | Owned checkout and ordinary PR | Preserved work, reviewed diff and every check for the candidate commit |
+| Release candidate | Canonical unused version and immutable tag | Accepted commit, complete declared profile and native validation |
+| Publication | Declared package index and release record | Qualified wheel/sdist identity and successful actual publisher |
+| Hosts | Authorized target services | Compatible installed packages, runtime health and relevant behavior |
+| Skills | Exported agent-readable knowledge | Installed source/version binding, exported content and actual discovery where checked |
 
-**PyPI first-publish caveat**: The first publish requires a manual workflow run with twine to register the project on PyPI. Only after that can you configure the trusted publisher (OIDC) on pypi.org. Subsequent releases are automatic via `publish-pypi.yml`.
+A higher stage does not follow merely because the previous command exited zero.
+A pushed tag, index entry, healthy process or exported file each establishes only
+its own observation. Identify which stages the user authorized and which have
+actually been verified.
 
 ## How to Present Choices
 
-When invoked via `/scitex-versions`, investigate current state and present like:
-
-```
-Current: scitex-dev v0.4.0
-  pyproject.toml: 0.4.0 | tag: v0.4.0 | release: v0.4.0 | PyPI: 0.4.0 | NAS: 0.4.0
-
-Recommendation: Level 4 (Hosts)
-
-  1. Local only
-  2. + GitHub Release
-  3. + PyPI
-  4. + Host sync       <-- recommended
-  5. + Skills export
-```
-
-Speak the recommendation and numbered choices. Wait for user to select a number, then execute that level.
+Report the current source SHA, version source, latest applicable accepted tag,
+publication evidence and host adoption separately. Explain the proposed scope
+and any missing acceptance. Honor explicit standing authorization; do not ask
+for the same permission again because a historical numbered menu said to wait.
+If scope is missing, prepare a concrete reviewable candidate before clarifying.
 
 ## Preflight: respect the working tree
 
-Before any `ecosystem pull` / `install` / `checkout` (or release-cut step
-below), check each target package's state — uncommitted changes, wrong branch,
-upstream tracking. See [16_version-control-preflight.md](16_version-control-preflight.md).
+Before pull, checkout, install, release or rollout, inspect the actual target's
+uncommitted changes, branch, tracking reference and remote state. Use an owned
+worktree when other work is present. Follow
+[version-control preflight](16_version-control-preflight.md); never discard,
+stash or commit another agent's work as an automatic cleanup step.
 
 ## Pre-Push CI Check
 
-**Before pushing any release, check GitHub Actions for failures:**
+Inspect all check runs, workflow runs and commit statuses for the exact
+candidate SHA, including consent and security outcomes. Recent unrelated green
+runs and the branch's required-check subset are not complete acceptance.
+Replace placeholders with the selected repository and run:
 
 ```bash
-gh run list -R ywatanabe1989/PACKAGE --limit 5
-gh run view RUN_ID -R ywatanabe1989/PACKAGE
+gh pr view PR_NUMBER --repo scitex-ai/PACKAGE --json headRefOid,statusCheckRollup
+gh pr checks PR_NUMBER --repo scitex-ai/PACKAGE
+gh run view RUN_ID --repo scitex-ai/PACKAGE
 ```
 
-If CI is failing, fix the issue before bumping version.
+Preserve failed or unavailable evidence. Do not force reruns, synthesize a
+verdict or reduce the install/test profile to obtain a green result.
 
 ## Ecosystem Roster
 
-Run `scitex-dev ecosystem list` for the authoritative current roster (39+ packages). Do not maintain a hand-list here — it drifts immediately.
+Discover packages and providers in the current environment through Dev's
+existing dispatcher. Do not maintain a second package count or assume that a
+registered provider is installed, enabled or live. Distinguish a source checkout
+from its installed distribution and the package actually serving a host.
 
 ## Should We Increment?
 
-Before bumping, check what changed since last tag:
-
-```bash
-git -C ~/proj/PACKAGE log $(git -C ~/proj/PACKAGE describe --tags --abbrev=0)..HEAD --oneline
-```
-
-**Increment if**: new commits exist since last tag that change behavior, API, or dependencies.
-**Skip if**: only docs, skills, or CI changes (unless you want a release for those).
+Inspect the diff since the applicable accepted release, not merely the nearest
+tag of any kind. Determine whether public behavior, interfaces, dependencies,
+packaged skills or bundled docs need delivery. Documentation-only work can
+require a release when installed users need the corrected content.
 
 ### Minor vs Patch
 
-| Bump | When |
-|------|------|
-| **Patch** (Z) | Bug fixes, small improvements, dependency updates |
-| **Minor** (Y) | New features, new CLI commands, new API functions |
-| **Major** (X) | Breaking changes — only when user explicitly requests |
+| Bump | Typical scope |
+|------|---------------|
+| Patch | Compatible fixes and small corrections |
+| Minor | Compatible public features or interfaces |
+| Major | Breaking changes under the user's authorized scope |
 
-Auto-determine from `git log`: if any commit starts with `feat:` → minor. Otherwise → patch.
+Review the actual change and the owning package's version policy. A commit
+prefix alone cannot determine compatibility or select a safe version.
 
 ### Also: did consumers grow a new minimum?
 
-If your bump exposes a new API that downstream/middle/upstream packages
-already use, those packages' `pyproject.toml` lower bounds must be raised
-in the same wave. See [08 § When YOU update a package, bump minima in
-consumers](../01_ecosystem/02_dependency-and-version-pinning.md#when-you-update-a-package-bump-minima-in-consumers).
-
-Quick check:
-
-```bash
-# Which scitex packages import the one you just bumped?
-grep -r "^from scitex_io\|^import scitex_io" ~/proj/scitex-*/src \
-    | cut -d/ -f5 | sort -u
-```
-
-Each hit is a potential minimum-bump candidate — inspect its
-`pyproject.toml` to decide if the bound needs to move.
+When a consumer starts using a new provider API, inspect its declared bounds
+and normal dependency resolution. Raise a required minimum in the owning
+consumer when justified. An upstream release alone does not prove that every
+consumer can adopt it; preserve compatible qualified versions until the
+replacement's complete profile passes.
 
 ## Version Increment (Core Workflow)
 
-Format: `vX.Y.Z` (X=Major, Y=Minor, Z=Patch, may have -alpha/-beta suffix).
-
-```bash
-# 1. Edit pyproject.toml: version = "X.Y.Z"
-# 2. Commit and tag
-git add pyproject.toml
-git commit -m "chore: bump version to X.Y.Z"
-git tag -a vX.Y.Z -m "Release vX.Y.Z"
-git push origin develop --tags
-# 3. Sync — see 05_development/03_release-automation.md for commands
-```
+Inspect whether the leaf uses a literal version, setuptools-scm or another
+source. Do not edit both `pyproject.toml` and `__init__.__version__` by rote.
+Select an unused canonical version, integrate accepted source normally and
+follow [the release flow](18_end-to-end-release-flow.md). Push only the intended
+version tag after its commit is accepted. Tag creation is not publication.
 
 ## When to merge `develop` → `main`
 
-Canonical rule: `main` = the latest tagged release, kept in sync by a tag push
-on `develop` auto-fast-forwarding `main`. The change-kind→action table, the
-reference `sync-main.yml` workflow, and the manual fallback are in
-[17_develop-to-main-sync.md](17_develop-to-main-sync.md).
+Read the selected leaf's actual release workflow and protected-branch policy.
+Do not assume that a tag pushed on `develop` advances `main` automatically.
+Promote through the ordinary release PR and inspect all acceptance for the candidate commit;
+no administrative bypass, auto-merge or alternate publication route.
 
 ## RULES: Never Sync Blind
 
-1. **NEVER push without checking remote state first** (`diff`)
-2. **NEVER pull without checking local state first** (`git status`)
-3. **NEVER discard uncommitted changes without reading the diff**
-4. **Always classify changes**: improvement (commit), artifact (discard), obsolete (archive)
+- Inspect remote state before pushing and local changes before pulling.
+- Preserve unrelated edits and unsuccessful qualification evidence.
+- Classify artifacts against source ownership before removing anything.
+- Record source, installed package and live-host identities separately.
 
 ## PyPI Trusted Publisher
 
-```
-Repository: ywatanabe1989/<package>
-Workflow: publish-pypi.yml
-Environment name: pypi
-```
-
-If not setup correctly,
-1. Manually publish using twine
-2. Instruct user to open `https://pypi.org/manage/project/<pypi-package-name>/settings/publishing/`
+Use the publisher declared by the leaf's actual repository, workflow and
+environment. PyPI supports pending Trusted Publishers for new projects; a
+manual first upload is not required. Setup and its official reference are in
+[the canonical release flow](18_end-to-end-release-flow.md#pypi-trusted-publisher-setup-one-time-per-package).
+A publisher error does not authorize a manual uploader or a moved tag.
 
 ## Troubleshooting
 
 ### Tag not reachable from current branch
 
-```bash
-git tag -d vX.Y.Z                               # Delete local
-git tag -a vX.Y.Z -m "Release vX.Y.Z" HEAD      # Retag on HEAD
-git push origin vX.Y.Z --force                   # Force-push tag
-```
+Inspect the tag's actual commit and the selected branch history. A pushed tag
+is immutable: do not delete, recreate or force-push it to another commit.
+Preserve its qualification result. Repair source and select a new unused
+version through the normal release procedure when a replacement is needed.
 
 ### Merge conflicts on remote hosts
 
-**Always read diff contents before discarding:**
-
-```bash
-scitex dev versions diff --host nas -p PACKAGE   # READ FIRST
-scitex dev versions commit --host nas -p PACKAGE -m "preserve: work from NAS" --confirm
-ssh nas "cd ~/proj/PACKAGE && git stash && git pull && git stash pop"
-```
+Read the target's actual diff and preserve its work before resolving a merge
+in an owned checkout. Do not run a blanket stash/pull/pop on a live authority
+checkout or assume that historical host aliases still identify the target.
+Qualified source integration and service rollout remain separate operations.
 
 ### Stale dist-info
 
-```bash
-ls ~/.env-3.11/lib/python3.11/site-packages/PACKAGE_NAME-*.dist-info
-rm -rf ~/.env-3.11/lib/python3.11/site-packages/PACKAGE_NAME-OLD_VERSION.dist-info
-```
+Identify the interpreter and distribution actually imported before changing an
+environment. Compare a fresh normal compatible installation with its wheel
+metadata and installed RECORD. Do not delete guessed `*.dist-info` paths from a
+shared environment to make an inconsistency disappear.
