@@ -10,6 +10,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.62.19] - 2026-11-08
+
 - Enforce literal workflow integrity through the normal project auditor:
   PS-235 rejects local install profiles changed after failure, and PS-236
   rejects `gh pr merge --admin`. Keep quoted examples and heredoc data outside
