@@ -10,6 +10,12 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Trace explicit local Python re-exports in static documentation checks,
+  including aliases and relative source imports. Report missing or invalid
+  local targets as drift while retaining incomplete outcomes for cycles,
+  overlong chains and ambiguous/dynamic bindings. Never import reviewed code
+  or read re-exported source outside the selected package root.
+
 - Enforce literal workflow integrity through the normal project auditor:
   PS-235 rejects local install profiles changed after failure, and PS-236
   rejects `gh pr merge --admin`. Keep quoted examples and heredoc data outside

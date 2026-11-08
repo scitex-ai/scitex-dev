@@ -68,7 +68,15 @@ print(report["status"], report["checked_scope"], report["unverified"])
 ```
 
 This is a read-only static check of closed Markdown Python/py fences and local
-src-layout imports/direct definitions. Explicit `documents` can select existing
+src-layout imports/direct definitions. Explicit top-level local `from` chains
+and aliases are followed statically, including relative imports in source.
+Missing local targets and source read/parse failures are issues. Cycles,
+chains beyond 32 references, multiple/conditional bindings, assignments,
+star imports and dynamic/external targets remain unverified. Relative imports
+in Markdown examples remain unverified because their package context is unknown.
+Source symlinks must remain within the selected root.
+
+Explicit `documents` can select existing
 agent Markdown or guides. Defaults cover README and source skills. It does not
 execute examples, check signatures/results, validate prose or other interfaces,
 or compare installed/exported skills. Inspect `limitations`; `ok` is scoped,
@@ -80,6 +88,8 @@ the [CommonMark fence indentation rule](https://spec.commonmark.org/0.31.2/#fenc
 it does not dedent arbitrary invalid Python or implement a full Markdown parser.
 Behavioral controls live in
 `tests/scitex_dev/_ecosystem/_skills/test_skills_verify.py`.
+Local re-export controls also live in
+`tests/scitex_dev/_ecosystem/_skills/test__source_references.py`.
 
 The CLI wrapper was added alongside this skill update; older installs,
 including 0.62.15, lack this route. Check `scitex dev docs --help` (or

@@ -22,10 +22,18 @@ unreadable/unparseable referenced source are reported as failures.
 Top-level closed Markdown fences labeled exactly `python` or `py` are parsed
 with Python's AST. Fences nested in lists/quotes are outside this parser's scope.
 Imports referring to local `src/` modules are checked for an existing parsable
-module and direct function/class definition or source submodule. This proves
-source declarations, not runtime importability. External modules, star and
-relative imports, re-exports, assignments, conditional and dynamic bindings
-remain explicitly unverified. Prose, RST, other languages, call signatures,
+module and direct function/class definition or source submodule. Explicit
+top-level `from` re-exports are followed through local source, including aliases
+and relative source imports. A regular package takes precedence over a
+same-named module, matching Python's file finder. Missing local targets and
+unreadable/unparseable source are reported as failures.
+
+This proves source declarations, not runtime importability. Traversal stops
+after 32 references; cycles, longer chains, multiple or conditional bindings,
+assignments, star imports, dynamic attributes and external targets remain
+explicitly unverified. Relative imports in Markdown examples also remain
+unverified because the example's package context is not established. Source
+symlinks cannot escape the selected root. Prose, RST, other languages, call signatures,
 example results, CLI/MCP/Web API behavior and exported skill drift are outside
 this helper's coverage. Continue the five-interface audit for those checks.
 

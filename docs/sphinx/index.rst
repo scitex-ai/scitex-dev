@@ -10,6 +10,7 @@ Shared developer utilities for the SciTeX ecosystem.
    quickstart
    api
    unified-search
+   documentation-verification
    cli
 
 Indices and tables

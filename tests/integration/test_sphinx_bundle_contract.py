@@ -21,6 +21,7 @@ class _Page(HTMLParser):
         self.heading_finished = False
         self.in_form = False
         self.query_form = False
+        self.text = []
 
     def handle_starttag(self, tag, attrs):
         if tag == "h1" and not self.heading_finished:
@@ -46,6 +47,7 @@ class _Page(HTMLParser):
             self.in_form = False
 
     def handle_data(self, data):
+        self.text.append(data)
         if self.in_heading and not self.in_permalink:
             self.heading.append(data)
 
@@ -84,3 +86,24 @@ def test_bundled_search_retains_the_generated_query_form():
     parser.feed((BUNDLE / "search.html").read_text(encoding="utf-8"))
     # Assert
     assert parser.query_form, "Bundled search page lost its generated query form"
+
+
+def test_bundled_verification_guide_contains_its_source_contract():
+    # Arrange
+    parser = _Page()
+    # Act
+    parser.feed(
+        (BUNDLE / "documentation-verification.html").read_text(encoding="utf-8")
+    )
+    text = " ".join("".join(parser.text).split())
+    # Assert
+    assert all(
+        phrase in text
+        for phrase in (
+            "Explicit top-level",
+            "Missing local targets",
+            "runtime importability",
+            "32 references",
+            "incomplete",
+        )
+    ), "Bundled guide is missing its scope, re-export behavior or limitations"
