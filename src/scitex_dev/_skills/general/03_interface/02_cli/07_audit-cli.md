@@ -22,8 +22,8 @@ python -m scitex_dev ecosystem audit-all scitex-dev --path "$PWD" --json
 
 `audit-cli` inspects the Click command tree. `audit-all` also runs the other
 interface and project auditors. CLI auditing and its dictionary data are part
-of the base Dev installation; installing the compatibility `cli-audit` extra
-is not an activation step.
+of the base Dev installation. The retired `cli-audit` extra is not a supported
+activation step.
 
 ## Read the actual verdict
 
@@ -75,6 +75,28 @@ loaded entry-point owner, exact distribution metadata and resource membership
 and bytes in `RECORD`. Invalid or ambiguous ownership must remain visible;
 the mounting application's dictionary must not supply a foreign group's
 vocabulary when ownership fails.
+
+The current source also attributes nested callbacks published by an already
+loaded ordinary Python module. It first verifies a loaded console source for
+that namespace, then checks the callback's own module membership in the
+distribution's `RECORD`. A Python-function console bootstrap can establish
+that source without being invoked. Namespace spelling alone is insufficient.
+Exact console claims retain priority, including rejected claims; a nested
+binding cannot rescue them. Missing, tampered or ambiguous resources still
+exclude the parent dictionary.
+
+Each walk freezes the first resource verdict and verified bytes for a metadata
+origin. Nested lookups cannot substitute later file contents or repair an
+already rejected resource within that snapshot. Callback-module membership is
+checked separately: an unrecorded child cannot use a verified parent dictionary
+even when both claim the same distribution.
+
+This added inference does not import modules or call business callbacks.
+Unpublished dynamic callbacks and opaque callable objects remain outside its
+scope. Older installed releases may lack this attribution; inspect the actual
+owner provenance before assuming a dictionary will apply. Behavioral controls
+are in `tests/scitex_dev/_cli/audit/_summary/test__callback_source.py` and the
+existing `test__mounted_owner.py` controls.
 
 A project-local file alone does not travel with a wheel. Keep one
 authoritative source and make the package's real build backend emit the

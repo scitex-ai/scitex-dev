@@ -10,6 +10,11 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Attribute module-published nested CLI callbacks to their verified installed
+  owner, including loaded Python-function console bootstraps. Retain console
+  claim priority, source membership, resource digest and ambiguity checks;
+  do not let a rejected nested owner borrow its host's vocabulary.
+
 - Correct embedded install and release guidance: newb is a base dependency,
   PyPI supports pending Trusted Publishers, and a tag or index entry alone
   does not qualify a release. Preserve failed checks and single-tag publishing.
