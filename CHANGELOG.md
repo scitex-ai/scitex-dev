@@ -10,6 +10,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Attach bounded Git Trace2 and local resource evidence when disposable
+  release-identity test commands time out. Preserve the five-second deadline,
+  real Git commands, original exceptions and all artifact validation gates.
+
 - Trace explicit local Python re-exports in static documentation checks,
   including aliases and relative source imports. Report missing or invalid
   local targets as drift while retaining incomplete outcomes for cycles,
