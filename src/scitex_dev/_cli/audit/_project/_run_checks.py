@@ -33,6 +33,9 @@ def run_checks(
 ) -> None:
     """Run every project-structure check, appending to ``violations``."""
     _check_top_level(repo_root, violations)
+    from ._check_workflow_integrity import check_workflow_integrity
+
+    check_workflow_integrity(repo_root, Violation, violations)
     if not skip_mirror:
         _check_mirror(repo_root, distribution, violations)
         _check_placeholder_tests(repo_root, violations)
