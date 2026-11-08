@@ -102,7 +102,7 @@ def render_guard_block() -> str:
 # WHAT: a session that would otherwise report SUCCESS, but never
 # collected OR ran the gate, fails instead — naming the reason. An
 # already-red session is left alone. Opt out for one run with
-# {OPT_OUT_ENV_VAR}=1.
+# {OPT_OUT_ENV_VAR}=1. Only the literal 1 opts out; 0 and false keep the guard.
 import os as _stx_os
 from pathlib import Path as _stx_Path
 
@@ -162,7 +162,7 @@ def pytest_sessionfinish(session, exitstatus):
     config = session.config
     if hasattr(config, "workerinput"):
         return  # xdist worker; the controller reports for the session
-    if _stx_os.environ.get(_STX_OPT_OUT):
+    if _stx_os.environ.get(_STX_OPT_OUT) == "1":
         return
     gate = _stx_gate_path(config)
     if not gate.is_file():

@@ -141,7 +141,6 @@
     <span class="n">violations_message</span><span class="p">,</span>
 <span class="p">)</span>
 
-
 <span class="n">SKIP_ENV_VAR</span> <span class="o">=</span> <span class="s2">"SCITEX_DEV_SKIP_AUDIT"</span>
 
 
@@ -227,6 +226,7 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">_is_tally_line</span><span class="p">(</span><span class="n">payload</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""True for a sub-auditor's own count line, which restates, never adds."""</span>
     <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">_TALLY_COUNT_RE</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">payload</span><span class="p">))</span>
+
 
 <span class="c1">#: Level words that are NOT failures. The auditors already print severity;</span>
 <span class="c1">#: this module used to strip it only to reach the bracket and then ignore it.</span>
@@ -379,14 +379,17 @@
 <span class="sd">        pytest-timeout's generic SIGALRM traceback winning the race. A</span>
 <span class="sd">        genuinely wedged auditor still times out, just later.</span>
 
-<span class="sd">    Bypass</span>
-<span class="sd">    ------</span>
-<span class="sd">    Set ``SCITEX_DEV_SKIP_AUDIT=1`` in the environment to skip the</span>
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    **Local audit bypass.**</span>
+
+<span class="sd">    Set the literal ``SCITEX_DEV_SKIP_AUDIT=1`` in the environment to skip the</span>
 <span class="sd">    audit (the test calls ``pytest.skip`` instead of running the</span>
 <span class="sd">    subprocess). Use during a remediation push when pre-existing</span>
 <span class="sd">    violations would block unrelated test runs, or when developing</span>
 <span class="sd">    locally without scitex-dev's audit corpus available. CI for</span>
-<span class="sd">    release branches MUST NOT set this — drift goes silent.</span>
+<span class="sd">    release branches MUST NOT set this — drift goes silent. Other values,</span>
+<span class="sd">    including ``0`` and ``false``, do not bypass the audit.</span>
 
 <span class="sd">    Raises</span>
 <span class="sd">    ------</span>
@@ -419,7 +422,7 @@
         <span class="c1"># warning that only fires on the non-skipped path is a warning</span>
         <span class="c1"># that goes missing exactly when the run is least scrutinised.</span>
         <span class="n">warn_on_guessed_path</span><span class="p">()</span>
-    <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">SKIP_ENV_VAR</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">SKIP_ENV_VAR</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"1"</span><span class="p">:</span>
         <span class="c1"># Guarded per PS-233: this branch is reached only under pytest, but a</span>
         <span class="c1"># bare install must still fail with the install remedy named.</span>
         <span class="k">try</span><span class="p">:</span>
@@ -471,8 +474,12 @@
     <span class="c1"># tests depended on the defect. Injecting the launcher lets a test say</span>
     <span class="c1"># which auditor it means, out loud, instead of smuggling it in through</span>
     <span class="c1"># the environment.</span>
-    <span class="n">argv</span> <span class="o">=</span> <span class="p">[</span><span class="o">*</span><span class="p">(</span><span class="n">launcher</span> <span class="ow">or</span> <span class="p">[</span><span class="n">sys</span><span class="o">.</span><span class="n">executable</span><span class="p">,</span> <span class="s2">"-m"</span><span class="p">,</span> <span class="s2">"scitex_dev"</span><span class="p">]),</span>
-            <span class="s2">"ecosystem"</span><span class="p">,</span> <span class="s2">"audit-all"</span><span class="p">,</span> <span class="n">distribution</span><span class="p">]</span>
+    <span class="n">argv</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="o">*</span><span class="p">(</span><span class="n">launcher</span> <span class="ow">or</span> <span class="p">[</span><span class="n">sys</span><span class="o">.</span><span class="n">executable</span><span class="p">,</span> <span class="s2">"-m"</span><span class="p">,</span> <span class="s2">"scitex_dev"</span><span class="p">]),</span>
+        <span class="s2">"ecosystem"</span><span class="p">,</span>
+        <span class="s2">"audit-all"</span><span class="p">,</span>
+        <span class="n">distribution</span><span class="p">,</span>
+    <span class="p">]</span>
     <span class="k">if</span> <span class="n">path</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">argv</span> <span class="o">+=</span> <span class="p">[</span><span class="s2">"--path"</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">)]</span>
     <span class="n">cmd</span> <span class="o">=</span> <span class="n">shlex</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">argv</span><span class="p">)</span>

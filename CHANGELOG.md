@@ -10,6 +10,13 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Require the literal value `1` for audit-skip and partial-run opt-outs.
+  Values such as `0`, `false` or an unrecognized string now retain the real
+  audit and missing-gate checks. Preserve intentional local opt-outs and
+  refresh the package's generated guard through the source renderer.
+  Keep the independent pytest configuration checks outside generated markers
+  so refreshing the guard cannot remove those checks.
+
 - Distinguish Dev's initial-frontmatter discovery from the independent SK-211
   EOF-marker audit. Remove unsupported claims about external agent loaders;
   describe the footer rule's exact implemented match.
