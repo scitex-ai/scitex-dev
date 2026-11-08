@@ -33,24 +33,23 @@
 
 | # | Problem | Solution |
 |---|---------|----------|
-| 1 | **~70 ecosystem packages drift apart** -- versions, READMEs, sphinx setups, CLI conventions diverge faster than humans can audit | **`scitex-dev ecosystem audit-*`** -- `audit-project`, `audit-cli`, `audit-mcp-tools`, `audit-python-apis`, `audit-skills`, `audit-summary` enforce ~130 numbered rules across the whole ecosystem |
+| 1 | **Ecosystem packages drift apart** -- versions, READMEs, Sphinx setups and interface conventions need consistent checks | **`scitex-dev ecosystem audit-*`** -- shared dispatchers run package, CLI, MCP, Python API, skills and Django checks; `audit-summary` combines cross-package findings |
 | 2 | **Skills scattered across ~70 source repos** -- AI agents can't discover them; humans can't review them | **`scitex dev skills list / get / install`** -- discover installed leaf skills and install them into `~/.scitex/dev/skills/` or an explicit `--directory` for your agent |
-| 3 | **Coordinated releases need ten manual steps** -- bump version, push tag, watch CI, verify PyPI, deploy — done per-package, multiplied by 70 | **`scitex-dev ecosystem sync` + `validate-versions` + `gui open`** -- one-shot install/sync across hosts, version-mismatch detection, and a web dashboard with the live state |
+| 3 | **Source, installed packages and servers show different versions** | **`scitex dev ecosystem list --versions --json`** and **`validate-versions`** report version observations and mismatches. Each leaf owns its qualified release and deployment; inventory and sync commands do not establish release acceptance. See the [Dev release procedure](src/scitex_dev/_skills/scitex-dev/18_full-update.md). |
 | 4 | **Bulk renames across 70 repos break cross-references** -- import paths, doc references, symlinks — `sed -i` corrupts something every time | **`scitex-dev rename-symbols`** -- atomic rename with cross-reference updates, regex support, dry-run preview, git-safety guards |
 | 5 | **Lint rules drift from the API they enforce** -- a renamed function in figrecipe leaves the rule pointing at a nonexistent symbol, and the bug only shows up months later | **`scitex-dev linter`** (engine, formerly `scitex-linter`) -- aggregates per-package rule plugins via the `scitex_dev.linter.plugins` entry point. Rules ship in the package whose API they enforce, so rename + rule + test land in one PR. Doc-block linting for `.py` / `.ipynb` / `.md` / `.rst`. `scitex-dev linter sweep` walks every package's README + docs in one shot |
 
 ## Installation
 
-There are exactly two installs. The CLI, the MCP server, icon rendering
-and skills all ship in the base install — there is no per-feature menu to
-assemble, and nothing to forget to add.
+The base install includes the CLI, MCP server, icon rendering and skills.
+Maintainers can add the `all` extra for development and documentation tooling.
 
 ```bash
 # Everything you need to USE scitex-dev:
 pip install scitex-dev
 
 # Plus the maintainer toolchain (pytest, sphinx, ...) — for working ON it:
-pip install scitex-dev[all]
+pip install "scitex-dev[all]"
 ```
 
 `[all]` adds development and documentation tooling and optional integrations,
@@ -59,6 +58,9 @@ including the Flask dashboard and NumPy diagnostics, on top of the base install.
 somebody eventually pins — and a pin naming an extra that does not exist
 installs anyway, warns into a log nobody reads, and silently omits the
 capability.
+
+Use `scitex dev` when the umbrella is installed. `scitex-dev` provides the
+standalone bootstrap CLI.
 
 ### Configuration
 
@@ -100,9 +102,11 @@ scitex_dev/
 └── testing/                  ← `audit_all_for_package` pytest helper
 ```
 
-Audit rules live alongside the code they check. Each rule has a
-docstring, an entry in `RULES`, a severity in `_SEVERITY_OVERRIDES`,
-and at least one unit test under `tests/.../_audit/_project/`.
+Rules and tests follow their owning audit domain. Project rules enter the shared
+`RULES` registry through central entries, co-located declarations or package
+providers. Co-located defaults live in their rule tuples; the final `_patch`
+pass applies severity and slug overrides after all registrations. Tests live
+under the corresponding audit modules.
 
 ## Demo
 
@@ -113,13 +117,18 @@ flowchart LR
     A --> D[audit-skills]
     A --> E[audit-python-apis]
     A --> F[audit-project]
-    B & C & D & E & F --> G{any error?}
-    G -- "yes" --> H["exit 1<br/>(CI fails)"]
-    G -- "no" --> I["exit 0<br/>(CI green)"]
+    A --> G[audit-django]
+    B & C & D & E & F & G --> H{Any unresolved failure?}
+    H -- "yes" --> I["exit 1"]
+    H -- "no" --> J["exit 0"]
 ```
 
-`scitex-dev` is a CLI/audit tool — its "demo" is the audit running on a
-package. Sample output (run on `scitex-io`):
+The wrapper aggregates auditor exit codes and applies the declared skip-rule
+policy. Read the actual exit status and per-auditor findings: a tally of zero
+unmasked errors alone does not establish success. Invocation or configuration
+errors can return exit code 2.
+
+Illustrative output structure, rather than a current package assessment:
 
 ```
 === audit-cli ===
@@ -138,7 +147,7 @@ ok  scitex-io: no Python API violations
 ok  scitex-io: no project-structure violations
 ```
 
-Failure mode (sample, scitex-dsp before the Hilbert fix):
+Illustrative failure shape:
 
 ```
 === audit-project ===

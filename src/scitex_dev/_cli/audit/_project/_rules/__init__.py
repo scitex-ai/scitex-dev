@@ -333,8 +333,7 @@ for _c, _sec, _msg, _sev, _slug in _EXTRAS_ALLOWLIST_RULES:
 
 # PS-222 — `.scitex/<pkg-short>/` config-layout convention (co-located rule,
 # merged on the same terms as ALL_CLOSURE_RULES / PRINT_FORBIDDEN_RULES).
-# Severity W lives in the tuple, NOT in `_SEVERITY_OVERRIDES` — see the note
-# beside `_patch`: an override for a co-located rule is a silent no-op.
+# Default severity W lives in the tuple; the final `_patch` pass applies overrides.
 from .._check_config_layout import (  # noqa: E402
     CONFIG_LAYOUT_RULES as _CONFIG_LAYOUT_RULES,
 )
@@ -344,8 +343,7 @@ for _c, _sec, _msg, _sev, _slug in _CONFIG_LAYOUT_RULES:
 
 # PS-223 — non-`runtime/` logs-path string literal in package source
 # (co-located rule, merged on the same terms as CONFIG_LAYOUT_RULES).
-# Severity W lives in the tuple, NOT in `_SEVERITY_OVERRIDES` — see the note
-# beside `_patch`: an override for a co-located rule is a silent no-op.
+# Default severity W lives in the tuple; the final `_patch` pass applies overrides.
 from .._check_logs_path import LOGS_PATH_RULES as _LOGS_PATH_RULES  # noqa: E402
 
 for _c, _sec, _msg, _sev, _slug in _LOGS_PATH_RULES:
@@ -354,10 +352,8 @@ for _c, _sec, _msg, _sev, _slug in _LOGS_PATH_RULES:
 # hook-bypass: line-limit
 # PS-224 — CI runner destination must exist in the scitex-dev machine
 # registry (co-located rule, merged on the same terms as LOGS_PATH_RULES).
-# Severity **E** lives in the tuple, NOT in `_SEVERITY_OVERRIDES` — see the
-# note beside `_patch`: an override for a co-located rule is a silent no-op,
-# and a rule that ships at E precisely so it CAN fail a build must never have
-# its severity routed through a table that would drop it.
+# Default severity E lives in the tuple and can fail a build. The final
+# `_patch` pass applies overrides after this co-located set is registered.
 from .._check_runner_destinations import (  # noqa: E402
     RUNNER_DESTINATION_RULES as _RUNNER_DESTINATION_RULES,
 )
@@ -367,11 +363,8 @@ for _c, _sec, _msg, _sev, _slug in _RUNNER_DESTINATION_RULES:
 
 # hook-bypass: line-limit
 # PS-226..PS-229 — the fleet-wide JobSpec declaration convention (co-located
-# rule set, merged on the same terms as RUNNER_DESTINATION_RULES). Severities
-# live in the tuples, NOT in `_SEVERITY_OVERRIDES` — see the note beside
-# `_patch`: an override for a co-located rule is a silent no-op, and PS-226's
-# whole purpose is to FAIL, so its E must not be routed through a table that
-# would drop it.
+# rule set, merged on the same terms as RUNNER_DESTINATION_RULES). Default
+# severities live in the tuples; the final `_patch` pass applies overrides.
 from .._check_job_naming import JOB_NAMING_RULES as _JOB_NAMING_RULES  # noqa: E402
 
 for _c, _sec, _msg, _sev, _slug in _JOB_NAMING_RULES:
@@ -379,10 +372,9 @@ for _c, _sec, _msg, _sev, _slug in _JOB_NAMING_RULES:
 
 # hook-bypass: line-limit
 # PS-231 — a leaf workflow that RE-IMPLEMENTS an org-provided reusable one
-# (co-located rule set, same terms as RUNNER_DESTINATION_RULES). Severity E
-# lives in the tuple, NOT in `_SEVERITY_OVERRIDES`: an override for a
-# co-located rule is a silent no-op, and this rule ships at E precisely so it
-# CAN fail a build. The operator settled the shape on PS-224 —
+# (co-located rule set, same terms as RUNNER_DESTINATION_RULES). Default
+# severity E lives in the tuple; final overrides apply after registration.
+# The operator settled the shape on PS-224 —
 # 「昔だろうが今だろうが問題点は問題点」 (no grandfathering) and
 # 「全て赤でいいと思います」 (a fleet-wide red is the intended start).
 from .._check_workflow_duplication import (  # noqa: E402
@@ -397,9 +389,8 @@ for _c, _sec, _msg, _sev, _slug in _WORKFLOW_DUPLICATION_RULES:
 # merged on the same terms as JOB_NAMING_RULES). PS-226..229 above make job
 # NAMES and KINDS mechanical; PS-230 closes the other half of the same
 # operator decision — the WORDS — which the naming skill itself flagged as
-# "convention until an auditor rule exists". Severity W lives in the tuple,
-# NOT in `_SEVERITY_OVERRIDES`: an override for a co-located rule is a
-# silent no-op (see the note beside `_patch`).
+# "convention until an auditor rule exists". Default severity W lives in the
+# tuple; the final `_patch` pass applies overrides after registration.
 from .._check_naming_vocabulary import (  # noqa: E402
     NAMING_VOCABULARY_RULES as _NAMING_VOCABULARY_RULES,
 )
