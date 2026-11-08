@@ -115,7 +115,8 @@ def _commands(script):
         try:
             tokens, quoted = _lex(line)
         except ValueError:
-            # A quoted multiline shell/Python fragment is not a literal call.
+            # Parse the entire quoted fragment before recognizing commands.
+            pending = line + "\n"
             continue
         for index, token in enumerate(tokens[:-1]):
             if token == "<<":
