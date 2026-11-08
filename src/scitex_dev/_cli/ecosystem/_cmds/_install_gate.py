@@ -82,7 +82,7 @@ def render_audit_gate(distribution: str, target: Path, root: Path) -> str:
         "\n"
         "@pytest.mark.skipif(\n"
         '    shutil.which("scitex-dev") is None,\n'
-        '    reason="scitex-dev not installed — add `scitex-dev[cli-audit]` '
+        '    reason="scitex-dev not installed — add `scitex-dev` '
         'to [project.optional-dependencies.dev]",\n'
         ")\n"
         "# audit-all fans out to 6 sub-auditor subprocesses (audit-cli,\n"

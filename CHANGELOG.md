@@ -10,6 +10,11 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Align audit-gate installation guidance and generated dependency remedies
+  with the base Dev distribution and the current installer. Document explicit
+  checkout anchors, interpreter-bound auditing, marked guard refreshes, all
+  six dispatchers, and the distinction between FAIL and UNKNOWN.
+
 - Require the literal value `1` for audit-skip and partial-run opt-outs.
   Values such as `0`, `false` or an unrecognized string now retain the real
   audit and missing-gate checks. Preserve intentional local opt-outs and
