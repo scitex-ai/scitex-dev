@@ -10,12 +10,13 @@ _LIMIT = 8192
 _NOTE_PREFIX = "release-command-timeout: "
 
 
-def _tail(path):
-    """Read a bounded tail; absent platform data is not a zero measurement."""
+def _read_bounded(path, *, tail=False):
+    """Read bounded data; only regular trace files need a seek to their tail."""
     try:
         with Path(path).open("rb") as stream:
-            stream.seek(0, 2)
-            stream.seek(max(0, stream.tell() - _LIMIT))
+            if tail:
+                stream.seek(0, 2)
+                stream.seek(max(0, stream.tell() - _LIMIT))
             return stream.read(_LIMIT).decode("utf-8", errors="replace")
     except OSError as error:
         return "unavailable: " + type(error).__name__
@@ -35,10 +36,10 @@ def run_release_command(command, root, environment, **options):
             "observed_utc": datetime.now(timezone.utc).isoformat(),
             "timeout_seconds": error.timeout,
             "command": command,
-            "git_trace_tail": _tail(root.parent / "git-trace.jsonl"),
-            "loadavg": _tail("/proc/loadavg"),
-            "io_pressure": _tail("/proc/pressure/io"),
-            "memory": _tail("/proc/meminfo"),
+            "git_trace_tail": _read_bounded(root.parent / "git-trace.jsonl", tail=True),
+            "loadavg": _read_bounded("/proc/loadavg"),
+            "io_pressure": _read_bounded("/proc/pressure/io"),
+            "memory": _read_bounded("/proc/meminfo"),
         }
         note = _NOTE_PREFIX + json.dumps(evidence, sort_keys=True)
         if hasattr(error, "add_note"):

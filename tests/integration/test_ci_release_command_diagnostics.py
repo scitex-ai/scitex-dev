@@ -6,7 +6,7 @@ import sys
 
 import pytest
 
-from ._release_command import _LIMIT, _NOTE_PREFIX, _tail, run_release_command
+from ._release_command import _LIMIT, _NOTE_PREFIX, _read_bounded, run_release_command
 
 
 def test_real_timeout_keeps_deadline_and_actual_git_trace(tmp_path):
@@ -28,9 +28,10 @@ def test_real_timeout_keeps_deadline_and_actual_git_trace(tmp_path):
         events = [json.loads(line) for line in evidence["git_trace_tail"].splitlines()]
         observed = (error.timeout, error.cmd, evidence["timeout_seconds"],
                     any(event.get("name") == "version" for event in events),
+                    "MemTotal:" in evidence["memory"],
                     set(evidence) >= {"observed_utc", "loadavg", "io_pressure", "memory"})
     # Assert
-    assert observed == (5, command, 5, True, True)
+    assert observed == (5, command, 5, True, True, True)
 
 
 def test_diagnostic_reads_are_bounded_and_missing_data_is_explicit(tmp_path):
@@ -38,9 +39,11 @@ def test_diagnostic_reads_are_bounded_and_missing_data_is_explicit(tmp_path):
     trace = tmp_path / "git-trace.jsonl"
     trace.write_bytes(b"discard" + b"x" * _LIMIT)
     # Act
-    observed = (_tail(trace), _tail(tmp_path / "absent"))
+    observed = (_read_bounded(trace, tail=True), _read_bounded(trace),
+                _read_bounded(tmp_path / "absent"))
     # Assert
-    assert observed == ("x" * _LIMIT, "unavailable: FileNotFoundError")
+    assert observed == ("x" * _LIMIT, "discard" + "x" * (_LIMIT - 7),
+                        "unavailable: FileNotFoundError")
 
 
 @pytest.mark.parametrize("code", [0, 7])
