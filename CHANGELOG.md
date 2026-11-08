@@ -10,6 +10,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Log bounded, escaped output tails when private PostgreSQL initialization or
+  startup fails. Keep the original subprocess exception, 120-second limits,
+  commands, cleanup and store routing; do not retry or substitute a database.
+
 - Attribute module-published nested CLI callbacks to their verified installed
   owner, including loaded Python-function console bootstraps. Retain console
   claim priority, source membership, resource digest and ambiguity checks;
