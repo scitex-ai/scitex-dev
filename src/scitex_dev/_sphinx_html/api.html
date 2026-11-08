@@ -784,19 +784,21 @@ for every other package) so THIS subprocess timeout fires
 first with a readable audit-output error message, instead of
 pytest-timeout’s generic SIGALRM traceback winning the race. A
 genuinely wedged auditor still times out, just later.</p></li>
-<li><p><strong>Bypass</strong></p></li>
-<li><p><strong>------</strong></p></li>
-<li><p><strong>the</strong> (<em>audit</em><em> (</em><em>the test calls pytest.skip instead</em><em> of </em><em>running</em>)</p></li>
-<li><p><strong>the</strong></p></li>
-<li><p><strong>pre-existing</strong> (<em>subprocess</em><em>)</em><em>. Use during a remediation push when</em>)</p></li>
-<li><p><strong>runs</strong> (<em>violations would block unrelated test</em>)</p></li>
-<li><p><strong>developing</strong> (<em>or when</em>)</p></li>
-<li><p><strong>for</strong> (<em>locally without scitex-dev's audit corpus available. CI</em>)</p></li>
-<li><p><strong>silent.</strong> (<em>release branches MUST NOT set this — drift goes</em>)</p></li>
 </ul>
 </dd>
-<dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/builtins/exceptions.html#AssertionError" title="(in Python v3.15)"><strong>AssertionError</strong></a> – If the subprocess returns non-zero. The full stdout + stderr
+</dl>
+<p class="rubric">Notes</p>
+<p><strong>Local audit bypass.</strong></p>
+<p>Set the literal <code class="docutils literal notranslate"><span class="pre">SCITEX_DEV_SKIP_AUDIT=1</span></code> in the environment to skip the
+audit (the test calls <code class="docutils literal notranslate"><span class="pre">pytest.skip</span></code> instead of running the
+subprocess). Use during a remediation push when pre-existing
+violations would block unrelated test runs, or when developing
+locally without scitex-dev’s audit corpus available. CI for
+release branches MUST NOT set this — drift goes silent. Other values,
+including <code class="docutils literal notranslate"><span class="pre">0</span></code> and <code class="docutils literal notranslate"><span class="pre">false</span></code>, do not bypass the audit.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/builtins/exceptions.html#AssertionError" title="(in Python v3.15)"><strong>AssertionError</strong></a> – If the subprocess returns non-zero. The full stdout + stderr
     are included in the message so the failing rule is visible in
     the test report without re-running the audit by hand.
     

@@ -64,7 +64,6 @@ from ._audit_outcome import (
     violations_message,
 )
 
-
 SKIP_ENV_VAR = "SCITEX_DEV_SKIP_AUDIT"
 
 
@@ -150,6 +149,7 @@ _TALLY_COUNT_RE = re.compile(r"\b\d+\s+(?:error|warning|info)\(s\)")
 def _is_tally_line(payload: str) -> bool:
     """True for a sub-auditor's own count line, which restates, never adds."""
     return bool(_TALLY_COUNT_RE.search(payload))
+
 
 #: Level words that are NOT failures. The auditors already print severity;
 #: this module used to strip it only to reach the bracket and then ignore it.
@@ -300,14 +300,17 @@ def audit_all_for_package(
         pytest-timeout's generic SIGALRM traceback winning the race. A
         genuinely wedged auditor still times out, just later.
 
-    Bypass
-    ------
-    Set ``SCITEX_DEV_SKIP_AUDIT=1`` in the environment to skip the
+    Notes
+    -----
+    **Local audit bypass.**
+
+    Set the literal ``SCITEX_DEV_SKIP_AUDIT=1`` in the environment to skip the
     audit (the test calls ``pytest.skip`` instead of running the
     subprocess). Use during a remediation push when pre-existing
     violations would block unrelated test runs, or when developing
     locally without scitex-dev's audit corpus available. CI for
-    release branches MUST NOT set this — drift goes silent.
+    release branches MUST NOT set this — drift goes silent. Other values,
+    including ``0`` and ``false``, do not bypass the audit.
 
     Raises
     ------
@@ -340,7 +343,7 @@ def audit_all_for_package(
         # warning that only fires on the non-skipped path is a warning
         # that goes missing exactly when the run is least scrutinised.
         warn_on_guessed_path()
-    if os.environ.get(SKIP_ENV_VAR):
+    if os.environ.get(SKIP_ENV_VAR) == "1":
         # Guarded per PS-233: this branch is reached only under pytest, but a
         # bare install must still fail with the install remedy named.
         try:
@@ -392,8 +395,12 @@ def audit_all_for_package(
     # tests depended on the defect. Injecting the launcher lets a test say
     # which auditor it means, out loud, instead of smuggling it in through
     # the environment.
-    argv = [*(launcher or [sys.executable, "-m", "scitex_dev"]),
-            "ecosystem", "audit-all", distribution]
+    argv = [
+        *(launcher or [sys.executable, "-m", "scitex_dev"]),
+        "ecosystem",
+        "audit-all",
+        distribution,
+    ]
     if path is not None:
         argv += ["--path", str(path)]
     cmd = shlex.join(argv)

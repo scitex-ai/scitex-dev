@@ -117,9 +117,21 @@ Both bypass via the environment variable:
 SCITEX_DEV_SKIP_AUDIT=1 python -m pytest .
 ```
 
-When set, `audit_all_for_package` calls `pytest.skip()` instead of
+Only the literal value `1` enables this bypass. Unset, empty, `0`,
+`false`, and other values retain the audit. With `1`,
+`audit_all_for_package` calls `pytest.skip()` instead of
 running the audit subprocess. The skip line shows up clearly in the
 report so it's never silent.
+
+The generated missing-gate guard uses a separate opt-out,
+`SCITEX_DEV_ALLOW_PARTIAL_RUN=1`, for explicitly accepting a local run
+that omits the audit test. It also requires the literal value `1`.
+This permits an unqualified partial run; it does not establish that the
+audit passed. Existing generated guards must be refreshed through the
+normal `scitex dev ecosystem install-audit-gate DISTRIBUTION` command
+after upgrading Dev (review its preview before replacing an existing gate).
+Keep independent, handwritten conftest controls outside the generated
+guard markers so regeneration preserves them.
 
 **Hard rule.** CI for `main`/`develop` MUST NOT set
 `SCITEX_DEV_SKIP_AUDIT`. The variable is for ephemeral local sessions

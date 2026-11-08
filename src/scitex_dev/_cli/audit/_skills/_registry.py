@@ -63,7 +63,7 @@ RULES: dict[str, Rule] = {
         Rule(
             "SK-211",
             "§2a",
-            "file ends with `<!-- EOF -->` or similar trailing marker",
+            "file ends with `<!-- EOF -->` (optional trailing whitespace)",
         ),
         # §3 SKILL.md as index only
         Rule("SK-301", "§3", "`SKILL.md` exceeds the size budget (~120 lines / ~6 KB)"),
