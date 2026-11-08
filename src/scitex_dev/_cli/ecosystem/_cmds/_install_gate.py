@@ -74,14 +74,14 @@ def render_audit_gate(distribution: str, target: Path, root: Path) -> str:
         "branches MUST NOT set this — drift goes silent.\n"
         '"""\n'
         "\n"
-        "import shutil\n"
+        "import importlib.util\n"
         "from pathlib import Path\n"
         "\n"
         "import pytest\n"
         "\n"
         "\n"
         "@pytest.mark.skipif(\n"
-        '    shutil.which("scitex-dev") is None,\n'
+        '    importlib.util.find_spec("scitex_dev") is None,\n'
         '    reason="scitex-dev not installed — add `scitex-dev` '
         'to [project.optional-dependencies.dev]",\n'
         ")\n"

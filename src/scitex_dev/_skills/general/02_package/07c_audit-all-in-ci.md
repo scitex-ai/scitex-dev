@@ -35,6 +35,12 @@ as described below. The distribution must be registered in the ecosystem
 package-root `path=` anchor; a separate test verifies that anchor. It also
 installs the marked collection guard in `tests/conftest.py`.
 
+The generated gate checks module availability in its test interpreter.
+A missing console script on shell PATH does not establish that the Python
+package is absent and must not silently skip an otherwise runnable audit.
+The existing missing-package exception remains a skip; CI must install
+the declared development dependencies rather than relying on that exception.
+
 The helper launches `sys.executable -m scitex_dev ecosystem audit-all`
 as a subprocess, keeping the auditor in the test interpreter rather than
 selecting a different environment from shell PATH. It raises
