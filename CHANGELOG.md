@@ -44,6 +44,11 @@ versions follow [Semantic Versioning](https://semver.org/).
   checkout anchors, interpreter-bound auditing, marked guard refreshes, all
   six dispatchers, and the distinction between FAIL and UNKNOWN.
 
+## [0.62.19] - 2026-11-08
+
+Unpublished candidate: tag validation failed and no package was published.
+Its changes remain under Unreleased for the next qualified release.
+
 ## [0.62.18] - 2026-11-08
 
 - Require the literal value `1` for audit-skip and partial-run opt-outs.
