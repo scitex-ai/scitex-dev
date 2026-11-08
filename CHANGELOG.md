@@ -20,6 +20,8 @@ versions follow [Semantic Versioning](https://semver.org/).
   checkout anchors, interpreter-bound auditing, marked guard refreshes, all
   six dispatchers, and the distinction between FAIL and UNKNOWN.
 
+## [0.62.18] - 2026-11-08
+
 - Require the literal value `1` for audit-skip and partial-run opt-outs.
   Values such as `0`, `false` or an unrecognized string now retain the real
   audit and missing-gate checks. Preserve intentional local opt-outs and
@@ -224,8 +226,6 @@ versions follow [Semantic Versioning](https://semver.org/).
 - Add provider installation for Claude and Hermes, preserving foreign settings/hooks and using Hermes' own writer for its profiles.
 - Support explicit target interpreters, dry runs, and idempotent provider updates without breaking configuration symlinks.
 - Use canonical scitex-logging diagnostics for retired-host warnings and supervisor logging; require scitex-logging 0.2.4.
-
-## [Unreleased]
 
 ## [0.62.5] - 2026-10-31
 
