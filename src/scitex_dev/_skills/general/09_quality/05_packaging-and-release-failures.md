@@ -136,7 +136,7 @@ cannot qualify the resolved installed graph.
    retain the location-sensitive PS-233 controls described below.
 2. Select an unused version and follow the owning
    [release procedure](../05_development/18_end-to-end-release-flow.md), including
-   all exact-head checks, the complete declared profile and artifact identity.
+   all checks for the candidate commit, the complete declared profile and artifact identity.
 3. Inspect the leaf's actual validation and publication triggers. Push only the
    intended immutable tag. Do not create a second GitHub release or uploader
    when the workflow already owns that operation.
