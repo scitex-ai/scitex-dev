@@ -10,6 +10,14 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.62.20] - 2026-11-09
+
+- Add bounded, passive live-child observations to release-fixture timeout
+  evidence on Linux. Exclude pre-existing children and private arguments or
+  environment values; report missing or ambiguous observations as unknown.
+  Keep the original five-second operation limit. Samples are diagnostic
+  evidence, not a complete child inventory or a proven timeout cause.
+
 - Log bounded, escaped output tails when private PostgreSQL initialization or
   startup fails. Keep the original subprocess exception, 120-second limits,
   commands, cleanup and store routing; do not retry or substitute a database.
@@ -51,7 +59,7 @@ versions follow [Semantic Versioning](https://semver.org/).
 ## [0.62.19] - 2026-11-08
 
 Unpublished candidate: tag validation failed and no package was published.
-Its changes remain under Unreleased for the next qualified release.
+Its changes are carried forward in 0.62.20.
 
 ## [0.62.18] - 2026-11-08
 
