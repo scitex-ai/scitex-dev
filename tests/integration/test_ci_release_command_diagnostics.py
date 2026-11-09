@@ -1,12 +1,14 @@
 """Real subprocess controls for timeout evidence without weakening deadlines."""
 
 import json
+import os
 import subprocess
 import sys
 
 import pytest
 
 from ._release_command import _LIMIT, _NOTE_PREFIX, _read_bounded, run_release_command
+from ._release_child_observation import OwnedChildObservation
 
 
 def test_real_timeout_keeps_deadline_and_actual_git_trace(tmp_path):
@@ -64,3 +66,70 @@ def test_check_true_retains_original_nonzero_exception(tmp_path):
     # Assert
     with pytest.raises(subprocess.CalledProcessError, match="exit status 7"):
         run_release_command(command, tmp_path, {}, check=True)
+
+
+def test_live_timeout_evidence_excludes_existing_child_and_private_inputs(tmp_path):
+    # Arrange
+    environment = {"PATH": "/usr/bin:/bin", "PRIVATE_MARKER": "private-not-for-evidence"}
+    unrelated = subprocess.Popen(
+        [sys.executable, "-I", "-S", "-B", "-c", "import time;time.sleep(30)",
+         "unrelated-private-argument"], cwd=tmp_path, env=environment,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    command = [sys.executable, "-I", "-S", "-B", "-c",
+               "import time;sum(i*i for i in range(2000000));time.sleep(30)"]
+    observed = None
+    # Act
+    try:
+        try:
+            run_release_command(command, tmp_path, environment, check=True)
+        except subprocess.TimeoutExpired as error:
+            note = next(n for n in error.__notes__ if n.startswith(_NOTE_PREFIX))
+            evidence = json.loads(note[len(_NOTE_PREFIX):])
+            observation = evidence["owned_child_observation"]
+            children = [r["child"] for r in observation["samples"]
+                        if r["state"] == "observed"]
+            observed = (
+                error.timeout, bool(children), observation["collector_stopped"],
+                all(c["pid"] != unrelated.pid and c["uid"] == os.getuid()
+                    and c["parent_pid"] == os.getpid() for c in children),
+                any(c["own_cpu_ticks"] > 0 for c in children),
+                unrelated.poll() is None,
+                "private-not-for-evidence" not in json.dumps(observation)
+                and "unrelated-private-argument" not in json.dumps(observation),
+            )
+    finally:
+        unrelated.kill()
+        unrelated.wait(timeout=5)
+    # Assert
+    assert observed == (5, True, True, True, True, True, True)
+
+
+def test_live_observation_missing_proc_is_unknown_and_stops_cleanly(tmp_path):
+    # Arrange
+    observation = OwnedChildObservation(tmp_path, proc_root=tmp_path / "absent")
+    # Act
+    observation.start()
+    observation.close()
+    result = observation.snapshot()
+    # Assert
+    assert (result["state"], result["reason"], result["samples"],
+            result["collector_stopped"]) == ("unknown", "FileNotFoundError", [], True)
+
+
+def test_live_observation_does_not_attribute_ambiguous_real_children(tmp_path):
+    # Arrange
+    observation = OwnedChildObservation(tmp_path)
+    children = [subprocess.Popen(
+        [sys.executable, "-I", "-S", "-B", "-c", "import time;time.sleep(30)"],
+        cwd=tmp_path, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    ) for _ in range(2)]
+    # Act
+    try:
+        result = observation._sample()
+    finally:
+        for child in children:
+            child.kill()
+            child.wait(timeout=5)
+    # Assert
+    assert result == {"state": "unknown", "reason": "no unique candidate child in owned fixture"}

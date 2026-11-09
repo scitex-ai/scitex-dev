@@ -6,6 +6,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from ._release_child_observation import OwnedChildObservation
+
 _LIMIT = 8192
 _NOTE_PREFIX = "release-command-timeout: "
 
@@ -24,12 +26,15 @@ def _read_bounded(path, *, tail=False):
 
 def run_release_command(command, root, environment, **options):
     """Keep the original five-second deadline and re-raise its failure."""
+    observation = OwnedChildObservation(root)
+    observation.start()
     try:
         return subprocess.run(
             command, cwd=root, env=environment, capture_output=True, timeout=5,
             **options,
         )
     except subprocess.TimeoutExpired as error:
+        observation.close()
         # Only owned fixture commands and bounded local diagnostics are recorded.
         # Never dump the environment or inspect another process's credentials.
         evidence = {
@@ -40,6 +45,7 @@ def run_release_command(command, root, environment, **options):
             "loadavg": _read_bounded("/proc/loadavg"),
             "io_pressure": _read_bounded("/proc/pressure/io"),
             "memory": _read_bounded("/proc/meminfo"),
+            "owned_child_observation": observation.snapshot(),
         }
         note = _NOTE_PREFIX + json.dumps(evidence, sort_keys=True)
         if hasattr(error, "add_note"):
@@ -47,3 +53,5 @@ def run_release_command(command, root, environment, **options):
         else:  # Python < 3.11 has no exception notes.
             print(note, file=sys.stderr)
         raise
+    finally:
+        observation.close()
