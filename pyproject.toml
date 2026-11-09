@@ -18,12 +18,10 @@ keywords = ["scitex", "developer-tools", "documentation", "llm-friendly", "mcp"]
 # console-script-deps-must-be-core enforces this rule on every package with
 # a [project.scripts] entry.)
 #
-# `newb` is NOT core: it is consumed only by the optional `scitex-dev skills
-# self-explain` subcommand, which is lazy-imported inside that command (see
-# src/scitex_dev/_cli/skills/_self_explain.py). Lifting newb out of core
-# avoids dragging `claude-agent-sdk` (newb's heavy transitive) into every
-# scitex-* leaf that pins scitex-dev. Install via `pip install
-# scitex-dev[skills]` when you need self-explain.
+# `newb` is a core dependency for skill evaluation. Its lazy import in
+# src/scitex_dev/_cli/skills/_self_explain.py keeps metadata/help inspection
+# light; a missing newb is a broken base installation, not a missing extra.
+# The retired scitex-dev[skills] extra does not enable this capability.
 # PS-225 / ADR-0005: extra NAMES are restricted to {all, dev, docs}, so every
 # runtime capability lives here in core. There are exactly two installs —
 # `pip install scitex-dev` (this list) and `pip install scitex-dev[all]`
@@ -374,7 +372,8 @@ Documentation = "https://scitex-dev.readthedocs.io/"
 
 [tool.setuptools_scm]
 # Derive version from latest vX.Y.Z release tag (vX.Y.Z → X.Y.Z).
-# Eliminates pyproject↔tag drift; release flow is `git tag vX.Y.Z && git push --tags`.
+# Follow the source-owned release procedure; push only the accepted version's tag.
+# Procedure: src/scitex_dev/_skills/scitex-dev/18_full-update.md.
 # tag_regex restricts versioning to v* release tags so fleet archive/* retention
 # tags (slashed paths/dates, e.g. archive/three-days-rule/...), which are
 # reachable from HEAD and unparseable by the default regex, are ignored instead

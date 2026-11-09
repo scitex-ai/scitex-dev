@@ -10,7 +10,36 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-## [0.62.19] - 2026-11-08
+## [0.62.20] - 2026-11-09
+
+- Add bounded, passive live-child observations to release-fixture timeout
+  evidence on Linux. Exclude pre-existing children and private arguments or
+  environment values; report missing or ambiguous observations as unknown.
+  Keep the original five-second operation limit. Samples are diagnostic
+  evidence, not a complete child inventory or a proven timeout cause.
+
+- Log bounded, escaped output tails when private PostgreSQL initialization or
+  startup fails. Keep the original subprocess exception, 120-second limits,
+  commands, cleanup and store routing; do not retry or substitute a database.
+
+- Attribute module-published nested CLI callbacks to their verified installed
+  owner, including loaded Python-function console bootstraps. Retain console
+  claim priority, source membership, resource digest and ambiguity checks;
+  do not let a rejected nested owner borrow its host's vocabulary.
+
+- Correct embedded install and release guidance: newb is a base dependency,
+  PyPI supports pending Trusted Publishers, and a tag or index entry alone
+  does not qualify a release. Preserve failed checks and single-tag publishing.
+
+- Attach bounded Git Trace2 and local resource evidence when disposable
+  release-identity test commands time out. Preserve the five-second deadline,
+  real Git commands, original exceptions and all artifact validation gates.
+
+- Trace explicit local Python re-exports in static documentation checks,
+  including aliases and relative source imports. Report missing or invalid
+  local targets as drift while retaining incomplete outcomes for cycles,
+  overlong chains and ambiguous/dynamic bindings. Never import reviewed code
+  or read re-exported source outside the selected package root.
 
 - Enforce literal workflow integrity through the normal project auditor:
   PS-235 rejects local install profiles changed after failure, and PS-236
@@ -26,6 +55,11 @@ versions follow [Semantic Versioning](https://semver.org/).
   with the base Dev distribution and the current installer. Document explicit
   checkout anchors, interpreter-bound auditing, marked guard refreshes, all
   six dispatchers, and the distinction between FAIL and UNKNOWN.
+
+## [0.62.19] - 2026-11-08
+
+Unpublished candidate: tag validation failed and no package was published.
+Its changes are carried forward in 0.62.20.
 
 ## [0.62.18] - 2026-11-08
 

@@ -7,22 +7,21 @@ import re
 from pathlib import Path
 from typing import Iterable, Optional
 
+from ._source_references import _check_reference, _read
+
 _LIMITATIONS = [
     "Only top-level closed Markdown python/py fences are parsed; "
     "prose, RST and other languages are not checked.",
-    "Local src-layout modules and direct definitions are checked statically, "
+    "Local src-layout modules, direct definitions and explicit local "
+    "from-import chains are checked statically, "
     "without importing or running code.",
-    "Re-exports, dynamic attributes, external imports, signatures, example "
+    "Local chains are bounded to 32 references. Cycles, ambiguous/conditional "
+    "bindings, star imports and relative example imports remain unverified.",
+    "Dynamic attributes, external imports, signatures, example "
     "results and CLI/MCP/Web API behavior are not verified.",
     "Installed/exported skills are not read, compared or refreshed; "
     "this is not complete documentation drift coverage.",
 ]
-
-
-def _read(path: Path, root: Path) -> str:
-    if not path.resolve().is_relative_to(root):
-        raise ValueError("path is outside package root")
-    return path.read_text(encoding="utf-8")
 
 
 def _python_blocks(text: str):
@@ -51,51 +50,6 @@ def _python_blocks(text: str):
             code.append(line[min(indent, leading) :])
     if fence is not None and start:
         raise ValueError(f"unclosed Python fence at line {start - 1}")
-
-
-def _module_file(root: Path, module: str) -> Optional[Path]:
-    base = root / "src" / Path(*module.split("."))
-    for candidate in (base.with_suffix(".py"), base / "__init__.py"):
-        if candidate.is_file():
-            return candidate
-    return None
-
-
-def _check_reference(root: Path, module: str, name: Optional[str]):
-    """Return a definite failure or an explicit reason we cannot verify."""
-    top = module.split(".")[0]
-    if _module_file(root, top) is None:
-        return "unverified", "external or unsupported source-layout module"
-    source = _module_file(root, module)
-    if source is None:
-        return "issue", "local source module does not exist"
-    tree = ast.parse(_read(source, root), filename=str(source))
-    if name is None:
-        return "checked", "local source module exists and parses"
-    if name == "*":
-        return "unverified", "star import"
-    # A submodule is also a legitimate `from package import module` target.
-    if _module_file(root, module + "." + name) is not None:
-        _check_reference(root, module + "." + name, None)
-        return "checked", "local source submodule exists and parses"
-    for node in tree.body:
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            if node.name == name:
-                return "checked", "direct source definition exists"
-    # Imports, assignments and conditional bindings need runtime/re-export
-    # reasoning. Even __getattr__ can supply a name absent from this AST.
-    if any(
-        not isinstance(
-            node, (ast.Expr, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
-        )
-        for node in tree.body
-    ) or any(
-        isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        and node.name == "__getattr__"
-        for node in tree.body
-    ):
-        return "unverified", "re-export, assignment, conditional or dynamic binding"
-    return "issue", "name has no direct source definition"
 
 
 def _readme_version(root: Path, documents: dict[Path, str]):
@@ -138,8 +92,9 @@ def verify_docs_and_skills(
     Defaults to README.md and src/*/_skills/**/*.md in the selected package.
     Pass ``documents=[Path('docs/guide.md')]`` to check explicit Markdown files
     within that root. Top-level Python/py fences are parsed; local src-layout import
-    modules and direct definitions are checked. Dynamic/re-export/external
-    references remain unverified. Only an explicit ``Version: X`` README line
+    modules, direct definitions and explicit local from-import chains are checked.
+    Cyclic, overlong, ambiguous, conditional, dynamic and external references
+    remain unverified. Only an explicit ``Version: X`` README line
     is compared with a literal project.version; no version mention is required.
 
     Legacy keys remain, but readme_version_match and skills_stale can be None

@@ -54,6 +54,7 @@ from pathlib import Path
 from typing import Iterator
 
 from ._host import STORE_DSN_ENV
+from ._testing_process import _run_bootstrap
 
 __all__ = [
     "ephemeral_cluster_dsn",
@@ -123,9 +124,10 @@ def ephemeral_cluster_dsn() -> Iterator[str]:
     """Start a private PostgreSQL, yield its DSN, and destroy it after.
 
     The cluster lives in a temporary directory, listens on a UNIX socket in
-    that same directory (so it cannot collide with a real instance on a port,
-    and needs no password because peer auth applies), and is removed on exit
-    whether or not the test passed.
+    that same directory, so it cannot collide with a real instance on a port.
+    It uses trust authentication inside its owned temporary directory and is
+    removed on exit whether or not the test passed. Bootstrap failures retain
+    their original exception type and log bounded, escaped output tails.
 
     Raises ``RuntimeError`` when the binaries are absent — the caller decides
     whether that is a skip or a failure, because the answer differs by
@@ -144,9 +146,9 @@ def ephemeral_cluster_dsn() -> Iterator[str]:
     data, sock, log = root / "data", root / "run", root / "postmaster.log"
     sock.mkdir()
     try:
-        subprocess.run(
+        _run_bootstrap(
             [initdb, "-D", str(data), "-A", "trust", "--encoding=UTF8", "-U", "postgres"],
-            check=True, capture_output=True, text=True, timeout=120,
+            stage="initdb", timeout=120,
         )
         # ``-l`` is REQUIRED, not tidiness. Without it the postmaster pg_ctl
         # forks inherits this process's captured stdout/stderr pipes and holds
@@ -154,10 +156,10 @@ def ephemeral_cluster_dsn() -> Iterator[str]:
         # them until the timeout even though pg_ctl itself already exited 0.
         # Observed on the org runners as a 120s TimeoutExpired whose traceback
         # reads ``Popen: returncode: 0``.
-        subprocess.run(
+        _run_bootstrap(
             [pg_ctl, "-D", str(data), "-l", str(log), "-o", f"-k {sock} -h ''", "-w",
              "-t", str(int(_START_TIMEOUT_SECONDS)), "start"],
-            check=True, capture_output=True, text=True, timeout=120,
+            stage="pg_ctl start", timeout=120,
         )
         dsn = f"postgresql://postgres@/postgres?host={sock}"
         deadline = time.monotonic() + _START_TIMEOUT_SECONDS
