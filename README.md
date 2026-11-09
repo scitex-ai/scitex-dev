@@ -73,15 +73,32 @@ list (with inline comments) lives in `.env.example`.
 
 <br>
 
-scitex-dev reads optional config + cache from the canonical SciTeX
-local-state locations:
+Dev selects configuration through [`_core/config.py`](src/scitex_dev/_core/config.py)
+and the shared SciTeX path resolver:
 
-| Path                          | Scope         | Purpose                              |
-|-------------------------------|---------------|--------------------------------------|
-| `~/.scitex/dev/`              | user-global   | per-user config, cache               |
-| `<proj-root>/.scitex/dev/`    | project-local | overrides for the current repo       |
+| Path | Purpose |
+|---|---|
+| `~/.scitex/dev/config.yaml` | User-default YAML preferences (`SCITEX_DIR` relocates `.scitex`). |
+| `<git-root>/.scitex/dev/config.yaml` | Selected instead of the user default when this file exists. |
+| `~/.scitex/dev/runtime/knob-state.json` | CLI-managed package switches, applied after YAML. |
 
-Project-local wins when both exist. Both are optional.
+An explicit `load_config(config_path=...)` argument takes priority over
+`SCITEX_DEV_CONFIG`; either selects the YAML file instead of the default lookup.
+The legacy `~/.scitex/dev_config.yaml` is used only when the preferred default
+file is absent. Default path selection is based on existing files, not merely
+an existing `.scitex/dev/` directory.
+
+For package switches, precedence is **ecosystem defaults → selected YAML →
+CLI-managed knob state**. A persisted switch can therefore override a
+project-local YAML preference. `SCITEX_DEV_KNOB_STATE` selects an explicit
+state file; without it, an existing project-local state file is preferred by
+the shared resolver. Inspect the selected paths and effective settings before
+changing another package's configuration.
+
+See the [configuration skill](src/scitex_dev/_skills/scitex-dev/12_config.md)
+for discovery, opt-outs, status commands and neutral skill destinations.
+Behavioral checks live in [the configuration tests](tests/scitex_dev/_core/test_config.py)
+and [knob persistence tests](tests/scitex_dev/_core/test_config_knob_persistence.py).
 
 </details>
 
