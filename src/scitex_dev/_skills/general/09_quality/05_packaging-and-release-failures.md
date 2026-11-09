@@ -163,6 +163,38 @@ audit entry points. Neither proves that a nightly job executed, an alert was
 delivered, or a release passed. Keep unsuccessful and incomplete evidence
 visible; follow the owning release procedure before merging or publishing.
 
+For a `release-command-timeout:` note from Dev's own release-identity tests,
+read the original error, command, observation time and bounded Git trace first.
+`tests/integration/_release_command.py` preserves the original five-second
+command timeout and error/output behavior. Revisions with
+`_release_child_observation.py` also include `owned_child_observation`: bounded
+live candidate samples collected before the timed-out child is killed.
+
+The reader considers newly observed caller-thread children with the same UID
+and owned fixture directory, excludes the initial child list and checks birth
+identity across metadata reads. It starts sampling after one second and keeps
+at most 24 samples. It records state, own CPU ticks, wait-channel metadata and
+only the syscall number or `running` marker. It does not inspect environment,
+command lines, descriptor contents or locals, or signal the target.
+Observation adds metadata-read overhead; reader shutdown waits at most a
+quarter-second after the underlying call returns. This does not extend the
+child's five-second timeout. `collector_stopped` reports whether shutdown
+completed, rather than assuming the reader has stopped.
+
+These are candidate observations, not a complete child inventory, an execution
+trace or a duration spent blocked. Linux's
+[child-list interface](https://www.man7.org/linux/man-pages/man5/proc_tid_children.5.html)
+can omit children during exits. Missing, unreadable or ambiguous data remains
+unknown. The [syscall interface](https://www.man7.org/linux/man-pages/man5/proc_pid_syscall.5.html)
+has architecture-dependent numbers and may be unavailable; its argument
+registers are not recorded. A sample does not establish a failure's cause.
+
+Behavioral controls live in
+`tests/integration/test_ci_release_command_diagnostics.py`, including real
+timeouts, existing-child exclusion, ambiguous candidates, missing data and
+unchanged exit/output checks. This fixture instrumentation does not establish
+fleet-wide diagnostics, resource admission or a repaired release.
+
 ## 11. Conflicting license metadata blocks the build
 
 **Symptom.** ``pip install -e .`` fails with
