@@ -10,7 +10,7 @@
       <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
 
-  
+
       <script src="../../_static/jquery.js?v=5d32c60e"></script>
       <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
       <script src="../../_static/documentation_options.js?v=5929fcd5"></script>
@@ -20,17 +20,17 @@
       <script src="../../_static/copybutton.js?v=f281be69"></script>
     <script src="../../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../../genindex.html" />
-    <link rel="search" title="Search" href="../../search.html" /> 
+    <link rel="search" title="Search" href="../../search.html" />
 </head>
 
-<body class="wy-body-for-nav"> 
+<body class="wy-body-for-nav">
   <div class="wy-grid-for-nav">
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
         <div class="wy-side-nav-search" >
 
-          
-          
+
+
           <a href="../../index.html" class="icon icon-home">
             scitex-dev
           </a>
@@ -74,7 +74,7 @@
 </div>
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
-             
+
   <h1>Source code for scitex_dev.cli_providers</h1><div class="highlight"><pre>
 <span></span><span class="sd">"""Installed CLI declarations, independent of Python, MCP and skills policy.</span>
 
@@ -99,6 +99,7 @@
     <span class="kn">import</span><span class="w"> </span><span class="nn">tomli</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">tomllib</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">.._core.names</span><span class="w"> </span><span class="kn">import</span> <span class="n">normalize_distribution_name</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">._metadata_snapshot</span><span class="w"> </span><span class="kn">import</span> <span class="n">_MetadataSnapshot</span>
 
 <span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"CliProvider"</span><span class="p">,</span> <span class="s2">"list_cli_providers"</span><span class="p">]</span>
 
@@ -190,8 +191,9 @@
     <span class="k">return</span> <span class="n">Path</span><span class="p">(</span><span class="n">origin</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">()</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">origin</span><span class="p">,</span> <span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">Path</span><span class="p">))</span> <span class="k">else</span> <span class="kc">None</span>
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">_distinct_installs</span><span class="p">(</span><span class="n">distributions</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_distinct_installs</span><span class="p">(</span><span class="n">distributions</span><span class="p">,</span> <span class="n">snapshot</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Dedup repeated origins and exactly proved editable source shadows only."""</span>
+    <span class="n">snapshot</span> <span class="o">=</span> <span class="n">snapshot</span> <span class="ow">or</span> <span class="n">_MetadataSnapshot</span><span class="p">()</span>
     <span class="n">unique</span><span class="p">,</span> <span class="n">seen</span> <span class="o">=</span> <span class="p">[],</span> <span class="nb">set</span><span class="p">()</span>
     <span class="k">for</span> <span class="n">dist</span> <span class="ow">in</span> <span class="n">distributions</span><span class="p">:</span>
         <span class="n">origin</span> <span class="o">=</span> <span class="n">_metadata_origin</span><span class="p">(</span><span class="n">dist</span><span class="p">)</span>
@@ -203,7 +205,7 @@
     <span class="n">shadows</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
     <span class="k">for</span> <span class="n">installed</span> <span class="ow">in</span> <span class="n">unique</span><span class="p">:</span>
         <span class="k">try</span><span class="p">:</span>
-            <span class="n">owner</span> <span class="o">=</span> <span class="n">normalize_distribution_name</span><span class="p">(</span><span class="n">installed</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"Name"</span><span class="p">))</span>
+            <span class="n">owner</span> <span class="o">=</span> <span class="n">normalize_distribution_name</span><span class="p">(</span><span class="n">snapshot</span><span class="o">.</span><span class="n">headers</span><span class="p">(</span><span class="n">installed</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"Name"</span><span class="p">))</span>
         <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
             <span class="k">continue</span>
         <span class="n">root</span> <span class="o">=</span> <span class="n">_editable_root</span><span class="p">(</span><span class="n">installed</span><span class="p">,</span> <span class="n">owner</span><span class="p">)</span>
@@ -219,7 +221,7 @@
             <span class="k">if</span> <span class="p">(</span>
                 <span class="n">source</span><span class="o">.</span><span class="n">read_text</span><span class="p">(</span><span class="s2">"PKG-INFO"</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
                 <span class="ow">and</span> <span class="n">source</span><span class="o">.</span><span class="n">read_text</span><span class="p">(</span><span class="s2">"PKG-INFO"</span><span class="p">)</span> <span class="o">==</span> <span class="n">installed</span><span class="o">.</span><span class="n">read_text</span><span class="p">(</span><span class="s2">"METADATA"</span><span class="p">)</span>
-                <span class="ow">and</span> <span class="n">source</span><span class="o">.</span><span class="n">version</span> <span class="o">==</span> <span class="n">installed</span><span class="o">.</span><span class="n">version</span>
+                <span class="ow">and</span> <span class="n">snapshot</span><span class="o">.</span><span class="n">version</span><span class="p">(</span><span class="n">source</span><span class="p">)</span> <span class="o">==</span> <span class="n">snapshot</span><span class="o">.</span><span class="n">version</span><span class="p">(</span><span class="n">installed</span><span class="p">)</span>
                 <span class="ow">and</span> <span class="nb">sorted</span><span class="p">((</span><span class="n">ep</span><span class="o">.</span><span class="n">group</span><span class="p">,</span> <span class="n">ep</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">ep</span><span class="o">.</span><span class="n">value</span><span class="p">)</span> <span class="k">for</span> <span class="n">ep</span> <span class="ow">in</span> <span class="n">source</span><span class="o">.</span><span class="n">entry_points</span><span class="p">)</span>
                 <span class="o">==</span> <span class="nb">sorted</span><span class="p">(</span>
                     <span class="p">(</span><span class="n">ep</span><span class="o">.</span><span class="n">group</span><span class="p">,</span> <span class="n">ep</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">ep</span><span class="o">.</span><span class="n">value</span><span class="p">)</span> <span class="k">for</span> <span class="n">ep</span> <span class="ow">in</span> <span class="n">installed</span><span class="o">.</span><span class="n">entry_points</span>
@@ -238,10 +240,11 @@
     <span class="p">)</span> <span class="ow">or</span> <span class="n">_editable_owns_module</span><span class="p">(</span><span class="n">dist</span><span class="p">,</span> <span class="n">owner</span><span class="p">,</span> <span class="n">module</span><span class="p">)</span>
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">_rows</span><span class="p">(</span><span class="n">dist</span><span class="p">,</span> <span class="n">owner</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">CliProvider</span><span class="p">]:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_rows</span><span class="p">(</span><span class="n">dist</span><span class="p">,</span> <span class="n">owner</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">snapshot</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">CliProvider</span><span class="p">]:</span>
+    <span class="n">snapshot</span> <span class="o">=</span> <span class="n">snapshot</span> <span class="ow">or</span> <span class="n">_MetadataSnapshot</span><span class="p">()</span>
     <span class="n">entries</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">dist</span><span class="o">.</span><span class="n">entry_points</span><span class="p">)</span>
     <span class="n">explicit</span> <span class="o">=</span> <span class="p">[</span><span class="n">ep</span> <span class="k">for</span> <span class="n">ep</span> <span class="ow">in</span> <span class="n">entries</span> <span class="k">if</span> <span class="n">ep</span><span class="o">.</span><span class="n">group</span> <span class="o">==</span> <span class="s2">"scitex.cli"</span><span class="p">]</span>
-    <span class="n">base</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"distribution"</span><span class="p">:</span> <span class="n">owner</span><span class="p">,</span> <span class="s2">"version"</span><span class="p">:</span> <span class="n">dist</span><span class="o">.</span><span class="n">version</span><span class="p">}</span>
+    <span class="n">base</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"distribution"</span><span class="p">:</span> <span class="n">owner</span><span class="p">,</span> <span class="s2">"version"</span><span class="p">:</span> <span class="n">snapshot</span><span class="o">.</span><span class="n">version</span><span class="p">(</span><span class="n">dist</span><span class="p">)}</span>
     <span class="k">if</span> <span class="n">explicit</span><span class="p">:</span>
         <span class="n">rows</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">ep</span> <span class="ow">in</span> <span class="n">explicit</span><span class="p">:</span>
@@ -327,22 +330,26 @@
 <span class="sd">    Duplicated owners and command names are ambiguous, including opt-out names.</span>
 <span class="sd">    Ambiguity is determined BEFORE an optional owner filter. ``path`` limits the</span>
 <span class="sd">    metadata search (useful for isolated environments and real dist-info tests).</span>
+<span class="sd">    Installed headers share one snapshot within this call; a subsequent call</span>
+<span class="sd">    reads installed state again rather than reusing a process-global cache.</span>
 <span class="sd">    """</span>
     <span class="n">selected</span> <span class="o">=</span> <span class="n">normalize_distribution_name</span><span class="p">(</span><span class="n">package</span><span class="p">)</span> <span class="k">if</span> <span class="n">package</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="n">snapshot</span> <span class="o">=</span> <span class="n">_MetadataSnapshot</span><span class="p">()</span>
     <span class="n">distributions</span> <span class="o">=</span> <span class="n">_distinct_installs</span><span class="p">(</span>
         <span class="n">metadata</span><span class="o">.</span><span class="n">distributions</span><span class="p">(</span>
             <span class="o">**</span><span class="p">({</span><span class="s2">"path"</span><span class="p">:</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">p</span><span class="p">)</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">path</span><span class="p">]}</span> <span class="k">if</span> <span class="n">path</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">{})</span>
-        <span class="p">)</span>
+        <span class="p">),</span>
+        <span class="n">snapshot</span><span class="o">=</span><span class="n">snapshot</span><span class="p">,</span>
     <span class="p">)</span>
     <span class="n">rows</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="n">owners</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="k">for</span> <span class="n">dist</span> <span class="ow">in</span> <span class="n">distributions</span><span class="p">:</span>
         <span class="k">try</span><span class="p">:</span>
-            <span class="n">owner</span> <span class="o">=</span> <span class="n">normalize_distribution_name</span><span class="p">(</span><span class="n">dist</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"Name"</span><span class="p">))</span>
+            <span class="n">owner</span> <span class="o">=</span> <span class="n">normalize_distribution_name</span><span class="p">(</span><span class="n">snapshot</span><span class="o">.</span><span class="n">headers</span><span class="p">(</span><span class="n">dist</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"Name"</span><span class="p">))</span>
         <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
             <span class="n">owner</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="n">owners</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">owner</span><span class="p">)</span>
-        <span class="n">rows</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">_rows</span><span class="p">(</span><span class="n">dist</span><span class="p">,</span> <span class="n">owner</span><span class="p">))</span>
+        <span class="n">rows</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">_rows</span><span class="p">(</span><span class="n">dist</span><span class="p">,</span> <span class="n">owner</span><span class="p">,</span> <span class="n">snapshot</span><span class="o">=</span><span class="n">snapshot</span><span class="p">))</span>
     <span class="n">owner_counts</span> <span class="o">=</span> <span class="n">Counter</span><span class="p">(</span><span class="n">owner</span> <span class="k">for</span> <span class="n">owner</span> <span class="ow">in</span> <span class="n">owners</span> <span class="k">if</span> <span class="n">owner</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">)</span>
     <span class="n">name_counts</span> <span class="o">=</span> <span class="n">Counter</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">rows</span> <span class="k">if</span> <span class="n">row</span><span class="o">.</span><span class="n">name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">)</span>
     <span class="n">rows</span> <span class="o">=</span> <span class="p">[</span>
@@ -380,7 +387,7 @@
   Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
     <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
     provided by <a href="https://readthedocs.org">Read the Docs</a>.
-   
+
 
 </footer>
         </div>
@@ -391,7 +398,7 @@
       jQuery(function () {
           SphinxRtdTheme.Navigation.enable(true);
       });
-  </script> 
+  </script>
 
 </body>
 </html>
