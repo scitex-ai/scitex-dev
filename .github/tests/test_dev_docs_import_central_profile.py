@@ -1,4 +1,11 @@
-"""Original required names reflect full approved central validation outcomes."""
+"""Original status bridges and the published nested docs permission contract.
+
+The historical fixture retains the original commands and loop guard. The newer
+published provider snapshot binds the nested publisher requirement separately:
+GitHub validates its permission ceiling even when that job will not run. These
+source controls do not simulate GitHub authorization or publish a docs bundle.
+"""
+import hashlib
 import json
 import subprocess
 import unittest
@@ -65,13 +72,51 @@ class TestFullCentralProfileCallers(unittest.TestCase):
                 observed.append(child.returncode)
         self.assertEqual(observed, [0, 1, 1, 1, 1, 1] * 2)
 
-    def test_docs_loop_guard_and_develop_write_authority_remain_original(self):
+    def test_docs_original_and_bridge_loop_guards_remain_original(self):
         baseline, candidate = sources(*SPECS[0][:2])
         original = baseline['jobs']['sphinx']
         call = candidate['jobs']['full-original-docs']
         bridge = candidate['jobs']['sphinx']
-        self.assertEqual((call['if'], call['permissions'], bridge['if']),
-                         (original['if'], original['permissions'], 'always() && (' + original['if'] + ')'))
+        self.assertEqual((call['if'], bridge['if']),
+                         (original['if'], 'always() && (' + original['if'] + ')'))
+
+    def test_published_provider_snapshot_has_exact_source_binding(self):
+        # Arrange
+        snapshot = json.loads((FIXTURE.parent / 'dev-docs-publisher-source.json').read_text())
+        body = snapshot['source'].encode()
+        # Act
+        observed = (snapshot['repository'], snapshot['revision'], snapshot['path'],
+                    len(body), hashlib.sha256(body).hexdigest(),
+                    hashlib.sha1(b'blob ' + str(len(body)).encode() + b'\0' + body).hexdigest())
+        # Assert
+        self.assertEqual(observed, ('scitex-ai/.github',
+                         '2baf2bd25f08ff0968991d1bae65ceba2e8b5b0d',
+                         '.github/workflows/rtd-sphinx-build.yml', snapshot['bytes'],
+                         'f7536adfb98bb9cb9862815d52b3d049f9c3032a4197a745f75bd62be5d7fa7e',
+                         'c25dedf1388bcc11da07cd56029a5f37ecf416f3'))
+
+    def test_original_docs_job_keeps_its_contents_only_write_scope(self):
+        # Arrange
+        baseline, _ = sources(*SPECS[0][:2])
+        provider = json.loads((FIXTURE.parent / 'dev-docs-publisher-source.json').read_text())
+        # Act
+        observed = yaml.safe_load(provider['source'])['jobs']['dev-original-sphinx']['permissions']
+        # Assert
+        self.assertEqual((observed, baseline['jobs']['sphinx']['permissions']),
+                         ({'contents': 'write'}, {'contents': 'write'}))
+
+    def test_nested_publisher_requires_exact_caller_permission_union(self):
+        # Arrange
+        _, candidate = sources(*SPECS[0][:2])
+        snapshot = json.loads((FIXTURE.parent / 'dev-docs-publisher-source.json').read_text())
+        publisher = yaml.safe_load(snapshot['source'])['jobs']['publish-sphinx-bundle']
+        # Act
+        observed = (candidate['jobs']['full-original-docs']['permissions'],
+                    publisher['permissions'], publisher['if'])
+        # Assert
+        self.assertEqual(observed, ({'contents': 'write', 'pull-requests': 'write'},
+                         {'contents': 'write', 'pull-requests': 'write'},
+                         "${{ inputs.bundle_dir != '' && github.event_name == 'push' }}"))
 
     def test_import_caller_does_not_gain_a_write_permission(self):
         _, candidate = sources(*SPECS[1][:2])
