@@ -91,6 +91,7 @@ callback's module must belong to the same exact distribution's `RECORD` and
 pass containment checks, even across different top-level namespaces. Dev does
 not call `__getattr__`, load entry points or invoke callbacks for this inference.
 Custom metaclasses and unpublished class bindings remain unsupported.
+A known console class with an unbound callback excludes parent vocabulary.
 
 A qualified facade anchors its callback namespace; each nested callback still
 needs its own source membership. Cache entries distinguish command classes
@@ -113,8 +114,7 @@ are in `tests/scitex_dev/_cli/audit/_summary/test__callback_source.py` and the
 live in `test__facade_source.py`. Also exercise
 the leaf's actual installed wheel: verify source attribution, exclusion of
 parent vocabulary when its dictionary is missing, unrecorded source refusal
-and ambiguous metadata refusal. Unit controls alone do not prove leaf artifact
-adoption.
+and ambiguous metadata refusal.
 
 A project-local file alone does not travel with a wheel. Keep one
 authoritative source and make the package's real build backend emit the

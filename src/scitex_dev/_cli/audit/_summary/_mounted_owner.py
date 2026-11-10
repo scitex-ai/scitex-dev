@@ -284,24 +284,33 @@ class MountedOwners:
 
     def _facade_claims(self, cmd):
         facade = published_facade_module(cmd)
-        binding = bound_callback_module(cmd)
-        if facade is None or binding is None:
+        if facade is None:
             return []
+        binding = bound_callback_module(cmd)
         source_name, source_module = facade
-        callback_name, callback_module = binding
         claims = []
         for ep, console_module, dist in self._facade_sources.get(source_name, ()):
             if console_module is not source_module:
                 continue
             qualification = _recorded_owner(ep, console_module, dist)
             if qualification.source_record_owned:
-                qualification = _recorded_module_owner(
-                    callback_name, callback_module, dist, "bound callback"
-                )
-                if qualification.source_record_owned:
-                    self._facade_bindings.setdefault(
-                        callback_name.split(".")[0], []
-                    ).append((ep, console_module, dist))
+                if binding is None:
+                    qualification = replace(
+                        qualification,
+                        resource=None,
+                        payload=None,
+                        reason="facade callback binding unavailable",
+                        source_record_owned=False,
+                    )
+                else:
+                    callback_name, callback_module = binding
+                    qualification = _recorded_module_owner(
+                        callback_name, callback_module, dist, "bound callback"
+                    )
+                    if qualification.source_record_owned:
+                        self._facade_bindings.setdefault(
+                            callback_name.split(".")[0], []
+                        ).append((ep, console_module, dist))
             claims.append(qualification)
         return claims
 
