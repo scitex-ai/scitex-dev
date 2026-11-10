@@ -43,6 +43,7 @@ class OwnedChildObservation:
             if info.st_uid != self._uid:
                 raise ValueError("fixture directory is not owned")
             self._fixture = (info.st_dev, info.st_ino)
+            self._fixture_directory = root
             self._baseline = self._children()
             self._ticks = os.sysconf("SC_CLK_TCK")
         except (OSError, ValueError, UnicodeError) as error:
@@ -85,6 +86,28 @@ class OwnedChildObservation:
             return None
         return result
 
+    def _fixture_filesystem(self):
+        """Observe only the original owned fixture's filesystem, off the caller."""
+        try:
+            directory = self._fixture_directory
+            before = directory.stat()
+            if (before.st_dev, before.st_ino) != self._fixture:
+                return _unknown("fixture directory identity changed")
+            space = os.statvfs(directory)
+            after = directory.stat()
+            if (after.st_dev, after.st_ino) != self._fixture:
+                return _unknown("fixture directory identity changed")
+            return {
+                "state": "observed",
+                "device": before.st_dev,
+                "capacity_bytes": space.f_blocks * space.f_frsize,
+                "available_bytes": space.f_bavail * space.f_frsize,
+                "free_bytes": space.f_bfree * space.f_frsize,
+                "available_inodes": space.f_favail,
+            }
+        except (OSError, AttributeError) as error:
+            return _unknown(type(error).__name__)
+
     def _sample(self):
         try:
             values = []
@@ -97,7 +120,10 @@ class OwnedChildObservation:
                     continue
             if len(values) != 1:
                 return _unknown("no unique candidate child in owned fixture")
-            return {"state": "observed", "child": values[0]}
+            return {
+                "state": "observed", "child": values[0],
+                "fixture_filesystem": self._fixture_filesystem(),
+            }
         except (OSError, ValueError, UnicodeError) as error:
             return _unknown(type(error).__name__)
 
