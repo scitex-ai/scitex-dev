@@ -205,7 +205,9 @@ jobs:
         run: '"$RUNNER_TEMP/venv/bin/python" -m scitex_dev ecosystem audit-all scitex-dev'
 
       - name: Qualify the public CI adapter and status bridges
-        run: '"$RUNNER_TEMP/venv/bin/python" .github/tests/test_dev_ci_adapters.py -v'
+        run: >-
+          "$RUNNER_TEMP/venv/bin/python" -m unittest discover
+          -s .github/tests -p 'test_dev_ci*.py' -v
 
   audit:
     # Original required name reflects only the genuine full own-code audit.
