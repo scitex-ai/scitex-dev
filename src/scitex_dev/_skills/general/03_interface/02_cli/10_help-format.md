@@ -39,9 +39,10 @@ The renderer states `version unresolved: no installed distribution` when
 metadata is absent; it never invents a version. Other metadata errors are
 not converted into that missing-distribution result.
 
-Pass-through entry points (Click `ignore_unknown_options=True` +
-`allow_extra_args=True`) are exempt — their help is forwarded
-verbatim from the upstream tool.
+Declared pass-through entry points (Click `ignore_unknown_options=True` +
+`allow_extra_args=True`) skip the walker's help checks. This declaration does
+not prove that help is forwarded from the upstream tool; the wrapper owns that
+behavior. See [§1c](05_pass-through.md) for detection and coverage limits.
 
 ## Spec-built help — the `CliHelp` dataclass (enforced construction method)
 
