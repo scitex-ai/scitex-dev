@@ -209,6 +209,11 @@ jobs:
           "$RUNNER_TEMP/venv/bin/python" -m unittest discover
           -s .github/tests -p 'test_dev_ci*.py' -v
 
+      - name: Qualify the docs and import caller contracts
+        run: >-
+          "$RUNNER_TEMP/venv/bin/python" -m unittest discover
+          -s .github/tests -p 'test_dev_docs_import*.py' -v
+
   audit:
     # Original required name reflects only the genuine full own-code audit.
     needs: [workspace-audit]
