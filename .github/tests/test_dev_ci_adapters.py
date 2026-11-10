@@ -148,7 +148,7 @@ console.log('all-four-events-three-minors-null-image-refused');
         candidate = workflow(AUDIT)["jobs"]["workspace-audit"]
 
         # Act
-        actual_steps = candidate["steps"][:-1]
+        actual_steps = candidate["steps"][:-2]
 
         # Assert
         self.assertEqual(actual_steps, previous["steps"])
@@ -156,8 +156,11 @@ console.log('all-four-events-three-minors-null-image-refused');
         self.assertEqual(candidate["runs-on"], "ubuntu-latest")
         self.assertEqual(actual_steps[-1]["run"], previous["steps"][-1]["run"])
         self.assertEqual(
-            candidate["steps"][-1]["run"],
-            "\"$RUNNER_TEMP/venv/bin/python\" -m unittest discover -s .github/tests -p 'test_dev_ci*.py' -v",
+            [step["run"] for step in candidate["steps"][-2:]],
+            [
+                "\"$RUNNER_TEMP/venv/bin/python\" -m unittest discover -s .github/tests -p 'test_dev_ci*.py' -v",
+                "\"$RUNNER_TEMP/venv/bin/python\" -m unittest discover -s .github/tests -p 'test_dev_docs_import*.py' -v",
+            ],
         )
 
     def test_original_required_names_and_full_dependencies_are_preserved(self):

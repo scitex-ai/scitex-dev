@@ -7,8 +7,8 @@ import sys
 
 import pytest
 
-from ._release_command import _LIMIT, _NOTE_PREFIX, _read_bounded, run_release_command
 from ._release_child_observation import OwnedChildObservation
+from ._release_command import _LIMIT, _NOTE_PREFIX, _read_bounded, run_release_command
 
 
 def test_real_timeout_keeps_deadline_and_actual_git_trace(tmp_path):
@@ -31,9 +31,15 @@ def test_real_timeout_keeps_deadline_and_actual_git_trace(tmp_path):
         observed = (error.timeout, error.cmd, evidence["timeout_seconds"],
                     any(event.get("name") == "version" for event in events),
                     "MemTotal:" in evidence["memory"],
-                    set(evidence) >= {"observed_utc", "loadavg", "io_pressure", "memory"})
+                    set(evidence) >= {"observed_utc", "loadavg", "io_pressure", "memory"},
+                    any(row.get("fixture_filesystem", {}).get("state") == "observed"
+                        and row["fixture_filesystem"]["device"] == root.stat().st_dev
+                        and 0 <= row["fixture_filesystem"]["available_bytes"]
+                        <= row["fixture_filesystem"]["free_bytes"]
+                        <= row["fixture_filesystem"]["capacity_bytes"]
+                        for row in evidence["owned_child_observation"]["samples"]))
     # Assert
-    assert observed == (5, command, 5, True, True, True)
+    assert observed == (5, command, 5, True, True, True, True)
 
 
 def test_diagnostic_reads_are_bounded_and_missing_data_is_explicit(tmp_path):
@@ -133,3 +139,28 @@ def test_live_observation_does_not_attribute_ambiguous_real_children(tmp_path):
             child.wait(timeout=5)
     # Assert
     assert result == {"state": "unknown", "reason": "no unique candidate child in owned fixture"}
+
+
+def test_missing_fixture_space_is_explicitly_unknown(tmp_path):
+    # Arrange
+    root = tmp_path / "owned"
+    root.mkdir()
+    observation = OwnedChildObservation(root)
+    root.rmdir()
+    # Act
+    result = observation._fixture_filesystem()
+    # Assert
+    assert result == {"state": "unknown", "reason": "FileNotFoundError"}
+
+
+def test_replaced_fixture_directory_refuses_space_attribution(tmp_path):
+    # Arrange
+    root = tmp_path / "owned"
+    root.mkdir()
+    observation = OwnedChildObservation(root)
+    root.rename(tmp_path / "original")
+    root.mkdir()
+    # Act
+    result = observation._fixture_filesystem()
+    # Assert
+    assert result == {"state": "unknown", "reason": "fixture directory identity changed"}

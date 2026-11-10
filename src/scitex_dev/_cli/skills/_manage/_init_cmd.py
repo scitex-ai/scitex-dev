@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""`scitex-dev skills init`."""
+"""`scitex-dev dev skills init`."""
 
 import click
 
@@ -15,15 +14,15 @@ def register(skills):
             summary="Scaffold a `_skills/<pip-name>/` tree per the standard template.",
             examples=(
                 Example(
-                    "{prog} skills init --package my-package",
+                    "{prog} dev skills init --package my-package",
                     "Scaffold the default set.",
                 ),
                 Example(
-                    "{prog} skills init --package scitex-foo --with-mcp --with-http",
+                    "{prog} dev skills init --package scitex-foo --with-mcp --with-http",
                     "Include MCP + HTTP reference pages.",
                 ),
                 Example(
-                    "{prog} skills init --package my-package --dest /tmp/skills/ --dry-run",
+                    "{prog} dev skills init --package my-package --dest /tmp/skills/ --dry-run",
                     "Preview to a custom dest.",
                 ),
             ),
@@ -57,7 +56,12 @@ def register(skills):
     @click.option("--force", is_flag=True, help="Overwrite existing files.")
     @click.option("--dry-run", is_flag=True, help="Preview without writing.")
     @click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
-    @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+    @click.option(
+        "--yes",
+        "-y",
+        is_flag=True,
+        help="Compatibility flag; this command does not prompt.",
+    )
     def skills_init(
         pip_name,
         import_name,

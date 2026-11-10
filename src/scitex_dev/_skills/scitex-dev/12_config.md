@@ -191,4 +191,4 @@ Only locations and selected booleans are shown, never raw configuration values.
 The snapshot exposes the same frozen paths, so a project-local file shadowing a
 home default is visible without adding another provenance registry.
 
-Setters are non-interactive; `--yes` is a compatibility flag, not consent.
+`skills init`/`install` and setters do not prompt. `--yes` is unused; `--dry-run` previews.
