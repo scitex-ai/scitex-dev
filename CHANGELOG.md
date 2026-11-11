@@ -10,6 +10,17 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.62.25] - 2026-11-11
+
+- Apply a verified installed package's CLI dictionary when it is audited as
+  the root command, retaining the same ownership and resource checks used
+  for mounted command groups. Preserve genuine naming and output findings.
+- Separate recorded-source evidence from metadata ambiguity. Conflicting
+  RECORD-proven installed owners remain rejected; unrecorded editable/source
+  claims do not acquire installed-root policy authority.
+- Add real metadata and source-context regressions and update the owning
+  audit skill. Preserve resource containment, hash checks and context cleanup.
+
 ## [0.62.24] - 2026-11-11
 
 - Restore the explicitly audited source package's CLI vocabulary when a walk
