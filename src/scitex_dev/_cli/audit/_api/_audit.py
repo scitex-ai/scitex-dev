@@ -188,9 +188,7 @@ def audit_api(
     # it does not fall back to the import-resolved init_path (site-packages),
     # which has no tests/ and would report a silent 0. See #435.
     violations.extend(
-        _audit_test_quality(
-            init_path, distribution, import_name, repo_root=repo_root
-        )
+        _audit_test_quality(init_path, distribution, import_name, repo_root=repo_root)
     )
     if rules:
         violations = [v for v in violations if v.rule in rules]
@@ -245,6 +243,11 @@ def audit_api(
             if "django" in cfg.project_types:
                 downgraded.add("PA-306")
 
+    def _effective_severity(rule: str) -> str:
+        if rule in downgraded:
+            return "warning"
+        return getattr(RULES.get(rule), "severity", "warning")
+
     if json_out:
         import json
 
@@ -256,7 +259,12 @@ def audit_api(
                     "repo_root": str(repo_root) if repo_root else None,
                     "files_inspected": len(inspected),
                     "violations": [
-                        {"rule": v.rule, "where": v.where, "detail": v.detail}
+                        {
+                            "rule": v.rule,
+                            "where": v.where,
+                            "detail": v.detail,
+                            "severity": _effective_severity(v.rule),
+                        }
                         for v in violations
                     ],
                 },
@@ -307,11 +315,6 @@ def audit_api(
     # warning-only violations don't. A rule relaxed for this run (e.g.
     # PA-306 under a `django` project-type) reports at warning level so it
     # no longer drives the error exit code or the error headline.
-    def _effective_severity(rule: str) -> str:
-        if rule in downgraded:
-            return "warning"
-        return getattr(RULES.get(rule), "severity", "warning")
-
     has_error = any(_effective_severity(v.rule) == "error" for v in violations)
     headline_level = "error" if has_error else "warning"
     # Category-named failure line — mirrors the clean line's

@@ -210,9 +210,7 @@ def audit_skills(
     canonical_dir = _check_layout(skills_dir, distribution, violations)
 
     if canonical_dir is not None:
-        violations.extend(
-            _collect_violations(distribution, canonical_dir, inspected)
-        )
+        violations.extend(_collect_violations(distribution, canonical_dir, inspected))
 
         # --fix: apply auto-fixable rules and re-collect.
         if fix:
@@ -244,7 +242,12 @@ def audit_skills(
                     "distribution": distribution,
                     "skills_dir": str(skills_dir) if skills_dir else None,
                     "violations": [
-                        {"rule": v.rule, "where": v.where, "detail": v.detail}
+                        {
+                            "rule": v.rule,
+                            "where": v.where,
+                            "detail": v.detail,
+                            "severity": "warning",
+                        }
                         for v in violations
                     ],
                 },

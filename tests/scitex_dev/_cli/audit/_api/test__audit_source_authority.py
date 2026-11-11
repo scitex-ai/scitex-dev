@@ -96,3 +96,16 @@ def test_inspected_counter_excludes_ignored_build_and_venv_paths(tmp_path):
     observed = (result.exit_code, json.loads(result.stdout)["files_inspected"])
     # Assert
     assert observed == (0, 1), result.output
+
+
+def test_json_api_findings_report_effective_warning_severity(tmp_path):
+    # Arrange
+    _repo(tmp_path, "src")
+    # Act
+    result = _audit(tmp_path)
+    payload = json.loads(result.stdout)
+    # Assert
+    assert (
+        result.exit_code,
+        [(v["rule"], v["severity"]) for v in payload["violations"]],
+    ) == (1, [("PA-101", "warning")])
