@@ -36,7 +36,9 @@ def test_installed_root_uses_its_verified_dictionary(installation, tmp_path):
     ) == ([], True)
 
 
-@pytest.mark.parametrize("variant", ["unrecorded", "tampered", "missing", "escape", "unhashed"])
+@pytest.mark.parametrize(
+    "variant", ["unrecorded", "tampered", "missing", "escape", "unhashed"]
+)
 def test_recorded_root_cannot_borrow_parent_words(installation, tmp_path, variant):
     # Arrange
     root = _HELPERS._install(
@@ -68,9 +70,10 @@ def test_ambiguous_root_reports_conflicting_installed_owners(installation, tmp_p
     # Assert
     assert (
         owners.owner(root).ambiguous,
+        owners.owner(root).source_record_owned,
         any("ambiguous distribution ownership" in item.message for item in findings),
         "control zorbulate-result" in _HELPERS._unknown(findings),
-    ) == (True, True, True)
+    ) == (True, True, True, True)
 
 
 def test_root_policy_context_is_restored_after_walk(installation, tmp_path):
@@ -84,3 +87,33 @@ def test_root_policy_context_is_restored_after_walk(installation, tmp_path):
         after = dict_candidate_paths()
     # Assert
     assert after == before
+
+
+def test_unrecorded_source_claims_do_not_create_installed_root_boundary(
+    installation, tmp_path
+):
+    # Arrange
+    root = _HELPERS._install(
+        installation,
+        "scitex-owner-control",
+        "owned_cli_control",
+        variant="unowned-source",
+    )
+    _HELPERS._additional_claim(
+        installation,
+        "scitex-owner-control",
+        "owned_cli_control",
+        version="1.0.0",
+        owned=False,
+    )
+    parent, _ = _HELPERS._parent(tmp_path, _HELPERS._DICT)
+    owners, findings = MountedOwners(), []
+    # Act
+    with use_dict_root(parent):
+        _walk(root, [], findings, "control", owners=owners)
+    # Assert
+    assert (
+        owners.owner(root).ambiguous,
+        owners.owner(root).source_record_owned,
+        _HELPERS._unknown(findings),
+    ) == (True, False, [])

@@ -76,7 +76,10 @@ and bytes in `RECORD`. A RECORD-owned root uses this boundary too: a missing or
 invalid dictionary cannot borrow words from the current project's dictionary.
 Ambiguous installed owners remain reported. Source checkouts retain the separate
 source-subject admission described below; an unrecorded source claim alone does
-not gain installed authority. A mounting application's dictionary must not supply
+not gain installed authority. Editable/source metadata without recorded source
+membership cannot create an installed-root boundary. Conflicting RECORD-proven
+installed origins still report ambiguity and block inherited vocabulary.
+A mounting application's dictionary must not supply
 a foreign group's vocabulary when ownership fails.
 
 The current source also attributes nested callbacks published by an already

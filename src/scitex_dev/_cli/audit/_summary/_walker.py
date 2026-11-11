@@ -89,7 +89,7 @@ def _walk(
     # Source subjects retain their explicit admission; an unrecorded source
     # claim alone must not acquire installed authority.
     root_boundary = not path and owner is not None and (
-        source is not None or owner.source_record_owned or owner.ambiguous
+        source is not None or owner.source_record_owned
     )
     if is_mount or root_boundary:
         full = root_display if not path else " ".join(
