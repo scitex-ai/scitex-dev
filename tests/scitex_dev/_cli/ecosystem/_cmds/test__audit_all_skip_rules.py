@@ -282,7 +282,7 @@ def test_summary_is_emitted_for_a_single_package_run(tmp_path):
 def _json_skip_rules(result):
     import json
 
-    return json.loads(result.output)["skip_rules"]["scitex-io"]
+    return json.loads(result.stdout)["skip_rules"]["scitex-io"]
 
 
 def test_json_payload_reports_the_masked_total(tmp_path):

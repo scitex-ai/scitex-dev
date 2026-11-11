@@ -248,21 +248,11 @@ def register(ecosystem):
                     err=True,
                 )
                 return a, {"exit": 1, "error": str(e)}
-            # `_raw` carries the auditor's combined text for skip-rule
-            # classification and is POPPED before the JSON payload is
-            # assembled, so it never changes the published shape. Without
-            # it, --json mode parsed stdout into `data` and kept no text,
-            # so masking silently classified nothing and every declared
-            # deferral was ignored for machine consumers.
-            raw_text = (r.stdout or "") + "\n" + (r.stderr or "")
             if as_json:
-                payload = r.stdout.strip() or "null"
-                try:
-                    res = {"exit": r.returncode, "data": _json.loads(payload)}
-                except _json.JSONDecodeError:
-                    res = {"exit": r.returncode, "raw": payload}
-                res["_raw"] = raw_text
-                return a, res
+                from ._audit_json_findings import captured_json_result
+
+                return a, captured_json_result(a, r.returncode, r.stdout, r.stderr)
+            raw_text = (r.stdout or "") + "\n" + (r.stderr or "")
             return a, {
                 "exit": r.returncode,
                 "stdout": r.stdout,
