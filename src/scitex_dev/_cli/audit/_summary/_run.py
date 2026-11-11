@@ -186,6 +186,7 @@ def _audit_one(
     from ._mounted_owner import MountedOwners
 
     owners = MountedOwners()
+    owners.bind_audited_source(cmd, package, repo_root, ep_value)
     _walk(cmd, [], out, root_display=package, coverage=coverage, owners=owners)
     if owner_sources is not None:
         owner_sources.extend(owners.sources)

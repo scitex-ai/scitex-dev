@@ -178,6 +178,7 @@ class MountedOwners:
         self._lexicons: dict[tuple, MountedOwner] = {}
         self.sources: list[str] = []
         self._reported: set[tuple[str, tuple[str, str, str, str, str]]] = set()
+        self._source_dictionary = None
         # Keep the distribution alongside its own entry points. This also
         # supports Python 3.9, whose EntryPoint lacks the newer .dist API.
         for dist in im.distributions():
@@ -199,6 +200,18 @@ class MountedOwners:
                     continue
                 module, callback = loaded
                 self._entries.setdefault(id(callback), []).append((ep, module, dist))
+
+    def bind_audited_source(self, command, package, root, entry_point):
+        """Admit only this audit's declared source subject, never a peer."""
+        from ._source_dictionary import SourceDictionary
+
+        self._source_dictionary = SourceDictionary.from_root(
+            package, root, entry_point, command, self.owner(command)
+        )
+
+    def source_dictionary(self, command, owner):
+        source = self._source_dictionary
+        return source if source is not None and source.owns(command, owner) else None
 
     def owner(self, cmd: click.Command) -> MountedOwner | None:
         callback_key = id(vars(cmd).get("callback"))
