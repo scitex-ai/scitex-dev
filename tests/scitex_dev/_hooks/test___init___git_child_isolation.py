@@ -19,15 +19,17 @@ from scitex_dev._hooks import HOOK_DIR
 HOOKS = Path(HOOK_DIR)
 SHIM = HOOKS / "_git_local_env.sh"
 WRAPPER = HOOKS / "run_testmon.sh"
-FIXTURE_CHILD = """from pathlib import Path
+FIXTURE_CHILD = f"""from pathlib import Path
 import os
-import subprocess
 import sys
+
+sys.path.insert(0, {str(Path(__file__).resolve().parents[3])!r})
+from tests.integration._git_fixture_command import run_fixture_command
 
 target = Path(sys.argv[1])
 def git(*args):
-    subprocess.run(['git', '-C', str(target), *args], check=True,
-                   capture_output=True, text=True, timeout=3)
+    run_fixture_command(['git', '-C', str(target), *args], target,
+                        os.environ.copy(), timeout=3)
 git('init', '-q')
 git('config', 'user.name', 'Fixture Tester')
 git('config', 'user.email', 'fixture@example.test')
