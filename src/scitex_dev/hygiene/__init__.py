@@ -23,6 +23,16 @@ Read :mod:`._branch_gc_model` for the vocabulary,
 :mod:`._branch_gc_config` for the four independent OFF gates,
 :mod:`._branch_gc_predicate` for the five-leg safety predicate, and
 :mod:`._branch_gc_backup` for the bundle-before-delete contract.
+
+The second sweep is DISK GUARD. Its reason to exist is a 2026-10-27
+incident: scitex-compute-03's root hit 100% because the Docker build
+cache grew to 146 GB (never pruned) while dated SIF builds piled up
+beside the live symlink. Same architecture — one engine
+(:mod:`._disk_guard`), one config (:mod:`._disk_guard_config`), one
+predicate (:mod:`._disk_guard_predicate`), two front-ends
+(``ecosystem prune-disk`` and the ``disk-guard`` cron job) — and the
+same asymmetry: a false KEEP leaves garbage the next pass can take. A
+false DELETE breaks a live agent. We pick the full disk.
 """
 
 from __future__ import annotations
@@ -39,6 +49,20 @@ from ._branch_gc_model import (
     RepoBranchGcResult,
     exit_code_for,
 )
+from ._disk_guard import sweep_host
+from ._disk_guard_config import DiskCleanupConfig, load_disk_cleanup_config
+from ._disk_guard_model import (
+    DEFAULT_MIN_AGE_DAYS as DISK_DEFAULT_MIN_AGE_DAYS,
+    DEFAULT_SIF_KEEP_NEWEST,
+    DEFAULT_THRESHOLD_PCT,
+    HARD_MIN_AGE_DAYS as DISK_HARD_MIN_AGE_DAYS,
+    HARD_MIN_SIF_KEEP,
+    DiskCandidateKind,
+    DiskGuardOutcome,
+    DiskVerdict,
+    HostSweepResult,
+    disk_exit_code_for,
+)
 
 __all__ = [
     "DEFAULT_BRANCH_CAP",
@@ -48,11 +72,24 @@ __all__ = [
     "BranchInfo",
     "BranchVerdict",
     "CleanupConfig",
+    "DISK_DEFAULT_MIN_AGE_DAYS",
+    "DISK_HARD_MIN_AGE_DAYS",
+    "DEFAULT_SIF_KEEP_NEWEST",
+    "DEFAULT_THRESHOLD_PCT",
+    "DiskCandidateKind",
+    "DiskCleanupConfig",
+    "DiskGuardOutcome",
+    "DiskVerdict",
+    "HARD_MIN_SIF_KEEP",
+    "HostSweepResult",
     "RepoBranchGcResult",
+    "disk_exit_code_for",
     "exit_code_for",
     "gc_repo",
     "gc_repos",
     "load_branch_cleanup_config",
+    "load_disk_cleanup_config",
+    "sweep_host",
 ]
 
 # EOF

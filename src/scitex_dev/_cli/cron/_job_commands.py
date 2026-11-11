@@ -134,6 +134,21 @@ def _worktree_gc_command() -> str:
     return exec_command("worktree-gc")
 
 
+def _disk_guard_command() -> str:
+    """The shell line installed for the ``disk-guard`` cron job.
+
+    Schedule rationale: every 6 hours at :17, matching the cadence the
+    incident that motivated this sweep needed (a 100%-full root
+    refills in hours, not days). A quiet pass costs a directory listing
+    plus ``df``; the build-cache leg only fires at/above the use
+    threshold, so steady-state runs are reads. Installing this job does
+    NOT arm it: the host stays DEFAULT OFF until
+    ``cleanup.disk.enabled: true`` appears in
+    ``$HOME/.scitex/dev/config.yaml``.
+    """
+    return exec_command("disk-guard")
+
+
 def _branch_gc_command() -> str:
     """The shell line installed for the ``branch-gc`` cron job.
 

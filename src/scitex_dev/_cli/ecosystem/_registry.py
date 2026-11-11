@@ -35,6 +35,7 @@ from ._cmds import (
     _list_exemptions,
     _up,
     _prune_branches,
+    _prune_disk,
     _prune_merged,
     _regen_umbrella,
     _run,
@@ -121,6 +122,7 @@ def register_ecosystem_commands(main_group):
     _host_config.register(ecosystem)
     _prune_merged.register(ecosystem)
     _prune_branches.register(ecosystem)
+    _prune_disk.register(ecosystem)
     _branch_hygiene.register(ecosystem)
     _freshness.register(ecosystem)
     _branch_protection.register(ecosystem)

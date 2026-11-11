@@ -60,6 +60,7 @@ from ._job_commands import (  # noqa: F401
     _ci_watch_command,
     _cred_distribute_command,
     _creds_rotate_all_command,
+    _disk_guard_command,
     _ecosystem_sync_command,
     _quota_keepalive_command,
     _scholar_library_sync_command,
@@ -292,6 +293,29 @@ JOB_REGISTRY: Mapping[str, JobSpec] = {
             "aborts the pass with zero deletions. No remote ref, tag, "
             "stash, reflog or worktree is ever touched. See "
             "scitex_dev.hygiene and _branch_gc.run_once."
+        ),
+    ),
+    "disk-guard": JobSpec(
+        name="disk-guard",
+        # Every 6 hours at :17 — off the 0-minute crowd and off the
+        # worktree-gc tick. Disk refills in hours (the 2026-10-27
+        # scitex-compute-03 incident went from comfortable to 100% in
+        # under a day), so daily is too slow and hourly is churn for a
+        # sweep whose quiet pass is a directory listing plus df.
+        schedule="17 */6 * * *",
+        command=_disk_guard_command(),
+        description=(
+            "Config-gated host disk hygiene, DEFAULT OFF. Being in this "
+            "registry installs nothing, and even installed the host stays "
+            "off until `cleanup.disk.enabled: true` is set in "
+            "$HOME/.scitex/dev/config.yaml. Deletes only dated SIF builds "
+            "superseded by newer ones (never the live symlink target, "
+            "never the newest N per family, never anything held open — an "
+            "unevaluable open check KEEPS), stale /tmp/ci-* runner dirs "
+            "past the age floor, and Docker build cache at/above the use "
+            "threshold and never mid-build. No checkout, image, container "
+            "or volume is ever touched. See scitex_dev.hygiene and "
+            "_disk_guard.run_once."
         ),
     ),
     # Future entries land here. Suggested naming pattern: short
