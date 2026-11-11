@@ -10,6 +10,17 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.62.23] - 2026-11-11
+
+- Use shared ignore-aware file discovery for Python test-quality audits so
+  ignored runtime caches are not attributed to the audited package. Preserve
+  untracked nonignored tests and visible fallback/not-run warnings.
+- Recognize repository `conftest.py` fixtures outside `tests/` and apply the
+  existing resource/state rules. Correct the shipped test-quality skill's
+  description of PA-307 enforcement and automatic-hook scope.
+- Exercise discovery through real Git/source fixtures and fd-absent child
+  processes, retaining native CI's job-owned dependency import paths.
+
 ## [0.62.22] - 2026-11-11
 
 - Count emitted JSON audit findings instead of passing raw JSON to the
