@@ -382,6 +382,18 @@ class TestPrePushStep4RoutesThroughWrapper:
             f"not a bare pytest; got {emitted}"
         )
 
+    def test_scope_step_uses_own_deadline_not_hook_deadline(self):
+        # Arrange — the shipped gate source.
+        text = Path(pre_push_sh_path()).read_text(encoding="utf-8")
+        # Act — which timeout var guards the scope-test invocation.
+        # Assert — Step 4 must NOT share the 60s whole-hook budget
+        # (figrecipe collects 3855 and needs minutes by construction):
+        # it uses SCOPE_DEADLINE_SECONDS, default 600, overridable via
+        # env or repo-local config, while fast steps keep DEADLINE_SECONDS.
+        assert 'timeout "$SCOPE_DEADLINE_SECONDS"' in text
+        assert "SCITEX_DEV_PREPUSH_SCOPE_TIMEOUT:-600" in text
+        assert "prepush_scope_timeout" in text
+
     def test_failing_wrapper_blocks_push_and_names_the_rc(self, tmp_path):
         # Arrange — a stub `scitex-dev` whose `--version` + `audit-all`
         # succeed (so the gate reaches Step 4) and whose `hooks show-path

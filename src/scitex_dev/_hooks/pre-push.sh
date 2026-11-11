@@ -166,8 +166,22 @@ echo_info "repo: $REPO_ROOT"
 # Time budget for the WHOLE hook. Red-green doctrine: a pre-push gate
 # that takes > 60s breaks the push flow and gets bypassed; the goal is
 # "always run, never noticed unless red", not "thorough." Heavy tests
-# go through CI.
+# go through CI. The scope-test step below gets its own, LARGER budget
+# (measured 2026-10-24: figrecipe collects 3855 and cannot fit step 4 in
+# 60s by construction — rc=124 at ~9% with zero failures).
 DEADLINE_SECONDS="${SCITEX_DEV_PREPUSH_TIMEOUT:-60}"
+# Scope tests run the diff-aware subset, which on big repos still needs
+# minutes, not seconds. Cap with the push flow, not starve it: default
+# 10 min, separately overridable, and a repo-local `.scitex/dev/config.yaml`
+# `prepush_scope_timeout` wins over both (owner-declared, per-repo).
+SCOPE_DEADLINE_SECONDS="${SCITEX_DEV_PREPUSH_SCOPE_TIMEOUT:-600}"
+if [[ -f "$REPO_ROOT/.scitex/dev/config.yaml" ]]; then
+    _CFG_SCOPE="$(grep -E '^[[:space:]]*prepush_scope_timeout:[[:space:]]*[0-9]+' "$REPO_ROOT/.scitex/dev/config.yaml" | grep -oE '[0-9]+' | tail -1 || true)"
+    if [[ -n "${_CFG_SCOPE:-}" ]]; then
+        SCOPE_DEADLINE_SECONDS="$_CFG_SCOPE"
+    fi
+    unset _CFG_SCOPE
+fi
 
 # ----------------------------------------------------------------- #
 # Diff scope: list .py files changed since the upstream tracking    #
@@ -430,7 +444,7 @@ if [[ -d "$REPO_ROOT/tests" ]]; then
         # directly so the failure message names the real testmon rc,
         # not the inverted truthy 0. The wrapper adds `--testmon`; we
         # forward the selection/flags it should apply.
-        ( cd "$REPO_ROOT" && timeout "$DEADLINE_SECONDS" bash "$RUN_TESTMON" \
+        ( cd "$REPO_ROOT" && timeout "$SCOPE_DEADLINE_SECONDS" bash "$RUN_TESTMON" \
                 -x --tb=short \
                 -m "not slow and not integration" \
                 tests >&2 )
