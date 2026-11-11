@@ -123,6 +123,27 @@ installable package, while its source distribution includes the original.
 Verify both artifacts and an installed resource through the actual backend;
 a source-file existence check does not prove installed behavior.
 
+## Explicitly audited source
+
+For the audit's own source checkout, the current source can use its declared
+dictionary when the project name and console entry point match the selected
+owner, and the loaded console and callback modules belong to that checkout's
+namespace. The project policy above takes precedence; otherwise a checked-in
+`<top_level_import>/_cli_audit_dict.yaml` supplies the source policy. Paths must
+remain within the audited tree. Missing declarations, wrong module origins and
+ambiguous metadata cannot establish this source context.
+The source resource must be a regular UTF-8 file of at most 1 MiB and remain
+unchanged while its bytes are captured.
+
+The walk freezes the selected source bytes and reports their path and SHA256
+as an **audited source subject**, not an installed RECORD claim. Returning from
+a mounted provider to a callback owned by that source restores its dictionary.
+This does not grant a foreign callback the root's vocabulary or relax installed
+resource checks. Controls using real Dev and SDK groups live in
+`tests/scitex_dev/_cli/audit/_summary/test__source_dictionary.py`.
+An older installed Dev may lack this behavior. Source attribution alone does
+not establish an installed artifact's contents or a command's business behavior.
+
 ## Keeping this guidance current
 
 Run the documented commands against the intended environment. Check source,

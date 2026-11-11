@@ -77,6 +77,7 @@ def _walk(
         _walk_node(cmd, path, out, root_display, coverage, registered_name, owners, parent_owner)
         return
     owner = owners.owner(cmd)
+    source = owners.source_dictionary(cmd, owner)
     is_mount = bool(path) and owner is not None and (
         parent_owner is None or owner.identity != parent_owner.identity
         or owner.resource != parent_owner.resource
@@ -84,12 +85,20 @@ def _walk(
         or owner.source_record_owned != parent_owner.source_record_owned
         or owner.ambiguous != parent_owner.ambiguous
     )
-    if is_mount:
-        full = " ".join([*path, registered_name or cmd.name or "<root>"])
-        owners.report(owner, full)
+    if is_mount or (not path and source is not None):
+        full = root_display if not path else " ".join(
+            [*path, registered_name or cmd.name or "<root>"]
+        )
+        if source is not None:
+            owners.sources.append(source.provenance(full))
+        else:
+            owners.report(owner, full)
         if owner.ambiguous:
             out.append(Violation(full, "§1d", owner.reason + ": " + owner.distribution))
-        with use_owner_dict(owner.resource, owner.distribution, owner.reason, owner.payload):
+        resource = source.resource if source is not None else owner.resource
+        payload = source.payload if source is not None else owner.payload
+        reason = "audited source subject" if source is not None else owner.reason
+        with use_owner_dict(resource, owner.distribution, reason, payload):
             from ._std_rules import check_verb_exception_comments
 
             check_verb_exception_comments(full, out)
