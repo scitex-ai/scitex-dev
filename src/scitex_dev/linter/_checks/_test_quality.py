@@ -49,7 +49,8 @@ class TestQualityMixin:
         parts = Path(self.filepath).parts
         name = Path(self.filepath).name
         return (
-            name.startswith("test_")
+            name == "conftest.py"
+            or name.startswith("test_")
             or name.endswith("_test.py")
             or any(seg in {"tests", "test"} for seg in parts)
         )

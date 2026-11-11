@@ -128,12 +128,23 @@ a unit test.
 
 ## Enforcement
 
-- **Linter** (`scitex-dev linter validate-files`) — fires on every save
-  via the PostToolUse hook. Error-severity rules block the save;
-  warning-severity rules surface for review.
-- **Audit** (`scitex-dev ecosystem audit-python-apis`) — currently
-  PA-306 (no-mocks) only; PA-307 for test-quality may be added if
-  drift between leaf packages becomes an issue.
+- **Linter** (`scitex dev linter validate-files PATH`) — detects the
+  rules above, including fixtures in `conftest.py`. Automatic invocation
+  depends on the agent's installed hook configuration; the CLI does not
+  establish that a particular editor or agent runs it on every save.
+- **Audit** (`scitex dev ecosystem audit-python-apis PACKAGE --path CHECKOUT`)
+  — PA-306 checks mock usage; PA-307 re-emits STX-TQ findings from `tests/`
+  and repository conftests as audit errors, including linter warnings.
+  Shared discovery honors hidden-path and Git ignore rules, retains
+  untracked nonignored source, and warns when it must use its stdlib
+  fallback. No discovered tests produces a visible not-run warning.
+
+Standalone bootstrap commands use `scitex-dev` in place of `scitex dev`.
+The auditor implementation is `_cli/audit/_api/_checks/_test_quality.py`;
+real Git/source controls live in
+`tests/scitex_dev/_cli/audit/_api/_checks/test__test_quality_discovery.py`.
+Check the installed version before assuming it has the current source's
+discovery behavior; passing source tests does not establish host adoption.
 
 ## Related skills
 
