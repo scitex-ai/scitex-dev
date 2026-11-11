@@ -10,6 +10,18 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.62.22] - 2026-11-11
+
+- Count emitted JSON audit findings instead of passing raw JSON to the
+  human-line classifier. Preserve reported severities, original findings and
+  failed exits; exclude unfiltered inventories from emitted-finding counts.
+- Include effective severity in Python API and skills audit JSON. Report
+  inspected and unreadable classification lines separately from source-file
+  coverage. Malformed or unknown JSON remains a failed measurement.
+- Prevent finding details from impersonating another rule and unreadable
+  diagnostic labels from becoming declared deferrals. Retain per-auditor
+  failure policy, installed-record ownership checks and existing test limits.
+
 ## [0.62.21] - 2026-11-11
 
 - Read installed provider headers once per discovery snapshot. Keep provider
