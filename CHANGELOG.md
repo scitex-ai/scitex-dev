@@ -10,6 +10,18 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.62.24] - 2026-11-11
+
+- Restore the explicitly audited source package's CLI vocabulary when a walk
+  returns from a mounted provider. Require matching project, console entry
+  point, loaded namespace and callback source declarations.
+- Capture bounded UTF-8 dictionary bytes within the audited tree and report
+  source provenance with its digest. Preserve installed RECORD/hash checks,
+  foreign-owner boundaries and ambiguous-metadata rejection.
+- Exercise source ownership with real Dev/SDK commands and installed metadata
+  in an isolated process. Document why distinct editable, source egg-info and
+  baked-wheel metadata origins remain ambiguous.
+
 ## [0.62.23] - 2026-11-11
 
 - Use shared ignore-aware file discovery for Python test-quality audits so
