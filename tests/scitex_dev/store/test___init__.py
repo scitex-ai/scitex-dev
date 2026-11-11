@@ -41,8 +41,14 @@ in an ``except`` clause. A fence nobody can catch is a crash, not a guard.
 
 from __future__ import annotations
 
+import ast
+import os
+import re
 import subprocess
 import sys
+import textwrap
+from pathlib import Path
+from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 
 import pytest
 
@@ -77,8 +83,7 @@ def _imported_modules() -> set[str]:
     )
     if completed.returncode != 0:
         raise AssertionError(
-            "importing scitex_dev.store failed in a subprocess:\n"
-            f"{completed.stderr}"
+            "importing scitex_dev.store failed in a subprocess:\n" f"{completed.stderr}"
         )
     return set(completed.stdout.split())
 
@@ -246,5 +251,74 @@ def test_identity_comparison_is_reachable_from_the_facade():
     got = callable(store.assert_same_store)
     # Assert
     assert got is True
+
+
+# Execute the selected public examples, not arbitrary documentation fences.
+_STORE_SOURCE = Path(__file__).resolve().parents[3] / "src/scitex_dev/store"
+
+
+def _quickstart(document):
+    if document == "README.md":
+        text = (_STORE_SOURCE / document).read_text().split("## Quick start", 1)[1]
+        return re.search(r"```python\n(.*?)```", text, re.DOTALL).group(1)
+    module = ast.parse((_STORE_SOURCE / document).read_text())
+    text = ast.get_docstring(module).split("Quick start\n-----------\n", 1)[1]
+    text = text.split("\n::\n", 1)[1]
+    return textwrap.dedent(text.split("\nReading is by key", 1)[0])
+
+
+@pytest.fixture
+def documented_store_dsn(pg_schemas):
+    schema = pg_schemas("documented_quickstart")
+    url = urlsplit(store.host_store(pkg="documentation-test").dsn)
+    query = dict(parse_qsl(url.query))
+    query["options"] = f"-c search_path={schema}"
+    dsn = urlunsplit(url._replace(query=urlencode(query, quote_via=quote)))
+    saved = os.environ.get("SCITEX_STORE_DSN")
+    os.environ["SCITEX_STORE_DSN"] = dsn
+    try:
+        yield dsn
+    finally:
+        if saved is None:
+            os.environ.pop("SCITEX_STORE_DSN", None)
+        else:
+            os.environ["SCITEX_STORE_DSN"] = saved
+
+
+@pytest.mark.parametrize("document", ["README.md", "__init__.py"])
+def test_documented_quickstart_persists_a_readable_record(
+    document, documented_store_dsn
+):
+    # Arrange
+    namespace = {}
+    try:
+        # Act
+        exec(compile(_quickstart(document), document, "exec"), namespace)
+        example = namespace["store"]
+        observed = {
+            "dsn": example.target.dsn,
+            "written": example.get({"id": "c1"}).values,
+        }
+        example.close()
+        reopened = store.Store(
+            store.host_store(pkg="cards"),
+            namespace["schema"],
+            node="documentation-reader",
+            writer_policy=store.WriterPolicy.MULTI_WRITER,
+        )
+        try:
+            observed["reopened"] = reopened.get({"id": "c1"}).values
+        finally:
+            reopened.close()
+        # Assert
+        assert observed == {
+            "dsn": documented_store_dsn,
+            "written": {"id": "c1", "status": "open"},
+            "reopened": {"id": "c1", "status": "open"},
+        }
+    finally:
+        if "store" in namespace:
+            namespace["store"].close()
+
 
 # EOF

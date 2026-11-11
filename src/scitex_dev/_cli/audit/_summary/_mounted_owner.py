@@ -15,10 +15,12 @@ import importlib.metadata as im
 import sys
 from dataclasses import dataclass, replace
 from pathlib import Path
+from types import ModuleType
 
 import click
 
 from ._callback_source import bound_callback_module, loaded_bootstrap_module
+from ._facade_source import published_facade_module
 
 RESOURCE_NAME = "_cli_audit_dict.yaml"
 
@@ -170,7 +172,9 @@ class MountedOwners:
     def __init__(self):
         self._entries: dict[int, list] = {}
         self._bootstraps: dict[str, list] = {}
-        self._owners: dict[int, MountedOwner | None] = {}
+        self._facade_sources: dict[str, list] = {}
+        self._facade_bindings: dict[str, list] = {}
+        self._owners: dict[tuple[int, int], MountedOwner | None] = {}
         self._lexicons: dict[tuple, MountedOwner] = {}
         self.sources: list[str] = []
         self._reported: set[tuple[str, tuple[str, str, str, str, str]]] = set()
@@ -180,6 +184,11 @@ class MountedOwners:
             for ep in dist.entry_points:
                 if ep.group != "console_scripts":
                     continue
+                module = sys.modules.get(ep.module)
+                if type(module) is ModuleType:
+                    self._facade_sources.setdefault(ep.module, []).append(
+                        (ep, module, dist)
+                    )
                 loaded = _loaded_command(ep)
                 if loaded is None:
                     module = loaded_bootstrap_module(ep)
@@ -192,17 +201,22 @@ class MountedOwners:
                 self._entries.setdefault(id(callback), []).append((ep, module, dist))
 
     def owner(self, cmd: click.Command) -> MountedOwner | None:
-        key = id(vars(cmd).get("callback"))
+        callback_key = id(vars(cmd).get("callback"))
+        # A lazy facade and its delegate can share a callback while only the
+        # facade class is published by the loaded console source.
+        key = (callback_key, id(type(cmd)))
         if key in self._owners:
             return self._owners[key]
         claims = [
             _recorded_owner(ep, module, dist)
-            for ep, module, dist in self._entries.get(key, ())
+            for ep, module, dist in self._entries.get(callback_key, ())
         ]
         # Exact console claims keep precedence, including invalid ones. A
         # nested binding cannot rescue a rejected entry-point claim.
         if not claims:
             claims = self._callback_claims(cmd)
+        if not claims:
+            claims = self._facade_claims(cmd)
         recorded = {
             owner.identity: owner for owner in claims if owner.source_record_owned
         }
@@ -253,6 +267,7 @@ class MountedOwners:
         name, module = binding
         namespace = name.split(".")[0]
         candidates = list(self._bootstraps.get(namespace, ()))
+        candidates.extend(self._facade_bindings.get(namespace, ()))
         for entries in self._entries.values():
             candidates.extend(entry for entry in entries
                               if entry[0].module.split(".")[0] == namespace)
@@ -265,6 +280,38 @@ class MountedOwners:
                 _recorded_module_owner(name, module, dist, "bound callback")
                 if qualification.source_record_owned else qualification
             )
+        return claims
+
+    def _facade_claims(self, cmd):
+        facade = published_facade_module(cmd)
+        if facade is None:
+            return []
+        binding = bound_callback_module(cmd)
+        source_name, source_module = facade
+        claims = []
+        for ep, console_module, dist in self._facade_sources.get(source_name, ()):
+            if console_module is not source_module:
+                continue
+            qualification = _recorded_owner(ep, console_module, dist)
+            if qualification.source_record_owned:
+                if binding is None:
+                    qualification = replace(
+                        qualification,
+                        resource=None,
+                        payload=None,
+                        reason="facade callback binding unavailable",
+                        source_record_owned=False,
+                    )
+                else:
+                    callback_name, callback_module = binding
+                    qualification = _recorded_module_owner(
+                        callback_name, callback_module, dist, "bound callback"
+                    )
+                    if qualification.source_record_owned:
+                        self._facade_bindings.setdefault(
+                            callback_name.split(".")[0], []
+                        ).append((ep, console_module, dist))
+            claims.append(qualification)
         return claims
 
     def report(self, owner: MountedOwner, full: str) -> None:

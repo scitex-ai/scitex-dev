@@ -32,19 +32,17 @@ tags: [scitex-general-interface-cli-help-format]
    of `(section_name, [cmd_names])`. Anything not listed falls to
    `Other`, which must be empty at audit-clean. Auditor rule `C7`.
 
-## Idiom — version-in-help via importlib.metadata
+Use `CliHelp(version_of="<distribution-name>")` with `SpecGroup` or
+`SpecCommand` to render the installed version. Do not resolve the version
+in a decorator yourself: an uninstalled source checkout must still load.
+The renderer states `version unresolved: no installed distribution` when
+metadata is absent; it never invents a version. Other metadata errors are
+not converted into that missing-distribution result.
 
-```python
-from importlib.metadata import version as _v
-
-@click.group(help=f"scitex-io (v{_v('scitex-io')}) — Universal scientific data I/O.")
-def main():
-    ...
-```
-
-Pass-through entry points (Click `ignore_unknown_options=True` +
-`allow_extra_args=True`) are exempt — their help is forwarded
-verbatim from the upstream tool.
+Declared pass-through entry points (Click `ignore_unknown_options=True` +
+`allow_extra_args=True`) skip the walker's help checks. This declaration does
+not prove that help is forwarded from the upstream tool; the wrapper owns that
+behavior. See [§1c](05_pass-through.md) for detection and coverage limits.
 
 ## Spec-built help — the `CliHelp` dataclass (enforced construction method)
 
@@ -54,26 +52,29 @@ roots and not others. The canonical construction method (operator msg
 505, confirmed 2026-07-07) is a **help spec dataclass** — help text is
 *data*, validated at import time, rendered uniformly.
 
-Lives in `scitex_dev/_ecosystem/help_spec.py` (slice 3 of the
-CLI-standardization plan — **not built yet**; this section is the
-contract it implements).
+Implemented in `scitex_dev/_ecosystem/help_spec.py` and exported through
+`scitex_dev.ecosystem`, which is a module, not a package. Import from this
+public facade; `scitex_dev.ecosystem.help_spec` is not an importable path.
+Check the installed Dev version and exports before adopting it in a leaf.
+The following example constructs and renders help data without running a
+command or its examples:
 
 ```python
-@dataclass
-class Example:
-    cmd: str            # "{prog} figure create spec.yaml"
-    note: str = ""      # "Create a figure from a YAML spec."
+from scitex_dev.ecosystem import CliHelp, Example, render_epilog, render_help
 
-@dataclass
-class CliHelp:
-    summary: str                          # one line, <=78 chars
-    description: str = ""                 # long-form body
-    examples: list[Example] = field(default_factory=list)
-    exit_codes: dict[int, str] = field(default_factory=dict)
-    config_resolution: str = ""           # §6 precedence chain, if any
-    see_also: list[str] = field(default_factory=list)
-    version_of: str = ""                  # dist name for version-in-help
+spec = CliHelp(
+    summary="List documentation providers.",
+    examples=(Example("{prog} docs list-providers --json"),),
+    version_of="scitex-dev",
+)
+print(render_help(spec))
+print(render_epilog(spec, prog="scitex dev"))
 ```
+
+`CliHelp` and `Example` are frozen dataclasses. Description and config strings
+are split into paragraphs; sequence inputs are normalized to tuples. Exit
+codes accept a mapping or `(code, meaning)` pairs. Constructing help validates
+its structure; it does not execute examples or verify a command's behavior.
 
 - `SpecCommand` (Click `Command` subclass) and `SpecGroup`
   (`CategorizedGroup` subclass, §4a
@@ -82,9 +83,10 @@ class CliHelp:
   summary line (with version via `version_of` +
   `importlib.metadata.version`), description, usage, options, examples,
   exit codes, config resolution, see-also.
-- **Validation in `__post_init__`** (fails at import, not at runtime):
+- **Validation when help is constructed** (often during module import):
   - `summary` is one line and ≤78 characters.
-  - Leaf commands declare **at least one example**.
+  - `SpecCommand` requires **at least one example**; `CliHelp` alone and
+    `SpecGroup` permit none.
   - Examples use the `{prog}` placeholder, never a hardcoded brand
     (`scitex-plt …` ✗, `{prog} …` ✓) — the renderer substitutes
     `ctx.find_root().info_name`, so the same spec shows the right
@@ -92,7 +94,16 @@ class CliHelp:
     (`scitex-plt …`) mounts.
 
 Spec-built help is the **enforced construction method**: audit rule
-`4b` (planned, slice 4) warns on any command whose help is not built
+`§4b`, implemented in `_cli/audit/_summary/_std_rules.py`, warns on a command
+whose help is not built
 from a `CliHelp` spec. It subsumes today's `_has_example` heuristic
 (§4 auditor greps for "example"/"$ ") and implements rule `C7`'s
 categorized rendering via `SpecGroup`.
+
+Behavioral controls are in
+`tests/scitex_dev/_ecosystem/test_help_spec.py`,
+`tests/scitex_dev/_ecosystem/test_help_spec_uninstalled_dist.py` and
+`tests/scitex_dev/_cli/audit/_summary/test__std_rules.py`. They cover
+construction, rendering, missing metadata and the audit rule. A valid spec
+or quiet help-format finding does not establish that the documented operation
+works or that the complete CLI audit passes.

@@ -13,6 +13,7 @@ import unittest
 from pathlib import Path
 
 import yaml
+from _dev_ci_node_probe import run_node
 
 ROOT = Path(__file__).resolve().parents[2]
 MATRIX = ROOT / ".github/workflows/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml"
@@ -36,14 +37,7 @@ def public_sources():
 
 
 def node(source):
-    return subprocess.run(
-        ["node", "-"],
-        input=source,
-        text=True,
-        capture_output=True,
-        timeout=4,
-        check=False,
-    )
+    return run_node(source, timeout=4)
 
 
 def bridge(job, values):
@@ -154,7 +148,7 @@ console.log('all-four-events-three-minors-null-image-refused');
         candidate = workflow(AUDIT)["jobs"]["workspace-audit"]
 
         # Act
-        actual_steps = candidate["steps"][:-1]
+        actual_steps = candidate["steps"][:-2]
 
         # Assert
         self.assertEqual(actual_steps, previous["steps"])
@@ -162,8 +156,11 @@ console.log('all-four-events-three-minors-null-image-refused');
         self.assertEqual(candidate["runs-on"], "ubuntu-latest")
         self.assertEqual(actual_steps[-1]["run"], previous["steps"][-1]["run"])
         self.assertEqual(
-            candidate["steps"][-1]["run"],
-            '"$RUNNER_TEMP/venv/bin/python" .github/tests/test_dev_ci_adapters.py -v',
+            [step["run"] for step in candidate["steps"][-2:]],
+            [
+                "\"$RUNNER_TEMP/venv/bin/python\" -m unittest discover -s .github/tests -p 'test_dev_ci*.py' -v",
+                "\"$RUNNER_TEMP/venv/bin/python\" -m unittest discover -s .github/tests -p 'test_dev_docs_import*.py' -v",
+            ],
         )
 
     def test_original_required_names_and_full_dependencies_are_preserved(self):

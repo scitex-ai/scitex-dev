@@ -319,3 +319,55 @@ def test_root_public_exports_match_submodule(tmp_path):
     )
     # Assert
     assert observed == (True, True, True)
+
+
+def test_discovery_reads_each_metadata_once_and_refreshes_next_call(tmp_path):
+    # Arrange
+    info = _dist(
+        tmp_path,
+        "scitex-snapshot",
+        explicit=[("snapshot", "snapshot_owned_cli:main")],
+        files=["snapshot_owned_cli.py"],
+    )
+    metadata_path = info / "METADATA"
+    opens = []
+    enabled = False
+
+    def observe(event, arguments):
+        if enabled and event == "open" and arguments[0] == str(metadata_path):
+            opens.append(arguments[0])
+
+    sys.addaudithook(observe)
+
+    # Act
+    enabled = True
+    try:
+        first = list_cli_providers(path=[tmp_path])
+    finally:
+        enabled = False
+    first_reads = len(opens)
+    metadata_path.write_text(
+        "Metadata-Version: 2.1\nName: scitex-snapshot\nVersion: 2.0\n"
+    )
+    opens.clear()
+    enabled = True
+    try:
+        second = list_cli_providers(path=[tmp_path])
+    finally:
+        enabled = False
+    observed = (
+        [(row.name, row.version, row.status) for row in first],
+        first_reads,
+        [(row.name, row.version, row.status) for row in second],
+        len(opens),
+        "snapshot_owned_cli" in sys.modules,
+    )
+
+    # Assert
+    assert observed == (
+        [("snapshot", "1.0", "declared")],
+        1,
+        [("snapshot", "2.0", "declared")],
+        1,
+        False,
+    )

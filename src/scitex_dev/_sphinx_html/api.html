@@ -989,7 +989,9 @@ wrapper/registry fallback must never resurrect them. Only <code class="docutils 
 <p>Explicit declarations suppress legacy fallback for their entire owner.
 Duplicated owners and command names are ambiguous, including opt-out names.
 Ambiguity is determined BEFORE an optional owner filter. <code class="docutils literal notranslate"><span class="pre">path</span></code> limits the
-metadata search (useful for isolated environments and real dist-info tests).</p>
+metadata search (useful for isolated environments and real dist-info tests).
+Installed headers share one snapshot within this call; a subsequent call
+reads installed state again rather than reusing a process-global cache.</p>
 </dd></dl>
 
 </section>

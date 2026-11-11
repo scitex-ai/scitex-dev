@@ -7,7 +7,9 @@ tags: [scitex-general-interface-cli-pass-through]
 
 # §1c. Pass-through exceptions
 
-Entry points that forward arguments verbatim — bypass parsing entirely after their own name.
+Entry points that delegate a command tail to another tool. The wrapper must
+preserve the downstream argument values and order, subject to its documented
+option-separator handling; Click still processes its own parsing controls.
 
 | Pattern           | Example                                       | Why                                      |
 |-------------------|-----------------------------------------------|------------------------------------------|
@@ -21,27 +23,57 @@ Entry points that forward arguments verbatim — bypass parsing entirely after t
 - **Must not** rewrite or reorder forwarded arguments.
 - Pass-through entry points are exempt from the §1 noun-verb rule.
 
-## How to declare a pass-through (so the auditor skips it)
+## Declare the actual forwarding contract
 
-The auditor ([07_audit-cli.md](07_audit-cli.md)) recognises pass-throughs by either of these markers — choose one per entry point:
+The current auditor recognizes a Click command whose `context_settings` sets
+both `ignore_unknown_options=True` and `allow_extra_args=True`. Declare this
+only for a real forwarding boundary, and explain the delegation in help:
 
-1. **Click `context_settings`** with `ignore_unknown_options=True` AND `allow_extra_args=True`:
+```python
+import subprocess
 
-   ```python
-   @cli.command(
-       context_settings={"ignore_unknown_options": True, "allow_extra_args": True},
-       help="Pass-through to upstream `git`. Args are forwarded verbatim.",
-   )
-   @click.argument("args", nargs=-1, type=click.UNPROCESSED)
-   def git(args):
-       subprocess.run(["git", *args], check=False)
-   ```
+import click
 
-2. **Module-level marker** in the package's CLI module:
 
-   ```python
-   # src/<pkg>/cli/__init__.py
-   PASS_THROUGH_COMMANDS: list[str] = ["git", "uv", "run", "eval"]
-   ```
+@click.group()
+def cli():
+    """Command-line tools."""
 
-The auditor reads `PASS_THROUGH_COMMANDS` (if present) and inspects each Click command's `context_settings`; any match in either is exempted from §1 / §1d reports. Without one of these markers the auditor will flag the entry as a bare-noun or bare-verb violation.
+
+@cli.command(
+    context_settings={"ignore_unknown_options": True, "allow_extra_args": True},
+    help="Pass arguments to upstream git in their original order.",
+)
+@click.argument("args", nargs=-1, type=click.UNPROCESSED)
+def git(args):
+    raise SystemExit(subprocess.run(["git", *args], check=False).returncode)
+```
+
+For example, `cli git --version` invokes the installed `git --version` and
+returns its status. Click consumes a standalone `--` option separator rather
+than forwarding that token; test and document separator behavior when an
+upstream command needs a literal separator. This example is not a complete
+SciTeX root CLI or a declaration that every interface rule passes.
+
+A module-level `PASS_THROUGH_COMMANDS` list is **not read by the current
+auditor**. It does not exempt a command. Internally `_is_pass_through` also
+recognizes the command object's `_pass_through` attribute; that private signal
+is not a public registration API or evidence of correct forwarding. A variadic
+`UNPROCESSED` argument alone does not satisfy the context-settings detector.
+Do not mark domain commands as pass-throughs merely to suppress findings.
+
+## What the check establishes
+
+The owning implementation is `_is_pass_through` in
+`scitex_dev/_cli/audit/_summary/_audit.py`. `_walk` in the sibling `_walker.py`
+checks universal flags (§2) before applying the declaration. Non-root declared
+pass-throughs then return from that walker before its naming/help checks and
+child traversal; root declarations skip the root version/spec-help checks.
+A declaration therefore narrows inspection; it does not prove the callback
+preserves arguments, exit status or side effects, or qualifies downstream tools.
+
+The existing controls in
+`tests/scitex_dev/_cli/audit/_summary/test__audit.py` cover
+`TestIsPassThrough` (both flags, the private attribute, absent and partial
+settings) and `TestPassThroughBypassesRule1`. Keep separate behavioral evidence
+for the owning wrapper's actual forwarding and separator contract.

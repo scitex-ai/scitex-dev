@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""`scitex-dev skills install` (+ hidden deprecated `export` / `collect`)."""
+"""`scitex-dev dev skills install` (+ hidden deprecated `export` / `collect`)."""
 
 import json
 
@@ -107,7 +107,12 @@ def register(skills):
     )
     @click.option("--dry-run", is_flag=True, help="Preview without copying.")
     @click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
-    @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+    @click.option(
+        "--yes",
+        "-y",
+        is_flag=True,
+        help="Compatibility flag; this command does not prompt.",
+    )
     def skills_install(
         dest,
         package,

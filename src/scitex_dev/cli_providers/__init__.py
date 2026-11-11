@@ -21,6 +21,7 @@ except ImportError:  # Python 3.9/3.10
     import tomli as tomllib
 
 from .._core.names import normalize_distribution_name
+from ._metadata_snapshot import _MetadataSnapshot
 
 __all__ = ["CliProvider", "list_cli_providers"]
 
@@ -109,8 +110,9 @@ def _metadata_origin(dist) -> Path | None:
     return Path(origin).resolve() if isinstance(origin, (str, Path)) else None
 
 
-def _distinct_installs(distributions):
+def _distinct_installs(distributions, snapshot=None):
     """Dedup repeated origins and exactly proved editable source shadows only."""
+    snapshot = snapshot or _MetadataSnapshot()
     unique, seen = [], set()
     for dist in distributions:
         origin = _metadata_origin(dist)
@@ -122,7 +124,7 @@ def _distinct_installs(distributions):
     shadows = set()
     for installed in unique:
         try:
-            owner = normalize_distribution_name(installed.metadata.get("Name"))
+            owner = normalize_distribution_name(snapshot.headers(installed).get("Name"))
         except ValueError:
             continue
         root = _editable_root(installed, owner)
@@ -138,7 +140,7 @@ def _distinct_installs(distributions):
             if (
                 source.read_text("PKG-INFO") is not None
                 and source.read_text("PKG-INFO") == installed.read_text("METADATA")
-                and source.version == installed.version
+                and snapshot.version(source) == snapshot.version(installed)
                 and sorted((ep.group, ep.name, ep.value) for ep in source.entry_points)
                 == sorted(
                     (ep.group, ep.name, ep.value) for ep in installed.entry_points
@@ -157,10 +159,11 @@ def _owns_module(dist, owner: str, target: str) -> bool:
     ) or _editable_owns_module(dist, owner, module)
 
 
-def _rows(dist, owner: str | None) -> list[CliProvider]:
+def _rows(dist, owner: str | None, snapshot=None) -> list[CliProvider]:
+    snapshot = snapshot or _MetadataSnapshot()
     entries = tuple(dist.entry_points)
     explicit = [ep for ep in entries if ep.group == "scitex.cli"]
-    base = {"distribution": owner, "version": dist.version}
+    base = {"distribution": owner, "version": snapshot.version(dist)}
     if explicit:
         rows = []
         for ep in explicit:
@@ -244,22 +247,26 @@ def list_cli_providers(
     Duplicated owners and command names are ambiguous, including opt-out names.
     Ambiguity is determined BEFORE an optional owner filter. ``path`` limits the
     metadata search (useful for isolated environments and real dist-info tests).
+    Installed headers share one snapshot within this call; a subsequent call
+    reads installed state again rather than reusing a process-global cache.
     """
     selected = normalize_distribution_name(package) if package is not None else None
+    snapshot = _MetadataSnapshot()
     distributions = _distinct_installs(
         metadata.distributions(
             **({"path": [str(p) for p in path]} if path is not None else {})
-        )
+        ),
+        snapshot=snapshot,
     )
     rows = []
     owners = []
     for dist in distributions:
         try:
-            owner = normalize_distribution_name(dist.metadata.get("Name"))
+            owner = normalize_distribution_name(snapshot.headers(dist).get("Name"))
         except ValueError:
             owner = None
         owners.append(owner)
-        rows.extend(_rows(dist, owner))
+        rows.extend(_rows(dist, owner, snapshot=snapshot))
     owner_counts = Counter(owner for owner in owners if owner is not None)
     name_counts = Counter(row.name for row in rows if row.name is not None)
     rows = [

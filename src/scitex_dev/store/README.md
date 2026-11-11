@@ -154,10 +154,16 @@ believes in.
 
 ## Quick start
 
+`host_store(pkg="cards")` resolves `SCITEX_STORE_DSN` when configured, then
+the default central PostgreSQL target. Use an explicitly configured, writable
+example database or isolated schema for this example; it writes record `c1`.
+The two quick starts are executed against a disposable PostgreSQL schema by
+`tests/scitex_dev/store/test___init__.py`, including a reopen/read check.
+
 ```python
 from scitex_dev.store import (
     FieldKind, FieldPolicy, FieldRole, MergeRule,
-    NEW_RECORD, Schema, Store, StoreTarget, WriterPolicy,
+    NEW_RECORD, Schema, Store, WriterPolicy, host_store,
 )
 
 schema = Schema.build("cards", {
@@ -172,14 +178,18 @@ schema = Schema.build("cards", {
 })
 
 store = Store(
-    StoreTarget.for_package("cards"),
+    host_store(pkg="cards"),
     schema,
-    node="scitex-compute-04",
+    node="example-node",
     writer_policy=WriterPolicy.MULTI_WRITER,
 )
 store.put({"id": "c1", "status": "open"}, expected_revision=NEW_RECORD)
+```
 
-# Reconcile with a peer — one direction, inspected separately.
+To reconcile, first configure and open a second `Store` as `peer_store`.
+Replay one direction and inspect its results:
+
+```python
 from scitex_dev.store import sync
 for result in sync(store, peer_store):
     print(result.describe())

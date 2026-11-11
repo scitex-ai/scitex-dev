@@ -42,7 +42,7 @@ Auditor coverage of each rule (`yes` = enforced statically; `partial` = best-eff
 | §1   | Noun-verb subcommand structure               | yes       | Click tree walk, token classification.                               |
 | §1a  | Required introspection commands              | yes       | Presence + `--json` static; `-v|-vv|-vvv` monotonic ladder behavioral (`--behavioral`). |
 | §1b  | Banned bare leaves (`version`, `completion`) | yes       | Hard-coded denylist at any depth.                                    |
-| §1c  | Pass-through entry points                    | no        | Auditor cannot statically detect verbatim-forward entries.           |
+| §1c  | Pass-through entry points                    | partial   | Declared context-settings pair/private command marker detected; actual argument forwarding is not verified. See [§1c](05_pass-through.md). |
 | §1d  | Vocabulary in catalog/dict/Moby              | yes       | Layered lookup; warns on `unknown`.                                  |
 | §1e  | (this section — the auditor itself)          | n/a       |                                                                      |
 | §1f  | Non-canonical verb synonyms                  | yes (warn) | Doctrine-06 synonym map over leaf names / verb tokens; `verb_exceptions:` (with `# why`) exempts. |

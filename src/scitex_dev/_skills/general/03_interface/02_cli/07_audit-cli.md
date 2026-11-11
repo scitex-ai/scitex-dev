@@ -85,6 +85,20 @@ Exact console claims retain priority, including rejected claims; a nested
 binding cannot rescue them. Missing, tampered or ambiguous resources still
 exclude the parent dictionary.
 
+A lazy facade can establish ownership when its plain Python Click class is
+defined and published in the loaded console module. Both that module and its published
+callback's module must belong to the same exact distribution's `RECORD` and
+pass containment checks, even across different top-level namespaces. Dev does
+not call `__getattr__`, load entry points or invoke callbacks for this inference.
+Custom metaclasses and unpublished class bindings remain unsupported.
+A known console class with an unbound callback excludes parent vocabulary.
+
+A qualified facade anchors its callback namespace; each nested callback still
+needs its own source membership. Cache entries distinguish command classes
+sharing a callback. Existing source claims retain priority, including rejections.
+Source membership establishes attribution, not source-content or behavior
+attestation; dictionary bytes require their recorded size/hash.
+
 Each walk freezes the first resource verdict and verified bytes for a metadata
 origin. Nested lookups cannot substitute later file contents or repair an
 already rejected resource within that snapshot. Callback-module membership is
@@ -96,7 +110,11 @@ Unpublished dynamic callbacks and opaque callable objects remain outside its
 scope. Older installed releases may lack this attribution; inspect the actual
 owner provenance before assuming a dictionary will apply. Behavioral controls
 are in `tests/scitex_dev/_cli/audit/_summary/test__callback_source.py` and the
-existing `test__mounted_owner.py` controls.
+`test__mounted_owner.py`. Class-binding controls
+live in `test__facade_source.py`. Also exercise
+the leaf's actual installed wheel: verify source attribution, exclusion of
+parent vocabulary when its dictionary is missing, unrecorded source refusal
+and ambiguous metadata refusal.
 
 A project-local file alone does not travel with a wheel. Keep one
 authoritative source and make the package's real build backend emit the

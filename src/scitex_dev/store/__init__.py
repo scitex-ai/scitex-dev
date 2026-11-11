@@ -32,11 +32,16 @@ is not merely discouraged here — it is unavailable.
 
 Quick start
 -----------
+The resolver honors ``SCITEX_STORE_DSN``, then the central PostgreSQL default.
+Use a writable example database or isolated schema: this writes record ``c1``.
+The README and docstring examples are exercised by
+``tests/scitex_dev/store/test___init__.py``.
+
 ::
 
     from scitex_dev.store import (
         FieldKind, FieldPolicy, FieldRole, MergeRule,
-        NEW_RECORD, Schema, Store, StoreTarget, WriterPolicy,
+        NEW_RECORD, Schema, Store, WriterPolicy, host_store,
     )
 
     schema = Schema.build("cards", {
@@ -51,9 +56,9 @@ Quick start
     })
 
     store = Store(
-        StoreTarget.for_package("cards"),
+        host_store(pkg="cards"),
         schema,
-        node="scitex-compute-04",
+        node="example-node",
         writer_policy=WriterPolicy.MULTI_WRITER,
     )
     store.put({"id": "c1", "status": "open"}, expected_revision=NEW_RECORD)

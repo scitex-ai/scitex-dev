@@ -228,7 +228,9 @@ def dispatch_fix_turn(
     # Keep the same call shape as the bash prototype: prompt as a single
     # positional argument. sac's send command treats arg as the message
     # body. We don't pipe via stdin so quoting stays simple.
-    r = runner(["agents", "send", agent, prompt], input_text="")
+    from ._ci_watch_send import send_fix_turn
+
+    r = send_fix_turn(agent, prompt, runner=runner)
     out = (r.stdout or "") + (r.stderr or "")
     if r.returncode != 0:
         raise RuntimeError(

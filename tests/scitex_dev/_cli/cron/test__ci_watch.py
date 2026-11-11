@@ -1,10 +1,4 @@
-"""Unit tests for scitex_dev._cli.cron._ci_watch.
-
-No live `gh` calls. We pass real callable fakes for the gh and sac
-runner seams (per PA-306 / STX-NM*). The fakes return CompletedProcess-
-shaped objects so the production code exercises its real JSON parse
-path and its real result-aggregation path.
-"""
+"""CI-watch controls with owned JSON and injected GH/SAC runner seams."""
 
 from __future__ import annotations
 
@@ -53,9 +47,7 @@ def _gh_runner_for(stdout: str, *, returncode: int = 0):
     return _runner
 
 
-# ---------------------------------------------------------------------------
 # red_workflows_for
-# ---------------------------------------------------------------------------
 
 
 def test_red_workflows_returns_only_workflows_with_latest_failure():
@@ -123,9 +115,7 @@ def test_red_workflows_calls_gh_with_branch_develop():
     assert "develop" in captured["args"]
 
 
-# ---------------------------------------------------------------------------
 # build_fix_prompt
-# ---------------------------------------------------------------------------
 
 
 def test_build_fix_prompt_mentions_repo():
@@ -160,9 +150,7 @@ def test_build_fix_prompt_asks_for_pr_url_or_blocked():
     assert "BLOCKED" in prompt
 
 
-# ---------------------------------------------------------------------------
 # run_once
-# ---------------------------------------------------------------------------
 
 
 def test_run_once_dry_run_does_not_call_sac():
@@ -225,6 +213,10 @@ def test_run_once_red_repo_dispatches_when_not_dry_run():
 
     def sac(args, *, input_text=""):
         sac_calls.append(args)
+        if args == ["agents", "send", "--help"]:
+            return _FakeCompletedProcess(
+                stdout="Usage: sac agents send [OPTIONS] NAME\n\nOptions:\n  --help  Help.\n"
+            )
         # db query returns an empty JSON list → busy probe sees no
         # active row → falls through (no probe possible, treat as not-busy).
         if args and args[0] == "db":
@@ -242,7 +234,11 @@ def test_run_once_red_repo_dispatches_when_not_dry_run():
     )
     # Assert — exactly one `agents send` call dispatched (db query is
     # the busy-probe; this assertion targets the dispatch surface).
-    send_calls = [c for c in sac_calls if c and c[0] == "agents" and c[1] == "send"]
+    send_calls = [
+        c
+        for c in sac_calls
+        if c and c[0] == "agents" and c[1] == "send" and "--help" not in c
+    ]
     assert len(send_calls) == 1
 
 
@@ -253,6 +249,10 @@ def test_run_once_dispatches_to_named_agent():
 
     def sac(args, *, input_text=""):
         sac_calls.append(args)
+        if args == ["agents", "send", "--help"]:
+            return _FakeCompletedProcess(
+                stdout="Usage: sac agents send [OPTIONS] NAME\n\nOptions:\n  --help  Help.\n"
+            )
         if args and args[0] == "db":
             return _FakeCompletedProcess(returncode=0, stdout="[]")
         return _FakeCompletedProcess(returncode=0, stdout="ok")
@@ -267,8 +267,12 @@ def test_run_once_dispatches_to_named_agent():
         out=out,
     )
     # Assert
-    send_calls = [c for c in sac_calls if c and c[0] == "agents" and c[1] == "send"]
-    assert send_calls[0][:3] == ["agents", "send", "agent-x"]
+    send_calls = [
+        c
+        for c in sac_calls
+        if c and c[0] == "agents" and c[1] == "send" and "--help" not in c
+    ]
+    assert send_calls[0][:4] == ["agents", "send", "--", "agent-x"]
 
 
 def test_run_once_only_agent_filters_other_agents():
@@ -302,9 +306,7 @@ def test_run_once_records_error_when_gh_fails():
     assert results[0].error is not None
 
 
-# ---------------------------------------------------------------------------
 # _is_agent_busy — fail-open semantics against the sac /_active endpoint
-# ---------------------------------------------------------------------------
 
 
 def _http_runner_returning(status: int, body: bytes):
@@ -419,9 +421,7 @@ def test_run_once_skips_dispatch_when_agent_busy():
     assert send_calls == []
 
 
-# ---------------------------------------------------------------------------
 # scitex-todo hook — pure helper + DI-seam tests
-# ---------------------------------------------------------------------------
 #
 # Tests use hand-rolled fakes (PA-306 / STX-NM*). No unittest.mock, no
 # monkeypatch, no real scitex-todo import. The production code's
@@ -505,9 +505,11 @@ def test_create_todo_new_path_calls_add_task_once():
 
     # Assert
     fake_add = api.add_task
-    assert created is True and len(fake_add.calls) == 1 and fake_add.calls[0][
-        "id"
-    ] == "ci-fail-scitex-stats-tests-abcd1234"
+    assert (
+        created is True
+        and len(fake_add.calls) == 1
+        and fake_add.calls[0]["id"] == "ci-fail-scitex-stats-tests-abcd1234"
+    )
 
 
 def test_create_todo_duplicate_path_returns_false_silently():
@@ -536,9 +538,7 @@ def test_create_todo_duplicate_path_returns_false_silently():
 
 def test_create_todo_other_validation_error_reraises():
     # Arrange
-    other_exc = _FakeTaskValidationError(
-        "/store.yaml: required field 'title' missing"
-    )
+    other_exc = _FakeTaskValidationError("/store.yaml: required field 'title' missing")
     api = _make_fake_todo_api(raises=other_exc)
     failing = _ci_watch.FailingRun(
         workflow="tests",

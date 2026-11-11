@@ -10,6 +10,26 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.62.21] - 2026-11-11
+
+- Read installed provider headers once per discovery snapshot. Keep provider
+  ownership checks and avoid importing provider implementations for metadata.
+- Attribute lazy CLI facades through verified installed callback and command
+  class source ownership. Retain installed-file membership, digest and
+  ambiguity checks when selecting the owning package's vocabulary.
+- Detect the installed Agent Container send-approval capability before cron
+  dispatch, preserving compatibility with older installed command interfaces.
+- Correct store quick starts and exercise them against private PostgreSQL.
+  Clarify configuration file selection and persisted switch precedence.
+- Align CLI help, pass-through and skill setup guidance with the implemented
+  declarations. Describe compatibility flags that do not enable prompting and
+  use canonical skill setup command paths.
+- Check nested documentation workflow permissions against the owning provider.
+  Preserve the existing workflow admission and complete test matrix.
+- Add bounded observations for owned Node children and fixture filesystem
+  capacity during release-test stalls. Retain the original operation limits
+  and errors; incomplete observations do not establish a failure cause.
+
 ## [0.62.20] - 2026-11-09
 
 - Add bounded, passive live-child observations to release-fixture timeout
