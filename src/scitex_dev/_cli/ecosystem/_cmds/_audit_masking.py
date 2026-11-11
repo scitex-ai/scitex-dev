@@ -196,18 +196,16 @@ def classify_output(text: str, skip_rules) -> MaskReport:
             # Framing: banners, headlines, per-audit progress. Counted in
             # `inspected` and nowhere else.
             continue
+        if not _RULE_ID_RE.search(stripped):
+            # A diagnostic label is not a rule. Even a declaration naming
+            # that label cannot turn an unreadable finding into a deferral.
+            unreadable.append(stripped)
+            continue
         hit = next((r.rule for r in rules if line_matches_rule(line, r.rule)), None)
         if hit is not None:
             masked[hit].append(stripped)
-        elif _RULE_ID_RE.search(stripped):
-            # Finding-shaped, attributable, matched no declared skip. A
-            # clean ANSWER: red.
-            unmasked.append(line)
         else:
-            # Finding-shaped but carrying no rule id, so it cannot be
-            # attributed and therefore cannot be shown to be covered by a
-            # declared skip. The genuine UNKNOWN.
-            unreadable.append(stripped)
+            unmasked.append(line)
     return MaskReport(
         masked={k: v for k, v in masked.items() if v},
         unmasked=unmasked,
@@ -406,6 +404,8 @@ def json_payload(mask_reports: dict, distributions) -> dict:
         payload[d] = {
             "unmasked_errors": report.unmasked_error_count,
             "unmasked_total": report.unmasked_count,
+            "unreadable": len(report.unreadable),
+            "inspected": report.inspected,
             "masked_total": report.masked_count,
             "declared": [
                 {

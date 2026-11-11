@@ -89,6 +89,16 @@ Argument or target-resolution errors can also return exit 2 directly.
 Use the existing test workflow's branch-protection settings to gate
 merges; no `continue-on-error` is involved.
 
+### JSON findings and classification coverage
+
+`audit-all --json` counts emitted findings at their reported severity.
+`inspected` and `unreadable` describe classification lines, not source-file
+coverage. Unfiltered inventories such as `violations_total` are not emitted
+findings. Unknown JSON remains a failed measurement; a zero error count is
+not a clean verdict. The shared classifier retains declared deferrals and
+refuses to defer unreadable findings. Source: `_cmds/_audit_json_findings.py`;
+controls: `test__audit_json_findings.py` and the API/skills producer tests.
+
 ### Per-package adoption
 
 Preview the exact target before writing (replace the example path with

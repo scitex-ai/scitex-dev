@@ -450,13 +450,13 @@ def test_audit_skills_json_payload_has_at_least_one_violation(_json_audit_run):
     assert n >= 1
 
 
-def test_audit_skills_json_violation_has_rule_where_detail_keys(_json_audit_run):
+def test_audit_skills_json_violation_has_explicit_severity_keys(_json_audit_run):
     # Arrange
     _, payload = _json_audit_run
     # Act
     keysets = [set(v.keys()) for v in payload["violations"]]
     # Assert
-    assert all(ks == {"rule", "where", "detail"} for ks in keysets)
+    assert all(ks == {"rule", "where", "detail", "severity"} for ks in keysets)
 
 
 def test_sk706_flags_missing_markers_in_skill_md_rc_1(tmp_path, capsys):
@@ -692,3 +692,12 @@ def test_locate_skills_dir_prefers_installed_when_both_present(tmp_path):
         result = _locate_skills_dir("scitex-dev")
     # Assert — install path wins, never under bogus_root
     assert result is None or bogus_root not in result.parents
+
+
+def test_json_skill_findings_report_actual_warning_severity(_json_audit_run):
+    # Arrange
+    _, payload = _json_audit_run
+    # Act
+    severities = {row["severity"] for row in payload["violations"]}
+    # Assert
+    assert severities == {"warning"}
