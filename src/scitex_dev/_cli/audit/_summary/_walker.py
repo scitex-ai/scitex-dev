@@ -85,7 +85,13 @@ def _walk(
         or owner.source_record_owned != parent_owner.source_record_owned
         or owner.ambiguous != parent_owner.ambiguous
     )
-    if is_mount or (not path and source is not None):
+    # A verified installed root is a policy boundary just like a mount.
+    # Source subjects retain their explicit admission; an unrecorded source
+    # claim alone must not acquire installed authority.
+    root_boundary = not path and owner is not None and (
+        source is not None or owner.source_record_owned or owner.ambiguous
+    )
+    if is_mount or root_boundary:
         full = root_display if not path else " ".join(
             [*path, registered_name or cmd.name or "<root>"]
         )
