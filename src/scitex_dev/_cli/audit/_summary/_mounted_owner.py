@@ -269,6 +269,10 @@ class MountedOwners:
             None,
             reason,
             True,
+            # Ambiguity and RECORD evidence are independent. Multiple proven
+            # installed claims still form a boundary; editable/source metadata
+            # with no recorded source must not acquire installed authority.
+            source_record_owned=bool(recorded),
             unowned_source_claims=rejected,
         )
         return self._owners[key]
