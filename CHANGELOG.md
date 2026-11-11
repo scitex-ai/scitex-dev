@@ -26,9 +26,10 @@ versions follow [Semantic Versioning](https://semver.org/).
   use canonical skill setup command paths.
 - Check nested documentation workflow permissions against the owning provider.
   Preserve the existing workflow admission and complete test matrix.
-- Add bounded observations for owned Node children and fixture filesystem
-  capacity during release-test stalls. Retain the original operation limits
-  and errors; incomplete observations do not establish a failure cause.
+- Add bounded observations for owned Node children, inner Git fixture
+  commands and fixture filesystem capacity during CI stalls. Retain the
+  original operation limits and errors; incomplete observations do not
+  establish a failure cause.
 
 ## [0.62.20] - 2026-11-09
 
