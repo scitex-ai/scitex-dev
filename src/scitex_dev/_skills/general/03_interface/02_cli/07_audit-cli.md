@@ -140,7 +140,10 @@ as an **audited source subject**, not an installed RECORD claim. Returning from
 a mounted provider to a callback owned by that source restores its dictionary.
 This does not grant a foreign callback the root's vocabulary or relax installed
 resource checks. Controls using real Dev and SDK groups live in
-`tests/scitex_dev/_cli/audit/_summary/test__source_dictionary.py`.
+`tests/scitex_dev/_cli/audit/_summary/test__source_dictionary.py`; its isolated
+child runs the actual source cases with one installed metadata origin. An
+editable target, source egg-info and baked wheel can expose distinct origins
+for the same package. That remains an ambiguous verdict, not source authority.
 An older installed Dev may lack this behavior. Source attribution alone does
 not establish an installed artifact's contents or a command's business behavior.
 
