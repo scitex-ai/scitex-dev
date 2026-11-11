@@ -52,7 +52,12 @@ def _audit_source_tree(
     source_tree: Path, tmp_path: Path, force_fallback: bool
 ) -> tuple[list[str], bool]:
     env = dict(os.environ)
-    env["PYTHONPATH"] = str(Path(scitex_dev.__file__).resolve().parent.parent)
+    source = str(Path(scitex_dev.__file__).resolve().parent.parent)
+    # Native CI installs dependencies in a job-owned --target directory.
+    # Preserve that import path when selecting this checkout in the child.
+    env["PYTHONPATH"] = os.pathsep.join(
+        [source, *filter(None, env.get("PYTHONPATH", "").split(os.pathsep))]
+    )
     if force_fallback:
         binary_dir = tmp_path / "bin"
         binary_dir.mkdir()
@@ -70,13 +75,19 @@ findings = _audit_test_quality(
 print(json.dumps(sorted({item.where.split(': ')[1].rsplit(':', 1)[0]
                          for item in findings})))
 """
-    result = subprocess.run(
-        [sys.executable, "-c", program, str(source_tree)],
-        env=env,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", program, str(source_tree)],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(
+            f"Source discovery child failed ({exc.returncode}):\n"
+            f"stdout: {exc.stdout}\nstderr: {exc.stderr}"
+        ) from exc
     return (
         json.loads(result.stdout),
         not force_fallback or "falling back to the stdlib scan" in result.stderr,
