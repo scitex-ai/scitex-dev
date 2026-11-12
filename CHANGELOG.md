@@ -12,6 +12,11 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [0.62.28] - 2026-11-12
 
+- Correct the architecture skill to describe current facade, Dev, leaf, SDK
+  and Hub ownership, five interfaces and declared dependency relationships.
+  Remove retired package layers and unsupported universal install/plugin rules;
+  align the dependency guide, index and referring guidance.
+
 - Validate each CI CPU image Python environment after installation: check the
   dependency graph and import the advertised FastMCP and MCP client stack.
   Refuse an inconsistent or non-importable image before build completion.

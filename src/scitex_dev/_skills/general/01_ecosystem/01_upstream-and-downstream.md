@@ -1,192 +1,127 @@
 ---
 description: |
-  [TOPIC] Upstream And Downstream Packages
-  [DETAILS] SciTeX ecosystem architecture — the 3-layer library cascade (upstream / middle / downstream) plus orthogonal ecosystem/platform packages (scitex-dev, scitex-orochi, scitex-agent-container, scitex-container, scitex-cloud). Covers dependency direction, import rules, test scope per layer, and the cascade pattern across Python API / CLI / MCP.
+  [TOPIC] Package ownership and dependency direction
+  [DETAILS] Place work in the umbrella facade, Dev dispatcher, domain leaf,
+  shared SDK or Hub host. Keep domain implementations in owning providers,
+  distinguish standalone use from dependency-free use, and verify the five
+  interfaces and declared dependency graph using source and installed metadata.
 tags: [scitex-general-ecosystem-upstream-and-downstream]
 ---
 
-# SciTeX Package Architecture
+# Package Ownership and Dependency Direction
 
-The ecosystem has **two orthogonal axes**:
+Choose the owner of a capability before choosing an import or public command.
+The ecosystem combines a public facade, domain libraries, shared contracts,
+development tooling and a host. A strict three-layer diagram cannot describe
+all of their declared dependencies.
 
-- **Axis 1 — Library cascade** (this skill's primary subject): a strict 3-layer dependency cascade for library code shipped as `scitex`, `scitex-io`, `figrecipe`, etc.
-- **Axis 2 — Ecosystem & platform packages**: orthogonal packages that *manage*, *orchestrate*, or *host* the cascade rather than participating in it. These do not fit the cascade rules and must be reasoned about separately.
+## Ownership
 
-## Axis 1 — Library Cascade (3-Layer)
-
-Dependencies flow in one direction only: upstream may import middle and downstream; middle may import downstream; downstream never imports upward.
-
-```
-Upstream (orchestration — SOC, integration tests only)
-    scitex (scitex-python)
-        │ imports / re-exposes
-        ▼
-Middle (shared infrastructure — integration tests of cascade)
-    scitex-io, scitex-app, scitex-ui, scitex-stats, scitex-audio, scitex-resource
-        │ integrates / wraps via plugin registry
-        ▼
-Downstream (apps — standalone, own IO/GUI, unit tests)
-    figrecipe, scitex-writer, scitex-scholar, scitex-clew, scitex-notebook, ...
-```
-
-**One-line contract**: Downstream does not know upstream exists. Upstream does not duplicate downstream logic.
-
-## Axis 2 — Ecosystem & Platform Packages (Orthogonal)
-
-These packages belong to the SciTeX ecosystem but sit **outside** the library cascade. They are not "downstream of scitex" and not "upstream of figrecipe" — they serve a different concern entirely. Treat them as peers of the cascade, not members of it.
-
-Axis 2 has **two sub-categories** with different concerns and different lifecycles:
-
-### Axis 2A — Dev tooling & orchestration
-
-These manage or orchestrate the cascade and the development workflow. They are *internal to the SciTeX team*, not user-facing products.
-
-| Package | Role |
+| Package or role | Owns |
 |---|---|
-| **scitex-dev** | Ecosystem-wide developer tooling, cross-repo management, skills quality harness, release automation. *Manages* the cascade (CI, tests, packaging). |
-| **scitex-orochi** | Multi-agent orchestration (head / controller / telegrammer roles). Drives development workflows. |
-| **scitex-agent-container** | Container images & configuration for SciTeX agents. Infrastructure for scitex-orochi. |
-| **scitex-container** | General container layer for SciTeX services. Infrastructure host. |
+| `scitex` (`scitex-python` repository) | Unified discovery and public Python/CLI entry points; delegation and composition of leaf capabilities. |
+| `scitex-dev` | Shared development, testing, documentation and release tooling; discovery and dispatch of package-owned auditors, hooks and skills. |
+| Domain leaves | Domain algorithms, data semantics, implementations, interface providers and their domain-specific checks. |
+| `scitex-sdk` | Shared GUI components, application/plugin contracts, Web API descriptors, route admission, schemas and host adapters; SDK-owned checks exposed to Dev. |
+| `scitex-hub` | Authentication, users, projects, workspaces, plugin composition and deployment through SDK contracts and thin host adapters. |
 
-### Axis 2B — User-facing platform
+SciTeX Cloud is the managed Hub deployment, not a separate library dependency
+layer. The former `scitex-app` and `scitex-ui` components now belong to SDK;
+retained component/provider labels do not identify independent distributions.
+For example, SDK's `pyproject.toml` registers documentation and skills for
+`scitex_sdk.app` and `scitex_sdk.ui` under those component names.
 
-A user-facing product that *hosts* SciTeX-built apps. Different direction entirely — not a library layer, not dev tooling.
+Agent Container, Cards, storage and scheduler tooling own their respective
+infrastructure capabilities. Their responsibilities are independent of the orchestration implementation.
+Dev also serves users outside the development team.
+Users and external agents also consume its public interfaces.
 
-| Package | Role |
-|---|---|
-| **scitex-cloud** | Research hub: app-centric platform for creating and sharing custom lab apps. User-facing product. |
+## Dependency direction
 
-**Why this matters**: applying cascade rules (e.g. "downstream must not import upstream", "upstream has no logic") to any Axis 2 package is a category error. They have their own internal architectures. In particular, **`scitex-cloud` is not "upstream of the library cascade"** — library packages do not import `scitex_cloud` and shouldn't pin a minimum on it.
+The facade delegates specialized work to its owner. A domain leaf must remain
+usable without installing the umbrella merely to reach its own implementation.
+This does **not** mean it has no SciTeX dependencies: a leaf can require shared
+SDK contracts, Dev tooling or another domain provider with a declared purpose.
 
-> For dependency hygiene and version-pinning rules (optional extras, `>=X` minima, coordinated waves), see the sibling skill [01_ecosystem/02_dependency-and-version-pinning.md](02_dependency-and-version-pinning.md).
+Inspect the actual `pyproject.toml` dependencies, optional profiles, entry
+points and runtime imports. Distinguish the runtime graph from development,
+example and integration-test dependencies. A lower-bound dependency declaration
+alone does not prove that all newer versions work.
 
----
+Avoid cycles and duplicate implementations. Keep domain behavior in its leaf;
+put generic discovery and enforcement in Dev, reusable GUI/Web contracts in
+SDK, and identity/project/deployment integration in Hub. A leaf must not depend
+on the hosted service merely to perform its local domain operation.
 
-## Layer Responsibilities
+The umbrella is the deterministic pin point for coordinated member versions.
+Leaves generally use compatible minimum floors; follow the
+[release and pin doctrine](../05_development/14_release-and-pin-doctrine.md)
+and [dependency guidance](02_dependency-and-version-pinning.md). Qualify the
+resolved profile rather than assuming declared compatibility is sufficient.
 
-| Layer | Role | Knows About | Tested With |
-|-------|------|-------------|-------------|
-| **Downstream** | Standalone apps with their own IO/GUI | Only itself and std-lib/third-party | **Unit tests** — covers its own logic fully |
-| **Middle** | Shared infrastructure (wraps, doesn't replace) | Downstream (as optional plugins) | **Integration tests** — does the cascade work? Plus unit tests for its own unique code |
-| **Upstream** | Orchestration, re-exposure, session framework | Middle + downstream | **Integration tests ONLY** — does the full pipeline flow? No unit tests for delegated logic |
+## Composition and discovery
 
----
+Conceptual I/O composition:
 
-## Upstream vs Downstream — The Difference
-
-| Dimension | Downstream (e.g. figrecipe) | Upstream (e.g. scitex) |
-|-----------|-----------------------------|------------------------|
-| **Dependency direction** | Imports nothing scitex-specific | Imports / re-exposes middle + downstream |
-| **Standalone** | MUST work without scitex installed | Requires full ecosystem |
-| **Owns logic?** | Yes — all app-specific logic lives here | **No** — pure re-export + orchestration (`@stx.session`) |
-| **Test scope** | **Unit tests** — covers all its own behaviour | **Integration only** — verifies the pipeline flows |
-| **May duplicate logic?** | N/A (it is the source of truth) | **Never** — re-expose only |
-| **CI install** | `pip install -e . --group dev` — no scitex | Full ecosystem installed |
-| **Breaking change risk** | Isolated — only its users affected | Cascades across all packages |
-| **Example feature** | `fr.save(fig, "plot.png")` — does the save | `stx.io.save(fig, ...)` — re-exports `fr.save` via plugin registry |
-
-### Testing the difference concretely
-
-```
-Layer        Test scope                              Example test
------------  --------------------------------------  ----------------------------------
-figrecipe    Unit: fr.save() produces YAML + PNG?    test_save_produces_yaml_png
-(down)       Unit: fr.reproduce() matches hashes?    test_reproduce_matches
-
-scitex-io    Integration: cascade reaches fr.save?   test_stx_io_save_calls_fr_save
-(middle)     Integration: plugin discovered?         test_figrecipe_plugin_found
-             Unit: type-check rejects bad input?     test_invalid_type_raises
-
-scitex       Integration: session → io → figrecipe?  test_session_saves_via_io
-(up)         Integration: all subpkgs importable?    test_import_all_subpackages
-             NO unit tests for downstream logic      (do not re-test fr.save here)
+```text
+scitex.io -> scitex_io -> the selected registered format handler
 ```
 
-**Rule of thumb**: if a test would still make sense after deleting the upstream package, it belongs downstream. If a test only makes sense because multiple packages exist, it is an integration test and belongs at the layer that composes them.
+Check the owning implementation before assuming a registration protocol.
+`scitex_io._registry` exposes saver/loader registration and lazily resolves
+built-in handler tuples. Do not invent a universal entry-point spec dictionary
+or claim every handler is imported during package import.
 
----
+Dev discovers leaf-provided skills, documentation and audit plugins through
+its declared provider mechanisms. SDK supplies application and Web API
+contracts; Hub mounts the admitted leaf routes with host identity and project
+scope. A provider declaration is not proof that its dependencies resolve or
+that a host has enabled it.
 
-## Core Principles
+## Five interfaces
 
-### 1. Downstream apps must work standalone
-- `figrecipe` must function without `scitex` installed.
-- `fr.save()`, `fr.load()`, `fr.reproduce()` work independently.
-- GUI (`figrecipe gui`) works without scitex.
+Almost every package should expose its applicable capabilities through:
 
-### 2. Middle layer wraps, doesn't replace
-- `scitex-io` provides universal `stx.io.save()` / `stx.io.load()`.
-- It **wraps** downstream IO via a plugin registry (cascades to the right handler).
-- Downstream apps register their formats via entry points.
-- `scitex-ui` provides shared React components, not app-specific logic.
-- `scitex-app` provides shared Python backends (FilesBackend, ChatBackend, ...).
+- Python API
+- CLI
+- MCP tools
+- Web API
+- Skills
 
-### 3. Upstream orchestrates only (SOC)
-- `scitex` is an orchestration package — Separation of Concerns.
-- `@stx.session` provides reproducible experiment tracking.
-- Session composes figrecipe output with scitex-io file operations.
-- Session is **optional** — downstream apps work fine without it.
-- **scitex has NO logic of its own** — it only re-exposes and integrates.
+Keep names, argument schemas, results and errors predictable across these
+interfaces. Delegate to the same owning domain implementation; interface
+adapters may translate their representation. Record a specific, justified
+exception when an interface is inapplicable.
 
-### 4. Test scope follows the layer
-- **Downstream** → unit tests of own logic.
-- **Middle** → integration tests of the cascade + unit tests of its own unique code.
-- **Upstream** → integration tests of the full pipeline. No duplicate unit coverage of delegated logic.
+Report implementation, installed discovery, host enablement and live
+availability separately. An installed MCP tool list is not an invocation test;
+a GUI registration or HTTP 200 is not endpoint authorization acceptance.
 
-### 5. Examples are the exception
-- Examples may use `@stx.session` for organized output.
-- Gallery CI installs scitex for examples but must handle failure gracefully.
+## Tests follow behavior ownership
 
----
+Test each package's own behavior where it is implemented. Add integration
+coverage where a facade, registry, SDK or host composes providers. The umbrella
+can have unit tests for its own dispatch, discovery and error handling; avoid
+copying tests of delegated algorithms just to repeat their coverage.
 
-## Cascade Pattern — IO as the Canonical Example
+Use the leaf's declared test/install profile and the owning CI procedure.
+Do not assume every leaf uses the same extra or dependency-group syntax.
+Exercise standalone operation in the appropriate resolved environment, plus
+the required integration, error and side-effect cases in owned fixtures.
 
-Three layers compose via a plugin registry:
+Dev's umbrella-dependency checks and real temporary-repository controls live
+in `tests/scitex_dev/_cli/audit/_project/test__check_umbrella_dep_and_integration.py`.
+They do not establish acceptance of every leaf or all five interfaces.
 
-1. **Downstream defines** — each app implements `save`/`load` for its
-   formats and registers a spec dict (`{extensions, save, load}`) via
-   entry points.
-2. **Middle detects** — `scitex-io` auto-discovers plugins at import,
-   dispatches by extension: `plugin = _registry.get(ext); plugin.save(...)`.
-3. **Upstream re-exposes** — `from scitex_io import save, load` — no
-   additional wrapping.
+## Review checklist
 
-All three interfaces (Python API, CLI, MCP) cascade the same direction:
-`stx.io.save()` → `scitex-io.save()` → `figrecipe.save()` (or the
-matching plugin). **Never reverse**: upstream imports downstream;
-downstream never imports upward.
+- Identify the owning implementation, shared contract and host responsibility.
+- Check declared dependencies and imports; preserve standalone domain use.
+- Verify providers against source, installed metadata and the intended profile.
+- Exercise own behavior and composition without duplicating domain logic.
+- Check applicable interfaces and document justified exceptions.
+- Qualify artifacts and served behavior separately; preserve failed checks.
 
-Rules: downstream defines, middle detects + type-checks, upstream
-re-exposes only. All interfaces cascade in the same direction.
-
----
-
-## CI Rules per Layer
-
-### Downstream CI
-- Install: `pip install -e . --group dev` — standalone only. (`dev` is a PEP 735 dependency group, not an extra — [26_the-only-extra-is-all.md](26_the-only-extra-is-all.md); needs uv or pip >= 25.1.)
-- Must NOT require scitex.
-- Tests downstream logic only (unit tests).
-
-### Middle CI
-- Install: `pip install -e . --group dev` + relevant downstream packages.
-- Integration tests: does the cascade work through the plugin registry?
-- Plus unit tests for its own unique code (type checking, registry, adapters).
-
-### Upstream CI
-- Full ecosystem installed.
-- Integration tests ONLY — does the full pipeline flow?
-- NO unit tests re-testing downstream functionality.
-
----
-
-## Quick Checklist (architecture)
-
-- [ ] **Downstream**: package imports no upstream/middle/sibling-downstream packages at runtime (only as optional extras).
-- [ ] **Middle**: own unique code (type checking, registry) is covered by unit tests.
-- [ ] **Middle**: cascade to at least one downstream plugin is covered by an integration test.
-- [ ] **Upstream**: no logic beyond re-export and orchestration.
-- [ ] **Upstream**: tests are integration tests only; no duplicate unit coverage of downstream behaviour.
-- [ ] All three interfaces (Python API, CLI, MCP) cascade in the same direction.
-- [ ] No reverse imports (check with grep / linter).
-
-For dependency hygiene and version-pinning checks, see [01_ecosystem/02_dependency-and-version-pinning.md](02_dependency-and-version-pinning.md).
+Use the [documentation-drift procedure](../05_development/22_documentation-drift.md)
+when reviewing these claims. Static fences, links and build checks do not
+validate architecture prose or establish live deployment readiness.

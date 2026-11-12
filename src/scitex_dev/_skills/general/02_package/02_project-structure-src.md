@@ -80,12 +80,12 @@ src and the tests in the same change.
 
 ## Inter-package dependencies
 
-Inter-scitex package deps follow the **cascade direction** (see [01_ecosystem/01_upstream-and-downstream.md](../01_ecosystem/01_upstream-and-downstream.md)):
+Inter-package dependencies follow [package ownership and declared dependency direction](../01_ecosystem/01_upstream-and-downstream.md):
 
-- A downstream package importing from an upstream one is fine and common — e.g. `scitex-stats` depends on `scitex-io` for save/load helpers; `scitex-cloud` depends on `scitex-config` for path resolution.
+- A leaf can import a justified shared or domain provider; for example, FigRecipe declares SDK and Dev runtime dependencies.
 - Pyproject must declare every such dep. `REL-5_implicit_deps` flags missing declarations.
 
-What `src/` should **not** import is the **umbrella `scitex` package itself** — that umbrella re-exports the package, which creates a real cycle on install. Tests, scripts, and examples are free to import from the umbrella.
+Keep a leaf's runtime domain implementation independent of the umbrella that re-exposes it. Tests, scripts and examples may use the umbrella when their declared profile supports it.
 
 ```python
 # src/scitex_io/__init__.py — GOOD
