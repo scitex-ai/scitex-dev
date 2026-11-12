@@ -281,7 +281,15 @@ def test_fence_indentation_does_not_become_python_indentation(tmp_path, indent, 
     # Act
     report = verify_docs_and_skills(root)
     # Assert
-    assert (report["status"], report["issues"]) == ("ok", [])
+    # Parsing still succeeds; the nested call now has explicit limited coverage.
+    assert (
+        report["status"],
+        report["issues"],
+        len(report["checked_scope"]["imports"]),
+        report["checked_scope"]["calls"],
+        len(report["unverified"]),
+        any("nested Python scope" in item for item in report["unverified"]),
+    ) == ("incomplete", [], 1, [], 1, True)
 
 
 def test_fence_removes_at_most_its_own_indent_from_each_line(tmp_path):
