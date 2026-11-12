@@ -79,9 +79,21 @@ star imports and dynamic/external targets remain unverified. Relative imports
 in Markdown examples remain unverified because their package context is unknown.
 Source symlinks must remain within the selected root.
 
+This source also checks argument shapes for plain local functions referenced
+by explicit imports in the same Python block, including local re-exports.
+Missing arguments, unsupported keywords and invalid positional/keyword use
+are issues. Defaults, annotations, arguments and function bodies are never
+evaluated. Accepted calls appear in `checked_scope["calls"]`; check the installed
+version and report fields before assuming this extension is available.
+Decorated functions, constructors, nested Python scopes/attributes, reassigned
+aliases, calls before their import and `*args`/`**kwargs` expansion remain
+unverified. Imports are not carried between separate examples. This checks
+call shape, not argument types, values, return data or runtime availability.
+Controls live in `tests/scitex_dev/_ecosystem/_skills/test__source_calls.py`.
+
 Explicit `documents` can select existing
 agent Markdown or guides. Defaults cover README and source skills. It does not
-execute examples, check signatures/results, validate prose or other interfaces,
+execute examples, validate results/prose or other interfaces,
 or compare installed/exported skills. Inspect `limitations`; `ok` is scoped,
 `incomplete` is not a complete pass, and `needs_update` reports a detected issue.
 

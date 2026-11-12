@@ -10,6 +10,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Check documented plain local Python function calls against source argument
+  shapes without importing or executing reviewed code. Report unsupported
+  bindings as unverified and retain existing import and source-boundary checks.
+
 ## [0.62.26] - 2026-11-12
 
 - Recognize lazy Python exports declared by a direct membership check against

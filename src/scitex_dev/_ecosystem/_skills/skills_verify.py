@@ -7,20 +7,36 @@ import re
 from pathlib import Path
 from typing import Iterable, Optional
 
+from ._source_calls import check_calls
 from ._source_references import _check_reference, _read
 
 _LIMITATIONS = [
-    "Only top-level closed Markdown python/py fences are parsed; "
-    "prose, RST and other languages are not checked.",
-    "Local src-layout modules, direct definitions and explicit local "
-    "from-import chains are checked statically, "
-    "without importing or running code.",
-    "Local chains are bounded to 32 references. Cycles, ambiguous/conditional "
-    "bindings, star imports and relative example imports remain unverified.",
-    "Dynamic attributes, external imports, signatures, example "
-    "results and CLI/MCP/Web API behavior are not verified.",
-    "Installed/exported skills are not read, compared or refreshed; "
-    "this is not complete documentation drift coverage.",
+    (
+        "Only top-level closed Markdown python/py fences are parsed; "
+        "prose, RST and other languages are not checked."
+    ),
+    (
+        "Local src-layout modules, direct definitions and explicit local "
+        "from-import chains are checked statically, "
+        "without importing or running code."
+    ),
+    (
+        "Local chains are bounded to 32 references. Cycles, ambiguous/conditional "
+        "bindings, star imports and relative example imports remain unverified."
+    ),
+    (
+        "Plain local function call shapes are checked without evaluating arguments. "
+        "Decorated functions, constructors, nested scopes/attributes, reassigned "
+        "aliases and dynamic argument expansions remain unverified."
+    ),
+    (
+        "Dynamic attributes, external imports, argument types/values, example "
+        "results and CLI/MCP/Web API behavior are not verified."
+    ),
+    (
+        "Installed/exported skills are not read, compared or refreshed; "
+        "this is not complete documentation drift coverage."
+    ),
 ]
 
 
@@ -93,6 +109,8 @@ def verify_docs_and_skills(
     Pass ``documents=[Path('docs/guide.md')]`` to check explicit Markdown files
     within that root. Top-level Python/py fences are parsed; local src-layout import
     modules, direct definitions and explicit local from-import chains are checked.
+    Plain local function calls are checked against static argument signatures;
+    no defaults, annotations, argument expressions or function bodies are evaluated.
     Cyclic, overlong, ambiguous, conditional, dynamic and external references
     remain unverified. Only an explicit ``Version: X`` README line
     is compared with a literal project.version; no version mention is required.
@@ -101,7 +119,7 @@ def verify_docs_and_skills(
     when not checked. Status is needs_update for failures, incomplete for
     unverified references/no Python blocks, otherwise ok *within checked_scope*.
     Always inspect checked_scope, unverified and limitations. Export staleness,
-    signatures, runtime results and other interface/documentation drift are
+    runtime results and other interface/documentation drift are
     deliberately not claimed. No installed skills or user-home paths are used.
     """
     root = Path(package_path or Path.cwd()).resolve()
@@ -111,6 +129,7 @@ def verify_docs_and_skills(
         else [root / Path(path) for path in documents]
     )
     issues, unverified, stale_files, checked_imports = [], [], set(), []
+    checked_calls = []
     contents = {}
     blocks = 0
     for path in dict.fromkeys(selected):
@@ -147,6 +166,15 @@ def verify_docs_and_skills(
                             stale_files.add(str(path))
                         else:
                             unverified.append(f"{where}: {detail}")
+                for line, reference, state, detail in check_calls(root, tree):
+                    where = f"{path}:{start + line - 1}: {reference}"
+                    if state == "checked":
+                        checked_calls.append(where)
+                    elif state == "issue":
+                        issues.append(f"{where}: {detail}")
+                        stale_files.add(str(path))
+                    else:
+                        unverified.append(f"{where}: {detail}")
         except (OSError, UnicodeError, ValueError, SyntaxError) as exc:
             issues.append(f"{path}: {type(exc).__name__}: {exc}")
             stale_files.add(str(path))
@@ -178,6 +206,7 @@ def verify_docs_and_skills(
             "documents": [str(path) for path in contents],
             "python_blocks": blocks,
             "imports": checked_imports,
+            "calls": checked_calls,
         },
         "unverified": unverified,
         "export_staleness": "not_checked",
