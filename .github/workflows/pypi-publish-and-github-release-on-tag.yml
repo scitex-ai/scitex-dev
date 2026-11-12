@@ -459,7 +459,7 @@ jobs:
         VERSION="$RELEASE_TAG"
         VERSION="${VERSION#v}"
         awk -v v="$VERSION" '
-          $0 ~ "^## \[" v "\]" {p=1; next}
+          $1 == "##" && $2 == ("[" v "]") {p=1; next}
           p && /^## \[/ {exit}
           p
         ' CHANGELOG.md > release-notes.md || true
