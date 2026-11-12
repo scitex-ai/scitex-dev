@@ -22,11 +22,13 @@ def register_docs_commands(main):
         "validate",
         cls=SpecCommand,
         help_spec=CliHelp(
-            summary="Check local Markdown Python references statically, without executing examples.",
+            summary="Check Markdown Python references and call arguments without execution.",
             description=(
                 "Defaults to README.md and src/*/_skills/**/*.md. --document "
-                "selects explicit files relative to --path. This does not validate "
-                "prose, signatures, runtime results or other interfaces. Exit 0 "
+                "selects explicit files relative to --path. Local references and "
+                "plain function argument bindings are checked in top-level Python "
+                "fences. Argument types and values, prose, runtime results and other "
+                "interfaces are not validated. Exit 0 "
                 "means ok within checked_scope; 1 means needs_update; 2 means "
                 "incomplete. Inspect unverified and limitations, even with exit 0."
             ),
