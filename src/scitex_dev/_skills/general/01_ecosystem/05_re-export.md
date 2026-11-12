@@ -110,7 +110,12 @@ tradeoff table and when-to-choose-which guidance — see
 
 This skill covers the **umbrella ↔ standalone** bridge: `scitex.<name>` re-exports `scitex_<name>` so docs and examples written in either namespace resolve to the same object.
 
-The **library cascade** in [`01_ecosystem/01_upstream-and-downstream.md`](01_upstream-and-downstream.md) (`stx.io.save → scitex-io.save → figrecipe.save` via plugin registry) is a *different* mechanism — middle layers wrap downstream behaviour through entry-point plugins, not via thin `from … import …` re-exports. Don't confuse the two: the umbrella bridge is one-to-one (no logic), the cascade is many-to-one (dispatcher + plugin handlers).
+Provider dispatch is a separate responsibility from a namespace bridge.
+For example, `scitex.io` delegates to `scitex_io`, whose registry selects a
+format handler. Use the actual registry API rather than assuming a universal
+entry-point protocol or a particular FigRecipe function. See
+[package ownership](01_upstream-and-downstream.md) for the facade, domain,
+shared-contract and host boundaries.
 
 ## Quick Checklist (re-export bridges)
 
