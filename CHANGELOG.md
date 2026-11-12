@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Match release-note changelog headings literally across awk implementations,
+  keeping dotted versions and nearby version prefixes distinct.
+
 ## [0.62.29] - 2026-11-12
 
 - Correct the shipped quality checklist to preserve Git hooks and dirty worktrees, review all exact-head CI, and keep source/artifact/host acceptance separate.
