@@ -1,11 +1,12 @@
-"""Test the smart release publisher.
+"""Release publisher tests with real local Git repositories.
 
-Each test sets up a temporary git repo + workflow file, then invokes
-``publish_release`` in dry-run mode (so no actual git/gh side effects).
+Non-dry-run cases push only to temporary local bare repositories and capture
+card events in memory. No GitHub, PyPI or message provider is contacted.
 """
 
 from __future__ import annotations
 
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -38,11 +39,15 @@ def _mk_git_repo(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def _add_origin(repo: Path, slug: str = "ywatanabe1989/scitex-testrepo") -> None:
+def _add_origin(repo: Path, slug: str = "ywatanabe1989/scitex-testrepo") -> Path:
+    origin = repo.parent / (repo.name + "-remote") / (slug + ".git")
+    origin.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["git", "init", "--bare", "-q", str(origin)], check=True)
     subprocess.run(
-        ["git", "-C", str(repo), "remote", "add", "origin", f"git@github.com:{slug}.git"],
+        ["git", "-C", str(repo), "remote", "add", "origin", str(origin)],
         check=True,
     )
+    return origin
 
 
 def test_detect_trigger_release(tmp_path):
@@ -90,7 +95,7 @@ def test_publish_dry_run_release_trigger_any_would_git_tag_v1_2_3_in_s_for_s_in_
     assert any("would: git tag v1.2.3" in s for s in rep.steps_run)
 
 
-def test_publish_dry_run_release_trigger_would_git_push_tags_in_rep_steps_run(tmp_path):
+def test_publish_dry_run_describes_only_requested_tag(tmp_path):
     # Arrange
     # Act
     # Assert
@@ -98,7 +103,7 @@ def test_publish_dry_run_release_trigger_would_git_push_tags_in_rep_steps_run(tm
     _mk_workflow(tmp_path, "name: Pub\non:\n  release:\n    types: [published]\n")
     rep = publish_release(tmp_path, "1.2.3", dry_run=True)
     # Tag would be created, push would run, gh release would be created.
-    assert "would: git push --tags" in rep.steps_run
+    assert "would: git push --no-follow-tags origin refs/tags/v1.2.3:refs/tags/v1.2.3" in rep.steps_run
 
 
 def test_publish_dry_run_tags_trigger_rep_trigger_tags(tmp_path):
@@ -210,11 +215,8 @@ def _publish_real_tags_trigger(tmp_path, emit_fn):
     _mk_git_repo(tmp_path)
     _add_origin(tmp_path)
     _mk_workflow(tmp_path, "name: Pub\non:\n  push:\n    tags:\n      - 'v*'\n")
-    # Real (non-dry-run) publish against a repo with no PyPI/gh side
-    # effects reachable in the test sandbox; `git push --tags` against
-    # the fake origin is recorded regardless of transport failure
-    # (existing publisher behavior), so the tag-creation signal still
-    # fires the emit.
+    # Exercise an actual push to the temporary local bare origin. Events
+    # are injected into memory rather than a real notification provider.
     return publish_release(tmp_path, "1.2.3", dry_run=False, emit_fn=emit_fn)
 
 
@@ -289,3 +291,79 @@ def test_publish_release_does_not_emit_on_idempotent_rerun(tmp_path):
 
     # Assert
     assert fired == []
+
+
+def _install_pre_push_hook(repo: Path, exit_code: int) -> Path:
+    hooks = repo / ".git" / "publisher-test-hooks"
+    hooks.mkdir()
+    marker = repo / "pre-push-refs"
+    hook = hooks / "pre-push"
+    hook.write_text(
+        "#!/bin/sh\ncat > " + shlex.quote(str(marker)) + "\nexit " + str(exit_code) + "\n"
+    )
+    hook.chmod(0o755)
+    subprocess.run(
+        ["git", "-C", str(repo), "config", "core.hooksPath", str(hooks)], check=True
+    )
+    return marker
+
+
+def _remote_tags(origin: Path) -> list[str]:
+    return subprocess.check_output(
+        ["git", "--git-dir=" + str(origin), "for-each-ref", "--format=%(refname)", "refs/tags"],
+        text=True,
+    ).splitlines()
+
+
+def test_real_publish_honors_pre_push_hook_and_only_requested_tag(tmp_path):
+    # Arrange
+    repo = _mk_git_repo(tmp_path)
+    origin = _add_origin(repo)
+    _mk_workflow(repo, "on:\n  push:\n    tags:\n      - 'v*'\n")
+    subprocess.run(
+        ["git", "-C", str(repo), "tag", "-a", "-m", "unrelated fixture", "v9.9.9"],
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repo), "config", "push.followTags", "true"], check=True
+    )
+    marker = _install_pre_push_hook(repo, 0)
+    events = []
+    # Act
+    result = publish_release(repo, "1.2.3", emit_fn=lambda *a, **k: events.append((a, k)))
+    hook_refs = marker.read_text().splitlines() if marker.exists() else []
+    observed = {
+        "failed": result.failed,
+        "remote_tags": _remote_tags(origin),
+        "hook_local_refs": [line.split()[0] for line in hook_refs],
+    }
+    # Assert
+    assert observed == {
+        "failed": [],
+        "remote_tags": ["refs/tags/v1.2.3"],
+        "hook_local_refs": ["refs/tags/v1.2.3"],
+    }
+
+
+def test_real_publish_refuses_pre_push_failure_without_emitting(tmp_path):
+    # Arrange
+    repo = _mk_git_repo(tmp_path)
+    origin = _add_origin(repo)
+    _mk_workflow(repo, "on:\n  push:\n    tags:\n      - 'v*'\n")
+    marker = _install_pre_push_hook(repo, 1)
+    events = []
+    # Act
+    result = publish_release(repo, "1.2.3", emit_fn=lambda *a, **k: events.append((a, k)))
+    observed = {
+        "push_failed": bool(result.failed),
+        "hook_ran": marker.exists(),
+        "remote_tags": _remote_tags(origin),
+        "events": events,
+    }
+    # Assert
+    assert observed == {
+        "push_failed": True,
+        "hook_ran": True,
+        "remote_tags": [],
+        "events": [],
+    }

@@ -10,6 +10,14 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.62.29] - 2026-11-12
+
+- Correct the shipped quality checklist to preserve Git hooks and dirty worktrees, review all exact-head CI, and keep source/artifact/host acceptance separate.
+
+- Honor repository Git hooks when triggering a release; push only the requested
+  tag without automatically following other annotated tags. Report push failure
+  and stop before creating a GitHub release or emitting a release event.
+
 ## [0.62.28] - 2026-11-12
 
 - Correct the architecture skill to describe current facade, Dev, leaf, SDK
