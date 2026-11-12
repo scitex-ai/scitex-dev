@@ -49,6 +49,26 @@ Rules:
 - Do **not** include private helpers, even if some downstream code imports them. If they need to be public, drop the `_` prefix and add to `__all__`.
 - Do **not** include third-party symbols (`numpy`, `pandas`). Users import those directly.
 
+## Lazy declarations and static audit scope
+
+PA-102 checks declared exports without importing the inspected package. Alongside
+the existing equality and dispatch-table forms, the source checker recognizes a
+direct `if attribute in {...}` guard in synchronous `__getattr__`. Its collection
+must be a closed, nonempty set, tuple or list of string literals, checked against
+the function's sole positional parameter, with no other parameters. The branch
+contains a direct return after straight-line preparation. Dynamic or mixed collections, unrelated names,
+negated/chained guards, nested helpers and raises before the return retain the
+unbound-name warning.
+
+This is declaration recognition, not proof that an import target exists or that
+a public operation works. Keep actual import and installed-interface controls in
+the owning package. Released Dev 0.62.25 lacks this literal-membership case;
+locally edited source trees also require module-path and test evidence.
+
+The implementation is [the lazy-declaration reader](../../../../_cli/audit/_api/_checks/_lazy_dispatch.py);
+[its real-file controls](../../../../../../tests/scitex_dev/_cli/audit/_api/_checks/test__lazy_dispatch.py) include a module-side-effect
+sentinel that must never execute during inspection.
+
 ## No re-export of third-party symbols
 
 ```python

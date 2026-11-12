@@ -10,6 +10,17 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.62.26] - 2026-11-12
+
+- Recognize lazy Python exports declared by a direct membership check against
+  a finite literal set, tuple or list in a single-argument `__getattr__`.
+  Preserve existing equality and dictionary-table detection.
+- Refuse dynamic or mixed membership declarations, unsupported control flow
+  and incompatible signatures. Inspect source without executing the module;
+  declaration recognition does not establish target availability.
+- Document the supported declaration form and cover acceptance, refusal and
+  module non-execution with real source-file controls.
+
 ## [0.62.25] - 2026-11-11
 
 - Apply a verified installed package's CLI dictionary when it is audited as
