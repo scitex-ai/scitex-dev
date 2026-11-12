@@ -28,8 +28,9 @@ table; recipes in `05_packaging-…` and `06_compat-and-refactor-drift.md`).
 - `gh auth status` succeeds; `$HOME/proj/scitex-*` present;
   `gh`/`git -C`/`pip` on PATH.
 - Never touch user uncommitted edits (`git -C <path> status --short`);
-  only stage files YOU modified. Bypass X11 pre-push hook with
-  `-c core.hooksPath=/dev/null`.
+  only stage files YOU modified. Keep normal Git hooks enabled. If a hook
+  fails because its environment is unavailable, diagnose that failure and
+  preserve the rejected attempt; do not bypass the hook to push.
 
 **Scope** = has `pyproject.toml` AND directory name == pyproject `name`
 (filters paper/template repos like `scitex-paper-1st/` that vendor
@@ -53,20 +54,40 @@ for p in $HOME/proj/scitex-*; do
 done
 ```
 
-Fix: fast-forward develop via `git update-ref` (avoids checkout on
-dirty tree), push, delete feature branch. If no `develop`:
-`git checkout -b develop main; git push -u origin develop`.
+Treat this as an observation, not permission to move a checked-out branch.
+Preserve dirty worktrees and use an owned clean worktree for changes. Reconcile
+branches through the repository's normal reviewed PR and exact-head checks.
+Do not rewrite branch references over uncommitted work, assume a feature
+branch is obsolete, or delete another agent's branch.
 
 ## 2. Push state
 
 No unpushed commits: `git -C "$p" log "origin/$br..$br" --oneline` →
-empty. If ahead, push (`-c core.hooksPath=/dev/null` bypasses X11 hook).
-Never force-push shared branches.
+empty. Fetch the intended remote and review the ahead commits before pushing
+the explicitly intended branch. Keep normal hooks enabled and inspect the
+push result. For release tags, push only the requested tag with
+`--no-follow-tags`; never push the whole tag namespace. Never force-push shared
+branches or continue publication after a rejected push.
 
-## 3. CI green (per repo, latest run on develop)
+## 3. CI at the exact reviewed head
 
-**Check:** `gh run list --repo ywatanabe1989/<pkg> --branch develop --limit 1`.
-Flag `failure`, `cancelled`, `in_progress > 1h`.
+List all original runs for the intended commit, for example:
+
+```bash
+gh run list --repo scitex-ai/PACKAGE --commit REVIEWED_SHA --limit 100
+```
+
+Review every applicable workflow and its real jobs, including optional
+consent/security checks, aggregate verdicts and step failures hidden by
+`continue-on-error`. A single latest green run is insufficient. Pending,
+cancelled, skipped or failed work is not complete acceptance. Do not force
+reruns, relax deadlines or create synthetic passing results. After a normal
+merge, review the original post-merge runs separately. Release-profile,
+artifact, installed-interface and live-host acceptance remain distinct.
+
+Owning source and real-Git regression evidence for tag scope and hook
+rejection: `scitex_dev._release.publisher.publish_release` and
+`tests/scitex_dev/_release/test_publisher.py`.
 
 Severity: **CRITICAL** blocks release; **HIGH** one pkg; **MEDIUM**
 test bug; **LOW** cosmetic. Full cookbook (~18 patterns): triage table in
