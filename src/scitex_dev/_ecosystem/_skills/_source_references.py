@@ -54,7 +54,9 @@ def _target_module(module, source, node):
     return ".".join(parts)
 
 
-def _check_reference(root: Path, module: str, name: Optional[str], seen=frozenset()):
+def _check_reference(
+    root: Path, module: str, name: Optional[str], seen=frozenset(), *, definitions=None
+):
     """Trace explicit local imports; distinguish failure from unsupported scope."""
     if _module_file(root, module.split(".")[0]) is None:
         return "unverified", "external or unsupported source-layout module"
@@ -93,17 +95,23 @@ def _check_reference(root: Path, module: str, name: Optional[str], seen=frozense
     if bindings:
         kind, node, alias = bindings[0]
         if kind == "definition":
+            if definitions is not None:
+                definitions.append(node)
             return "checked", "direct source definition exists"
         if kind == "uncertain":
             return "unverified", "assignment, conditional or unsupported source binding"
         target = _target_module(module, source, node)
         if target is None:
             return "issue", "relative re-export goes beyond the source package"
-        state, detail = _check_reference(root, target, alias.name, seen | {key})
+        state, detail = _check_reference(
+            root, target, alias.name, seen | {key}, definitions=definitions
+        )
         return state, f"re-export {target}.{alias.name}: {detail}"
     # A from-import can also select a local submodule.
     if _module_file(root, module + "." + name) is not None:
-        return _check_reference(root, module + "." + name, None, seen | {key})
+        return _check_reference(
+            root, module + "." + name, None, seen | {key}, definitions=definitions
+        )
     if any(
         not isinstance(
             node, (ast.Expr, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
