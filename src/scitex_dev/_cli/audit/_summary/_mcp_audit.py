@@ -1,9 +1,10 @@
 """MCP-tool auditor — companion to `audit-cli`.
 
-Walks each `scitex-*` package's `_mcp_server.mcp` instance (FastMCP) and the
-matching umbrella bridge under `scitex._mcp_tools.<pkg>`; checks against the
+Walks each `scitex-*` package's exported FastMCP instance across supported
+server and MCP module layouts, plus the matching umbrella bridge under
+`scitex._mcp_tools.<pkg>`; checks against the
 canonical MCP convention in
-`<scitex-python>/src/scitex/_skills/general/03_interface/03_mcp/`.
+`src/scitex_dev/_skills/general/03_interface/03_mcp/`.
 
 Rules (matching that skill's section numbers):
 
@@ -321,7 +322,7 @@ def run_audit_mcp(
         _emit_json([rec], "single-package mode (mcp)")
     else:
         if status == "no-mcp-server":
-            _emit("info", f"{package}: no `_mcp_server.mcp` found — skipped")
+            _emit("info", f"{package}: no FastMCP instance in supported module exports — skipped")
         elif status == "skip-not-standalone":
             _emit(
                 "info",
