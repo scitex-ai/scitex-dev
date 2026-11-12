@@ -10,6 +10,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.62.28] - 2026-11-12
+
 - Validate each CI CPU image Python environment after installation: check the
   dependency graph and import the advertised FastMCP and MCP client stack.
   Refuse an inconsistent or non-importable image before build completion.
