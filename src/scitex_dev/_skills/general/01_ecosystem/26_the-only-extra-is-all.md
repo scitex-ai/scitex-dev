@@ -173,7 +173,7 @@ from a stale leaf:
 
 | Leaf | Was | Now |
 |---|---|---|
-| [01_upstream-and-downstream.md](01_upstream-and-downstream.md) | Downstream/middle CI install `pip install -e ".[dev]"` | `pip install -e . --group dev` |
+| [01_upstream-and-downstream.md](01_upstream-and-downstream.md) | One install command for every library layer | Inspect the leaf's declared and qualified CI profile; this skill describes the target extra/group policy. |
 | [02_dependency-and-version-pinning.md](02_dependency-and-version-pinning.md) | "Heavy or rarely-used deps moved to **named extras** (`[imaging]`, `[scientific]`, `[mcp]`, …)"; a `scitex = [...]` optional pattern | Everything optional goes in `all`; `dev`/`docs` are groups |
 | [03_modules-and-standalone-packages.md](03_modules-and-standalone-packages.md) §3, §8 | `scitex[session]` as the minimal monolith dep; "its named extra" per module | Bare `scitex>=X`; `all` is the only extra, and it must still transitively install every canonical package |
 | [05_re-export.md](05_re-export.md) | "Optional peers stay OUT of `[all]`/`[dev]` … pin only in the targeted extra (`[cloud]`/`[hub]`/…)" | There is no targeted extra to park a heavy peer in; omit it from `all` until it ships |
