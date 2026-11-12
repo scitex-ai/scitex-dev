@@ -33,6 +33,28 @@ behavior assertion. Never discover and execute arbitrary documentation fences;
 network, models, messages, installers and live data require their own authorized
 fixtures. If no safe executable check exists, report manual/unverified scope.
 
+## Configuration and environment claims
+
+Trace each advertised setting to its reader. Importing `PriorityConfig` or
+calling `load_dotenv` does not establish a YAML loader, a fallback order or
+which commands consume those values. A Python availability flag is not an
+environment variable unless code actually reads it from the environment.
+Include names passed through shared resolvers when inspecting those reads.
+
+Check precedence with the owning package's real commands in owned temporary
+homes and projects. Give explicit arguments, environment values and documented
+configuration files distinguishable values; assert the selected result and
+destination. Reuse existing leaf controls where available. A command ignoring
+an invalid configuration file can expose a consumption gap, but does not prove
+how every other command behaves.
+
+The CLI `§6b` check in
+`src/scitex_dev/_cli/audit/_summary/_audit.py::_check_config_help` checks for
+configuration-path text in root help. It does not execute a configuration
+loader or verify fallback behavior. Do not invent a supported precedence chain
+to satisfy that check. When implementation is missing, document the current
+limitation explicitly and retain the intended contract as an unresolved gap.
+
 ## Select checks by cadence
 
 - **PR:** follow the changed source's declared documentation references and
