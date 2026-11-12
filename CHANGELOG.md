@@ -10,6 +10,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Honor repository Git hooks when triggering a release; push only the requested
+  tag without automatically following other annotated tags. Report push failure
+  and stop before creating a GitHub release or emitting a release event.
+
 ## [0.62.28] - 2026-11-12
 
 - Correct the architecture skill to describe current facade, Dev, leaf, SDK
