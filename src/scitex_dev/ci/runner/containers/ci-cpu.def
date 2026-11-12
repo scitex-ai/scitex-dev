@@ -222,6 +222,12 @@ From: ubuntu:24.04
             mne ripple_detection tensorpac \
             "scitex-dev[all,dev]" \
             pytest pytest-cov pytest-xdist pytest-timeout
+
+        # Refuse an inconsistent graph or an unusable advertised MCP stack.
+        # A completed install alone does not establish importability.
+        PY="/opt/venv-$V/bin/python"
+        uv pip check --python "$PY"
+        "$PY" -I -c 'from fastmcp import FastMCP; from mcp import ClientSession'
     done
 
 %environment
