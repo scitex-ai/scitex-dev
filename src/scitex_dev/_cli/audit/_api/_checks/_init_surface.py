@@ -12,6 +12,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from ._lazy_dispatch import _literal_guard_exports
 from ._model import _STDLIB_SAFE_ROOTS, _THIRD_PARTY_ROOTS, Violation
 
 
@@ -176,6 +177,7 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
                 # import time. Treat each `name == "..."` literal inside
                 # __getattr__ as a bound name so PA-102 doesn't false-fire.
                 if node.name == "__getattr__":
+                    bound_names.update(_literal_guard_exports(node))
                     for sub in ast.walk(node):
                         # Pattern A: `if name == "X":`
                         if (
