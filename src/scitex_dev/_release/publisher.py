@@ -6,7 +6,7 @@
 
 The 2026-04-28 footgun: 13 ecosystem packages use ``release: published``
 in their publish-pypi.yml, while 58 use ``push: tags: ['v*']``. After
-``git tag v<X> && git push --tags``:
+``git tag v<X> && git push --no-follow-tags origin refs/tags/v<X>:refs/tags/v<X>``:
 
 - tag-trigger workflows publish immediately
 - release-trigger workflows do NOTHING — the operator must also run
@@ -191,20 +191,19 @@ def publish_release(
     else:
         rep.skipped.append(f"tag v{version} already exists")
 
-    # 2. Push tags.
+    # 2. Push only the requested tag, retaining the repository's Git hooks.
+    # Explicitly disable followTags: a configured annotated-tag auto-push
+    # must not publish an unrelated candidate alongside this release.
+    refspec = f"refs/tags/v{version}:refs/tags/v{version}"
+    push_step = f"git push --no-follow-tags origin {refspec}"
     if dry_run:
-        rep.steps_run.append("would: git push --tags")
+        rep.steps_run.append(f"would: {push_step}")
     else:
-        r = _git(
-            repo,
-            "-c",
-            "core.hooksPath=/dev/null",
-            "push",
-            "--tags",
-        )
-        # `--tags` with already-pushed tags returns 0 ("Everything up-to-date");
-        # rejected because-tag-exists-on-remote is also benign for our purpose.
-        rep.steps_run.append("git push --tags")
+        r = _git(repo, "push", "--no-follow-tags", "origin", refspec)
+        if r.returncode != 0:
+            rep.failed.append((push_step, r.stderr.strip()))
+            return rep
+        rep.steps_run.append(push_step)
 
     # 3. If trigger is `release`, create the GH release (idempotent).
     if trigger == "release":
