@@ -99,9 +99,9 @@ from ._mcp_names import _import_name, _short_name
 def _resolve_mcp_server(package: str):
     """Locate a `FastMCP` instance for `package`.
 
-    Tries module candidates `scitex_<pkg>._mcp_server`, `scitex_<pkg>.mcp_server`
-    and looks for a top-level `mcp` attribute that is a `FastMCP`. Returns the
-    instance or None.
+    Check legacy server modules, nested server modules and then MCP package
+    exports. Accept only an exported FastMCP instance, including lazy exports;
+    return None when no supported module exposes one.
     """
     try:
         from fastmcp import FastMCP  # local import to keep the module light
@@ -114,6 +114,8 @@ def _resolve_mcp_server(package: str):
         f"{import_name}.mcp_server",
         f"{import_name}._mcp.server",  # scitex-io shape
         f"{import_name}.mcp.server",
+        f"{import_name}._mcp",
+        f"{import_name}.mcp",
     ]
     for mod_name in candidates:
         try:
@@ -126,7 +128,11 @@ def _resolve_mcp_server(package: str):
             # would let it propagate and kill the audit run.
             continue
         for attr in ("mcp", "server", "app"):
-            obj = getattr(mod, attr, None)
+            try:
+                obj = getattr(mod, attr, None)
+            except (ImportError, SystemExit):
+                # Lazy exports can enforce optional dependencies at access time.
+                continue
             if isinstance(obj, FastMCP):
                 return obj
     return None
