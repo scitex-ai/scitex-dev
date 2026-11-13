@@ -1,80 +1,43 @@
 ---
 description: |
-  [TOPIC] When to merge `develop` → `main` (tag-push auto-sync)
-  [DETAILS] The canonical rule that `main` = the latest tagged release, kept in
-  sync by a single trigger — a tag push on `develop` auto fast-forwards `main`
-  via `.github/workflows/sync-main.yml`. Includes the change-kind → action table
-  (code/skills/docs all release via a tag; WIP stays on develop), the reference
-  `sync-main.yml` workflow, and the manual fallback escape hatch when the
-  workflow can't run. Companion to 01_version-control.md.
+  [TOPIC] Reviewed develop-to-main promotion
+  [DETAILS] Follow the owning package's protected source, tag and publication boundaries. Dev requires release source already promoted to protected main; a tag push validates the source and builds, while publication is a separate main dispatch. Companion to version control and the end-to-end release flow.
 tags: [scitex-general-development-version-control]
 ---
 
-# When to merge `develop` → `main`
+# Reviewed develop-to-main promotion
 
-**Canonical rule: `main` = the latest tagged release.** `main` is what
-casual visitors see on GitHub; `develop` is where active work
-integrates. We keep these in sync via a single trigger:
+Follow the package's checked-in release workflow and current user authorization.
+Main promotion, tag validation, publication and host rollout are separate stages.
+The sequence is in [the release flow](18_end-to-end-release-flow.md); branch
+review conventions are in [version control](01_version-control.md).
 
-> **Tag push on `develop` automatically fast-forwards `main` to the tag.**
+## Current Dev boundary
 
-The mechanism is a small GitHub Action workflow at
-`.github/workflows/sync-main.yml` that listens on `push: tags: ['v*']`
-and runs `git merge --ff-only <tag>` on `main` (with a `--no-ff` merge
-commit as fallback for non-linear histories). The bot pushes `main`
-directly using `GITHUB_TOKEN` — no manual `checkout main` step needed.
+Dev's release caller is
+[the tag/publication workflow](https://github.com/scitex-ai/scitex-dev/blob/4e14fe28571617ccf7b6fffd9cff0e15a7bfc38c/.github/workflows/pypi-publish-and-github-release-on-tag.yml).
+A tag push runs source validation and the whole test/build profile. Publication
+requires a separate workflow dispatch from protected `main`, using the existing
+`pypi` environment and Trusted Publisher identity. Dev has no checked-in
+`.github/workflows/sync-main.yml` at this reviewed source.
 
-### What this means in practice
+The shared
+[source qualifier](https://github.com/scitex-ai/.github/blob/4b2175758b236d57a90918a196f723b7400f0bbd/.github/workflows/ci-sif-matrix.yml)
+checks the tag's resolved commit against protected `main` before and after the
+comparison. It refuses unpromoted source, a changing main head, mismatched tag
+events and a publication dispatch outside `main`. Its `DEV_RELEASE_SOURCE`
+controls are exercised in the shared repository's
+[release contract tests](https://github.com/scitex-ai/.github/blob/4b2175758b236d57a90918a196f723b7400f0bbd/tests/test_dev_release_contract.py).
+These links identify reviewed evidence; inspect current owning source before
+using the procedure for a later release.
 
-| Change kind                           | Action to land it on `main`              |
-|---------------------------------------|------------------------------------------|
-| **Code/API/CLI/MCP change**           | Bump version, tag `vX.Y.Z`, push tag — workflow syncs `main` |
-| **Skills / audit-rule rollout**       | Same: bump patch, tag `vX.Y.Z`, push tag |
-| **README / docs polish (visible-on-GitHub change)** | Same — patch bump with `docs:` commit prefix is honest signaling |
-| **In-flight refactor / WIP**          | Stay on `develop` — no tag yet           |
+Promote the reviewed source through an ordinary `develop` to `main` PR, accept
+its exact-head checks and original post-merge checks, then select an unused
+canonical tag on the accepted source. Follow the owning tag-validation and
+publication stages. A tag is not a mechanism for advancing Dev's main branch.
 
-The patch-bump-for-docs idiom is intentional: any change that should be
-visible on the GitHub landing page is a "release" of sorts (the README
-is part of what users see when deciding whether to install). Tag it.
-
-### Reference workflow
-
-```yaml
-# .github/workflows/sync-main.yml
-name: Sync main with release tag
-on:
-  push:
-    tags: ['v*']
-jobs:
-  ff-main:
-    runs-on: ubuntu-latest
-    permissions: { contents: write }
-    steps:
-      - uses: actions/checkout@v4
-        with: { ref: main, fetch-depth: 0, token: '${{ secrets.GITHUB_TOKEN }}' }
-      - run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          TAG="${{ github.ref_name }}"
-          git fetch origin --tags
-          git merge --ff-only "$TAG" || git merge --no-ff "$TAG" -m "merge: sync main with $TAG"
-          git push origin main
-```
-
-Reference exemplars: `scitex-ssh`, `scitex-dev`.
-
-### Manual fallback (escape hatch)
-
-If the workflow can't run (CI down, branch protection misconfigured,
-etc.):
-
-```bash
-git -C ~/proj/PACKAGE checkout main
-git -C ~/proj/PACKAGE pull origin main
-git -C ~/proj/PACKAGE merge --ff-only vX.Y.Z       # or --no-ff if diverged
-git -C ~/proj/PACKAGE push origin main
-git -C ~/proj/PACKAGE checkout develop
-```
-
-If a pre-push hook blocks direct `git push origin main`, open a PR
-`develop → main` instead and merge via `gh pr merge --merge`.
+Other packages can have different workflows. Inspect their actual triggers and
+source-admission checks rather than copying Dev's sequence or an automatic-sync
+template. Keep in-flight work on `develop`; preserve existing failures and
+immutable tags. Version reconciliation and an installed version match do not
+establish release acceptance.

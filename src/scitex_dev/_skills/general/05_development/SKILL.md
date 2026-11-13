@@ -15,7 +15,7 @@ ecosystem maintainers. Sits atop the docs tier
 
 1. [01_version-control.md](01_version-control.md) — Branches, tags, release waves, release gates (core workflow)
    - [16_version-control-preflight.md](16_version-control-preflight.md) — Preflight state checks (uncommitted changes, wrong branch, upstream tracking) before pull/install/checkout
-   - [17_develop-to-main-sync.md](17_develop-to-main-sync.md) — When to merge `develop` → `main`: tag-push auto-sync workflow, change-kind table, manual fallback
+   - [17_develop-to-main-sync.md](17_develop-to-main-sync.md) — Reviewed `develop` → `main` promotion: owning source/tag boundaries and protected-main Dev publication
 2. [02_periodic-audits.md](02_periodic-audits.md) — Run `audit-all` continuously while editing — cron / tmux / agent loops, JSON contract, Claude Code mechanisms
 3. [03_release-automation.md](03_release-automation.md) — Automation commands, ecosystem sync CLI, MCP tools, Python API
    - [18_end-to-end-release-flow.md](18_end-to-end-release-flow.md) — Authorization-aware release flow, exact-head checks and leaf-owned publication boundaries
