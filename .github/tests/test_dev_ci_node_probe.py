@@ -50,3 +50,31 @@ class DevCINodeProbe(unittest.TestCase):
             ),
             (4, ["node", "-"], 4, note["child_pid"], os.getpid()),
         )
+
+        self.assertEqual((note["stdout_bytes"], note["stderr_bytes"]), (0, 0))
+
+    def test_timeout_reports_lengths_without_copying_output_into_note(self):
+        # Arrange
+        stdout = "private-output-é"
+        stderr = "private-error-漢"
+        source = (
+            f"process.stdout.write({json.dumps(stdout)});"
+            f"process.stderr.write({json.dumps(stderr)});"
+            "setTimeout(() => {}, 6000);"
+        )
+        refusal = self.assertRaises(subprocess.TimeoutExpired)
+        # Act
+        with refusal:
+            run_node(source)
+        # Assert
+        error = refusal.exception
+        note = json.loads(error.__notes__[0])
+        self.assertEqual(error.timeout, 4)
+        self.assertEqual(error.output, stdout.encode())
+        self.assertEqual(error.stderr, stderr.encode())
+        self.assertEqual(note["stdout_bytes"], len(stdout.encode()))
+        self.assertEqual(note["stderr_bytes"], len(stderr.encode()))
+        self.assertNotIn("private-output", error.__notes__[0])
+        self.assertNotIn(stdout, error.__notes__[0])
+        self.assertNotIn("private-error", error.__notes__[0])
+        self.assertNotIn(stderr, error.__notes__[0])
