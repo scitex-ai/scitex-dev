@@ -8,9 +8,11 @@ on:
 
 jobs:
   full-original-docs:
-    uses: scitex-ai/.github/.github/workflows/rtd-sphinx-build.yml@main
+    uses: scitex-ai/.github/.github/workflows/rtd-sphinx-build.yml@fccc4199f3417128985a7ecd58891646bb61ed1b
     with:
       dev_original_commands: true
+      # Publish generated HTML through a source-bound draft PR, preserving protection.
+      bundle_dir: src/scitex_dev/_sphinx_html
       runs_on: '["self-hosted","Linux","X64","scitex-org-cpu"]'
     if: "!contains(github.event.head_commit.message, 'docs(sphinx_html): refresh from CI build')"
     permissions:
