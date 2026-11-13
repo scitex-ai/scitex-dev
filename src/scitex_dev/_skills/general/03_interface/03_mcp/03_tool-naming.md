@@ -15,7 +15,12 @@ Every MCP tool name has the shape:
 
 - snake_case throughout.
 - `<pkg>` = the package short name (`io`, `stats`, `dev`, …). New packages add it via `safe_mount(..., namespace="<pkg>")` from `scitex._mcp_tools._compat` — the standalone source uses **bare names**. Legacy packages (`scitex-io`) bake the prefix into the source and call `safe_mount(mcp, sub_mcp)` without a namespace; this is allowed but discouraged for new code (see [02_server-registration.md](02_server-registration.md)).
-- `<verb>_<noun>` mirrors the CLI subcommand tree.
+- `<verb>_<noun>` mirrors the CLI subcommand tree. When the object is supplied
+  as a parameter, an established action verb can stand alone: standalone
+  `save`, `speak`, `plot` and `compose` become `io_save`, `audio_speak`,
+  `plt_plot` and `plt_compose` after mounting. This exception does not permit
+  arbitrary single-token names or verbs requiring an explicit noun, such as
+  `list` and `describe`. The cross-package standard `health` is also accepted.
 
 ## Examples (canonical)
 

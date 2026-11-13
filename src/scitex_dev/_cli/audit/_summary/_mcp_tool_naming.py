@@ -33,8 +33,8 @@ _TOOL_NAME_SYNONYMS: dict[str, str] = {
     "modify": "update",
 }
 
-# Verbs whose object is implicit (passed as a parameter) — `io_save`, `audio_speak`,
-# `stats_run` — bare `<pkg>_<verb>` is acceptable per the §2 examples table.
+# Verbs whose object is implicit (passed as a parameter): standalone `save`
+# and mounted `io_save` are both valid under the §2 examples table.
 _OBJECT_FROM_PARAM_VERBS = {
     "save",
     "load",
@@ -156,13 +156,18 @@ def _check_tool_naming(
         # The tool name as visible from the umbrella must start with `<short>_`.
         # Standalone-source names omit it under Convention A (mount adds it);
         # we only check the prefix when the name is already prefixed.
-        if "_" not in raw and raw not in STANDARD_TOOL_NAMES:
+        if (
+            "_" not in raw
+            and raw not in STANDARD_TOOL_NAMES
+            and raw not in _OBJECT_FROM_PARAM_VERBS
+        ):
             out.append(
                 Violation(
                     f"{package}::{raw}",
                     "§2",
                     f"tool name '{raw}' has no verb_noun split — single-token "
-                    "tools are forbidden; use `<verb>_<noun>` even for read tools",
+                    "tools require a standard name or a verb whose object is "
+                    "passed as a parameter; otherwise use `<verb>_<noun>`",
                 )
             )
             continue
