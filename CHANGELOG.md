@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Discover FastMCP instances exported from MCP package modules, including
+  lazy exports, while preserving existing server-module lookup priority.
+
 - Match release-note changelog headings literally across awk implementations,
   keeping dotted versions and nearby version prefixes distinct.
 
