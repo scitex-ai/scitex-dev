@@ -10,6 +10,21 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.62.30] - 2026-11-13
+
+- Share owned CI-job lifecycle helpers for bounded cleanup and cancellation.
+  Stage byte-pinned regular files exclusively in private owned directories,
+  rejecting source changes, unsafe destinations and mismatched identities.
+- Stage generated Dev documentation on fresh source-bound branches using an
+  ordinary push. Report the staged commit for maintainer review without changing
+  runner admission or creating bot PRs that cannot run the native suite.
+- Refresh the bundled HTML and correct the documentation-verification guide's
+  supported call-shape checks and static-analysis limits.
+- Align the shipped release-promotion skill with protected-main promotion,
+  immutable tag validation and separate publication.
+- Record captured output sizes when a CI adapter probe times out. This adds
+  diagnostic evidence; it does not establish or fix the observed OS I/O stall.
+
 - Accept established parameter-object MCP verbs before namespace mounting,
   consistently with their prefixed forms; retain required-noun checks.
 
