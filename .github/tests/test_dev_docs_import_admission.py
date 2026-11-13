@@ -16,7 +16,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
-DOCS_REVISION = "6f99fd20900028e697f523ae7b66d834dae679df"
+DOCS_REVISION = "7e04b9f2a8a554ca59d1ba5468fd2d2082c5755c"
 BASE_REVISION = "b453ac735dfaf1ca728e5739040af04fbcfbbaee"
 ADMISSION_REVISION = "d7d96c34d68cdfbb5503a933591f7748b5aa30ee"
 ADMISSION_SHA256 = "f2e92f6a50526c2133cd12ae7c5cbd98ce2922354bd85c628ca48aad4acc6d18"

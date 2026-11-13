@@ -8,7 +8,7 @@ on:
 
 jobs:
   full-original-docs:
-    uses: scitex-ai/.github/.github/workflows/rtd-sphinx-build.yml@6f99fd20900028e697f523ae7b66d834dae679df
+    uses: scitex-ai/.github/.github/workflows/rtd-sphinx-build.yml@7e04b9f2a8a554ca59d1ba5468fd2d2082c5755c
     with:
       dev_original_commands: true
       # Stage source-bound HTML with ordinary pushes; an admitted maintainer reviews
