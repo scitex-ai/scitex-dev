@@ -397,6 +397,7 @@ scitex_dev = [
     "skills/references/*.md",
     "_skills/**/*",
     "_hooks/*.sh",
+    "ci/*.sh",  # Shared owned release-job lifecycle resource
     "_branding/*.yaml",
     "_cli/audit/_summary/data/*",
     "linter/_rules/_verb_lexicon.txt",

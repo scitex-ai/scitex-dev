@@ -15,6 +15,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = Path(__file__).parent / 'fixtures/dev-original-docs-import-source.json'
+DOCS_REVISION = 'c5acd551f050094dbca4d1c3a889a08212bcd73b'
 SPECS = (
     ('rtd-sphinx-build.yml', 'rtd-sphinx-build-on-ubuntu-latest.yml',
      'sphinx', 'sphinx', 'full-original-docs'),
@@ -46,9 +47,18 @@ class TestFullCentralProfileCallers(unittest.TestCase):
             observed.append((set(candidate['jobs']) == {bridge, full}, call['uses'], call['with'],
                              'runs-on' not in call, 'steps' not in call,
                              candidate['jobs'][bridge]['runs-on']))
-        self.assertEqual(observed, [(True, 'scitex-ai/.github/.github/workflows/' + central + '@main',
-             {'dev_original_commands': True, 'runs_on': '["self-hosted","Linux","X64","scitex-org-cpu"]'},
-             True, True, 'ubuntu-latest') for central, _, _, _, _ in SPECS])
+        expected = []
+        for central, _, _, _, _ in SPECS:
+            options = {'dev_original_commands': True,
+                       'runs_on': '["self-hosted","Linux","X64","scitex-org-cpu"]'}
+            revision = 'main'
+            if central == 'rtd-sphinx-build.yml':
+                revision = DOCS_REVISION
+                options['bundle_dir'] = 'src/scitex_dev/_sphinx_html'
+            expected.append((True, 'scitex-ai/.github/.github/workflows/'
+                             + central + '@' + revision, options,
+                             True, True, 'ubuntu-latest'))
+        self.assertEqual(observed, expected)
 
     def test_original_required_names_depend_on_the_full_reusable_result(self):
         observed = []

@@ -16,6 +16,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
+DOCS_REVISION = "c5acd551f050094dbca4d1c3a889a08212bcd73b"
 BASE_REVISION = "b453ac735dfaf1ca728e5739040af04fbcfbbaee"
 ADMISSION_REVISION = "d7d96c34d68cdfbb5503a933591f7748b5aa30ee"
 ADMISSION_SHA256 = "f2e92f6a50526c2133cd12ae7c5cbd98ce2922354bd85c628ca48aad4acc6d18"
@@ -194,7 +195,8 @@ class DevDocsImportAdmission(unittest.TestCase):
         # Assert
         assert observed == {
             name: ("scitex-ai/.github/.github/workflows/" + PROFILE_SPECS[name][0]
-                   + "@main", "./.github/workflows/runner-admission.yml")
+                   + "@" + (DOCS_REVISION if name.startswith("rtd-") else "main"),
+                   "./.github/workflows/runner-admission.yml")
             for name in names
         }
 
@@ -217,7 +219,8 @@ class DevDocsImportAdmission(unittest.TestCase):
             name: workflow(name)["jobs"][PROFILE_SPECS[name][2]]["with"]
             for name in names
         } == {
-            name: {"dev_original_commands": True, "runs_on": json.dumps(LABELS, separators=(",", ":"))}
+            name: {"dev_original_commands": True, "runs_on": json.dumps(LABELS, separators=(",", ":")),
+                   **({"bundle_dir": "src/scitex_dev/_sphinx_html"} if name.startswith("rtd-") else {})}
             for name in names
         }
 
