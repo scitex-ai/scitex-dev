@@ -282,10 +282,9 @@ def _concrete_labels(runs_on: Any, job: dict, workflow: dict) -> list[str]:
 
 
 def _collect_ps169_violations(repo: Path, violation_cls: type) -> list:
-    """Pure collection pass — no severity escalation.
+    """Collect hosted-runner findings without applying a baseline comparison.
 
-    Split out so the escalation helper can re-run the SAME detection against a
-    `worktree_at`-staged baseline checkout without recursing into escalation.
+    The caller appends these findings at the rule's configured advisory severity.
     """
     found: list = []
     wf_dir = repo / ".github" / "workflows"
@@ -373,11 +372,10 @@ def check_ps169_hosted_runners(
     out : list
         Violations are appended in place (project-auditor convention).
     baseline_ref : str
-        Git ref to diff against for new-vs-existing severity escalation
-        (default ``"develop"``; falls back to ``"origin/<baseline_ref>"`` —
-        see `_new_vs_baseline.escalate_new_violations`). A NEW hosted-runner
-        reference ratchets to "E"; a pre-existing one stays at the rule
-        default "W".
+        Retained for call-site compatibility; not consulted by this check.
+        No baseline comparison or severity override is applied. New and
+        pre-existing hosted-runner findings both use the rule's advisory
+        default ("W").
     """
     # NO baseline escalation. Every finding stays at the rule default W.
     # The ratchet was removed on 2026-08-05: it left a long-standing
