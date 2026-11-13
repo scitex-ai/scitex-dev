@@ -15,7 +15,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = Path(__file__).parent / 'fixtures/dev-original-docs-import-source.json'
-DOCS_REVISION = 'c5acd551f050094dbca4d1c3a889a08212bcd73b'
+DOCS_REVISION = '6f99fd20900028e697f523ae7b66d834dae679df'
 SPECS = (
     ('rtd-sphinx-build.yml', 'rtd-sphinx-build-on-ubuntu-latest.yml',
      'sphinx', 'sphinx', 'full-original-docs'),
