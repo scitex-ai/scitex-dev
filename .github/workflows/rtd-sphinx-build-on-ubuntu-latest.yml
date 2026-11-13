@@ -8,10 +8,11 @@ on:
 
 jobs:
   full-original-docs:
-    uses: scitex-ai/.github/.github/workflows/rtd-sphinx-build.yml@fccc4199f3417128985a7ecd58891646bb61ed1b
+    uses: scitex-ai/.github/.github/workflows/rtd-sphinx-build.yml@c5acd551f050094dbca4d1c3a889a08212bcd73b
     with:
       dev_original_commands: true
-      # Publish generated HTML through a source-bound draft PR, preserving protection.
+      # Stage source-bound HTML with ordinary pushes; an admitted maintainer reviews
+      # the artifact and opens the PR. Keep bot identity outside private CI admission.
       bundle_dir: src/scitex_dev/_sphinx_html
       runs_on: '["self-hosted","Linux","X64","scitex-org-cpu"]'
     if: "!contains(github.event.head_commit.message, 'docs(sphinx_html): refresh from CI build')"

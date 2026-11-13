@@ -68,3 +68,10 @@ an attempted comparison remains a visible failure.
 `status` is `needs_update` for definite failures, `incomplete` for unverified
 references or no Python blocks, otherwise `ok` within the reported static
 scope. No status means complete documentation or ecosystem drift verification.
+
+The example above imports `Path` from the standard library and
+`verify_docs_and_skills` through Dev's lazy public facade. With the current
+static resolver, checking this guide against Dev's own source reports these
+bindings as unverified and returns `incomplete`, with no detected issues.
+Keep that coverage limit visible. The owning behavioral tests and installed
+interface checks establish runtime behavior separately.
