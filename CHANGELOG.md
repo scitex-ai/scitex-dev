@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Accept established parameter-object MCP verbs before namespace mounting,
+  consistently with their prefixed forms; retain required-noun checks.
+
 - Discover FastMCP instances exported from MCP package modules, including
   lazy exports, while preserving existing server-module lookup priority.
 
