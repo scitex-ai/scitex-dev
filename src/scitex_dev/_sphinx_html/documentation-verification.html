@@ -139,6 +139,12 @@ an attempted comparison remains a visible failure.</p>
 <p><code class="docutils literal notranslate"><span class="pre">status</span></code> is <code class="docutils literal notranslate"><span class="pre">needs_update</span></code> for definite failures, <code class="docutils literal notranslate"><span class="pre">incomplete</span></code> for unverified
 references or no Python blocks, otherwise <code class="docutils literal notranslate"><span class="pre">ok</span></code> within the reported static
 scope. No status means complete documentation or ecosystem drift verification.</p>
+<p>The example above imports <code class="docutils literal notranslate"><span class="pre">Path</span></code> from the standard library and
+<code class="docutils literal notranslate"><span class="pre">verify_docs_and_skills</span></code> through Dev’s lazy public facade. With the current
+static resolver, checking this guide against Dev’s own source reports these
+bindings as unverified and returns <code class="docutils literal notranslate"><span class="pre">incomplete</span></code>, with no detected issues.
+Keep that coverage limit visible. The owning behavioral tests and installed
+interface checks establish runtime behavior separately.</p>
 </section>
 
 
