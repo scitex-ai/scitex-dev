@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Report bounded process-group IDs and states when owned CI cleanup is refused,
+  without exposing command arguments or changing cancellation/deletion guards.
+
 - Parse a versioned, owner-bound plain-data Python/MCP capability declaration.
   Leaves can return dictionaries without importing private Dev models;
   malformed fields and self-certification flags are refused, while semantic
