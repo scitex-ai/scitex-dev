@@ -10,6 +10,26 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Parse a versioned, owner-bound plain-data Python/MCP capability declaration.
+  Leaves can return dictionaries without importing private Dev models;
+  malformed fields and self-certification flags are refused, while semantic
+  inventory findings and behavioral qualification remain separate.
+
+- Resolve capability-provider Python files against their current installed
+  declaration and RECORD digest/size without importing code. Refuse missing
+  or ambiguous records, changed declarations and redirected module paths;
+  actual import origin and callable behavior remain separate checks.
+
+- Read internal capability-provider declarations through the shared installed
+  metadata reader. Select providers by canonical distribution owner and exact
+  name; refuse duplicate claims and malformed factory targets without loading
+  entry points or changing interface enablement.
+
+- Add an internal Python/MCP capability-inventory inspector for leaf-owned
+  declarations and observed callables. Report missing or unclassified bindings,
+  unexplained Python-only scope and asynchronous native API bindings.
+  Inventory consistency does not establish behavior or change existing audits.
+
 - Honor detected Boolean availability when applying conditional linter rules.
   Unavailable optional packages no longer trigger their recommendations;
   unknown-package handling and skipped-rule diagnostics remain in place.
