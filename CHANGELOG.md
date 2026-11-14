@@ -10,6 +10,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Honor detected Boolean availability when applying conditional linter rules.
+  Unavailable optional packages no longer trigger their recommendations;
+  unknown-package handling and skipped-rule diagnostics remain in place.
+
 ## [0.62.30] - 2026-11-13
 
 - Share owned CI-job lifecycle helpers for bounded cleanup and cancellation.
