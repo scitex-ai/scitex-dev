@@ -390,7 +390,7 @@ class SciTeXChecker(
     def _add(self, rule: Rule | None, line: int, col: int, source_line: str) -> None:
         if rule is None:
             return
-        if rule.requires and rule.requires not in self._available:
+        if rule.requires and not self._available.get(rule.requires, False):
             # Pillar-0 fail-loud (#TBD): tally the silent-skip so the
             # health module can emit an L2 stderr summary the first
             # time the count goes non-zero. Without this the
