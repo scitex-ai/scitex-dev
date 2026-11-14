@@ -10,6 +10,11 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Add an internal Python/MCP capability-inventory inspector for leaf-owned
+  declarations and observed callables. Report missing or unclassified bindings,
+  unexplained Python-only scope and asynchronous native API bindings.
+  Inventory consistency does not establish behavior or change existing audits.
+
 - Honor detected Boolean availability when applying conditional linter rules.
   Unavailable optional packages no longer trigger their recommendations;
   unknown-package handling and skipped-rule diagnostics remain in place.
