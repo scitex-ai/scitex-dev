@@ -1,6 +1,7 @@
 """Inspect real fixture-owned groups without exposing process arguments."""
 
 import os
+import signal
 import subprocess
 from pathlib import Path
 
@@ -115,3 +116,76 @@ def test_real_group_overflow_reports_only_bounded_members(tmp_path):
                if row.startswith("owned group member:")]
     assert (result.returncode, len(members),
             "owned group report: additional members omitted" in result.stderr) == (0, 32, True)
+
+
+@pytest.fixture(params=[False, True], ids=["term", "kill"])
+def timed_out_report(tmp_path, request):
+    """Exercise GNU timeout against a real, fixture-owned blocked collector."""
+    worker = tmp_path / "blocked-collector"
+    ready = tmp_path / "collector.pid"
+    worker.write_text('''#!/bin/bash
+set -eu
+pid=$BASHPID
+IFS= read -r statline < "/proc/$pid/stat"
+statline="${statline##*) }"
+set -- $statline
+printf '%s %s' "$pid" "${20}" > "$HOME/collector.pid"
+if [[ "$COLLECTOR_IGNORE_TERM" == 1 ]]; then trap '' TERM; fi
+exec /usr/bin/sleep 30
+''')
+    worker.chmod(0o700)
+    body = r'''function /usr/bin/timeout() {
+    [[ "$#" == 6 && "$1" == --signal=TERM && "$2" == --kill-after=1s &&
+       "$3" == 1s && "$4" == /usr/bin/ps && "$5" == -eo &&
+       "$6" == pid=,ppid=,pgid=,sid=,stat=,etimes= ]] || return 99
+    command /usr/bin/timeout "$1" "$2" "$3" "$HOME/blocked-collector"
+}
+export COLLECTOR_IGNORE_TERM=''' + str(int(request.param)) + '\nowned_report_group "$$"'
+    identity = None
+    try:
+        result = execute(tmp_path, body)
+        identity = tuple(ready.read_text().split())
+        yield result, (137 if request.param else 124), identity
+    finally:
+        if identity is None and ready.exists():
+            identity = tuple(ready.read_text().split())
+        if identity is not None:
+            pid, token = identity
+            status = Path(f"/proc/{pid}/stat")
+            try:
+                current = status.read_text().rsplit(") ", 1)[1].split()
+                if current[19] == token and current[0] != "Z":
+                    os.kill(int(pid), signal.SIGKILL)
+            except (FileNotFoundError, ProcessLookupError):
+                pass
+
+
+def test_collector_timeout_preserves_actual_failure_status(timed_out_report):
+    # Arrange
+    result, expected, _ = timed_out_report
+    # Act
+    observed = result.returncode, f"collection failed (status={expected})" in result.stderr
+    # Assert
+    assert observed == (expected, True)
+
+
+def test_collector_timeout_diagnostic_omits_arguments_and_environment(timed_out_report):
+    # Arrange
+    result, _, _ = timed_out_report
+    # Act
+    output = result.stdout + result.stderr
+    # Assert
+    assert SECRET not in output and str(RESOURCE) not in output
+
+
+def test_collector_timeout_stops_the_owned_worker(timed_out_report):
+    # Arrange
+    _, _, (pid, token) = timed_out_report
+    # Act
+    try:
+        state = Path(f"/proc/{pid}/stat").read_text().rsplit(") ", 1)[1].split()
+        alive = state[19] == token and state[0] != "Z"
+    except (FileNotFoundError, ProcessLookupError):
+        alive = False
+    # Assert
+    assert not alive

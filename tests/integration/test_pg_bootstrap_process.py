@@ -1,5 +1,6 @@
 """Exercise real child processes; these are not PostgreSQL qualification tests."""
 
+import logging
 import subprocess
 import sys
 
@@ -34,14 +35,15 @@ def test_failed_process_keeps_its_status_and_output():
             result.stderr) == (subprocess.CalledProcessError, 7, "before", "reason")
 
 
-def test_failure_logs_the_stage_and_both_captured_streams(capfd):
+def test_failure_logs_the_stage_and_both_captured_streams(caplog):
     # Arrange
     command = [sys.executable, "-c",
                "import sys;sys.stdout.write('before');sys.stderr.write('reason');sys.exit(7)"]
     # Act
     _observe(command)
-    captured = capfd.readouterr()
-    output = captured.out + captured.err
+    output = "\n".join(record.getMessage() for record in caplog.records
+                       if record.name == _run_bootstrap.__module__
+                       and record.levelno == logging.ERROR)
     # Assert
     assert all(text in output for text in
                ["owned process", "CalledProcessError", "before", "reason"])
@@ -71,26 +73,28 @@ def test_timeout_preserves_the_caller_budget_and_captured_bytes():
         subprocess.TimeoutExpired, 2, b"started")
 
 
-def test_timeout_logs_progress_before_preserving_the_failure(capfd):
+def test_timeout_logs_progress_before_preserving_the_failure(caplog):
     # Arrange
     command = [sys.executable, "-c",
                "import sys,time;sys.stdout.write('startup-stage');sys.stdout.flush();time.sleep(10)"]
     # Act
     _observe(command, timeout=2)
-    captured = capfd.readouterr()
-    output = captured.out + captured.err
+    output = "\n".join(record.getMessage() for record in caplog.records
+                       if record.name == _run_bootstrap.__module__
+                       and record.levelno == logging.ERROR)
     # Assert
     assert "TimeoutExpired" in output and "startup-stage" in output
 
 
-def test_output_tail_is_bounded_and_control_characters_are_escaped(capfd):
+def test_output_tail_is_bounded_and_control_characters_are_escaped(caplog):
     # Arrange
     command = [sys.executable, "-c",
                "import sys;sys.stdout.write('discard-prefix'+'x'*5000+'\\x1b[2Jtail');sys.exit(7)"]
     # Act
     _observe(command)
-    captured = capfd.readouterr()
-    output = captured.out + captured.err
+    output = "\n".join(record.getMessage() for record in caplog.records
+                       if record.name == _run_bootstrap.__module__
+                       and record.levelno == logging.ERROR)
     # Assert
     assert ("discard-prefix" in output, "\\x1b[2Jtail" in output,
             len(output) < 3000) == (False, True, True)
