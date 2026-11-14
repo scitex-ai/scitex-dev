@@ -10,6 +10,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Explicitly load one selected capability factory after regular-file and import-
+  metadata checks, then parse its strict plain-data contract. Discovery remains
+  inert; no audit enablement or behavioral acceptance is added.
+
 - Verify regular capability-provider parent package files against the declaring
   distribution's RECORD without importing them. Target-only checks keep their
   existing scope; namespace/unrecorded/other-owner parents remain unqualified.
