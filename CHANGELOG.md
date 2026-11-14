@@ -10,6 +10,11 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Resolve capability-provider Python files against their current installed
+  declaration and RECORD digest/size without importing code. Refuse missing
+  or ambiguous records, changed declarations and redirected module paths;
+  actual import origin and callable behavior remain separate checks.
+
 - Read internal capability-provider declarations through the shared installed
   metadata reader. Select providers by canonical distribution owner and exact
   name; refuse duplicate claims and malformed factory targets without loading
