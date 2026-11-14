@@ -10,6 +10,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Verify regular capability-provider parent package files against the declaring
+  distribution's RECORD without importing them. Target-only checks keep their
+  existing scope; namespace/unrecorded/other-owner parents remain unqualified.
+
 - Report bounded process-group IDs and states when owned CI cleanup is refused,
   without exposing command arguments or changing cancellation/deletion guards.
 
