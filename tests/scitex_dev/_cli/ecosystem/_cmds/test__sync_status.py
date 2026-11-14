@@ -157,15 +157,28 @@ def test_sync_status_missing_when_local_path_absent(tmp_path):
     assert payload["rows"][0]["status"] == "missing"
 
 
-def test_sync_status_table_renders_package_name(tmp_path):
+def test_sync_status_table_renders_package_name(tmp_path, caplog):
     """The default table output includes the package name."""
     # Arrange
     repo = tmp_path / "pkg-a"
     _init_repo_on_develop(repo)
     # Act
-    result = _invoke_sync_status(["-p", "pkg-a"], packages={"pkg-a": repo})
+    with caplog.at_level("INFO"):
+        result = _invoke_sync_status(["-p", "pkg-a"], packages={"pkg-a": repo})
     # Assert
     assert "pkg-a" in result.output
+
+
+def test_sync_status_table_respects_configured_warning_threshold(tmp_path, caplog):
+    """The levelled stdout console still honors its embedding caller's level."""
+    # Arrange
+    repo = tmp_path / "pkg-a"
+    _init_repo_on_develop(repo)
+    # Act
+    with caplog.at_level("WARNING"):
+        result = _invoke_sync_status(["-p", "pkg-a"], packages={"pkg-a": repo})
+    # Assert
+    assert result.output == ""
 
 
 def test_sync_status_classify_equal_shas_is_synced():
