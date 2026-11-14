@@ -10,6 +10,11 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Read internal capability-provider declarations through the shared installed
+  metadata reader. Select providers by canonical distribution owner and exact
+  name; refuse duplicate claims and malformed factory targets without loading
+  entry points or changing interface enablement.
+
 - Add an internal Python/MCP capability-inventory inspector for leaf-owned
   declarations and observed callables. Report missing or unclassified bindings,
   unexplained Python-only scope and asynchronous native API bindings.
