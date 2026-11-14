@@ -10,6 +10,11 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Parse a versioned, owner-bound plain-data Python/MCP capability declaration.
+  Leaves can return dictionaries without importing private Dev models;
+  malformed fields and self-certification flags are refused, while semantic
+  inventory findings and behavioral qualification remain separate.
+
 - Resolve capability-provider Python files against their current installed
   declaration and RECORD digest/size without importing code. Refuse missing
   or ambiguous records, changed declarations and redirected module paths;
