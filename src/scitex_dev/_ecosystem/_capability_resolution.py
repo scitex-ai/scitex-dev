@@ -1,7 +1,8 @@
 """Resolve a declared Python provider file against installed RECORD metadata.
 
 This does not import code or establish publisher trust, actual import origin,
-attribute existence, parent-package ownership or behavioral correctness.
+attribute existence or behavioral correctness. Parent file consistency is
+only checked by the explicit chain resolver, never by the target-only resolver.
 Only ordinary filesystem .py modules/packages with recorded digests qualify.
 """
 
@@ -21,16 +22,8 @@ from .._core.provider_metadata import ProviderMetadata
 from ._capability_providers import read_capability_providers, select_capability_provider
 
 
-def resolve_capability_provider_module(
-    provider: ProviderMetadata, *, path: Sequence[str | Path] | None = None,
-) -> Path:
-    """Verify one current declaration's module file without importing its target.
-
-    Refuse stale/ambiguous declarations, missing records, symlink redirects and
-    digest/size mismatches. Editable or non-filesystem installs without a
-    matching record remain unqualified; no source-tree fallback is attempted.
-    The returned file does not establish which module an import would execute.
-    """
+def _provider_record_context(provider, *, path):
+    """Read one selected owner's current declaration and raw file records."""
     if not isinstance(provider, ProviderMetadata):
         raise TypeError("provider must be ProviderMetadata")
     current = select_capability_provider(
@@ -57,10 +50,6 @@ def resolve_capability_provider_module(
     if len(owners) != 1:
         raise ValueError("provider distribution ownership is ambiguous")
     dist = owners[0]
-    module = provider.target.partition(":")[0]
-    relative = Path(*module.split("."))
-    candidates = {relative.with_suffix(".py").as_posix(),
-                  (relative / "__init__.py").as_posix()}
     # Distribution.files omits missing paths on supported Python versions.
     # Read the actual manifest so a missing recorded file remains diagnosable.
     text = dist.read_text("RECORD")
@@ -69,6 +58,11 @@ def resolve_capability_provider_module(
     rows = list(csv.reader(io.StringIO(text)))
     if any(len(row) != 3 for row in rows):
         raise ValueError("provider RECORD contains a malformed row")
+    return dist, rows
+
+
+def _resolve_recorded_file(dist, rows, candidates):
+    """Verify a file from this owner's manifest without importing any code."""
     records = [row for row in rows if PurePosixPath(row[0]).as_posix() in candidates]
     if len(records) != 1:
         raise ValueError("provider module must be uniquely listed in RECORD")
@@ -98,3 +92,21 @@ def resolve_capability_provider_module(
     if size_field and size != int(size_field):
         raise ValueError("provider module RECORD size mismatch")
     return resolved
+
+
+def resolve_capability_provider_module(
+    provider: ProviderMetadata, *, path: Sequence[str | Path] | None = None,
+) -> Path:
+    """Verify one current declaration's module file without importing its target.
+
+    Refuse stale/ambiguous declarations, missing records, symlink redirects and
+    digest/size mismatches. Editable or non-filesystem installs without a
+    matching record remain unqualified; no source-tree fallback is attempted.
+    The returned file does not establish which module an import would execute.
+    """
+    dist, rows = _provider_record_context(provider, path=path)
+    relative = Path(*provider.target.partition(":")[0].split("."))
+    return _resolve_recorded_file(dist, rows, {
+        relative.with_suffix(".py").as_posix(),
+        (relative / "__init__.py").as_posix(),
+    })
