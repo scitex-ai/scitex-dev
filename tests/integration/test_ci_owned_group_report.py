@@ -102,3 +102,16 @@ def test_invalid_group_cannot_be_reported(tmp_path, group):
     result = execute(tmp_path, body)
     # Assert
     assert (result.returncode, result.stdout, result.stderr) == (1, "", "")
+
+
+def test_real_group_overflow_reports_only_bounded_members(tmp_path):
+    # Arrange
+    body = ('for ((i=0;i<40;i++)); do sleep 5 & done; '
+            'owned_report_group "$$"; wait')
+    # Act
+    result = execute(tmp_path, body)
+    # Assert
+    members = [row for row in result.stderr.splitlines()
+               if row.startswith("owned group member:")]
+    assert (result.returncode, len(members),
+            "owned group report: additional members omitted" in result.stderr) == (0, 32, True)
