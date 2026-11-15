@@ -55,6 +55,24 @@ exit_code = run_local(TestConfig(
 exit_code = run_local(TestConfig(coverage=True))
 ```
 
+### Local module selection
+
+`module=""` intentionally selects the project's whole `tests/` directory.
+For a nonempty module, the local runner first checks `tests/scitex/<module>`;
+otherwise it passes `tests/<module>` to pytest. For leaf layouts, include the
+package directory when needed, for example `module="scitex_dev/testing"` if
+that directory exists. This is path selection, not package-name discovery.
+
+A missing explicit module stays a missing pytest path and returns pytest's
+usage-error exit status (4); it no longer silently selects the whole suite.
+Valid selection precedence, pytest options and test-failure exit codes are
+unchanged. This local fix does not change the separate legacy HPC helpers or
+add a progress journal, timeout policy or new CLI route.
+
+Owning source: `test_runner.py::_build_pytest_args` / `run_local`.
+Real local subprocess selection and exit-status controls:
+`tests/integration/test_test_runner_module_scope.py`.
+
 ## sync_to_hpc
 
 Rsync project to HPC host (excludes .git, __pycache__, dist, build, etc.).
