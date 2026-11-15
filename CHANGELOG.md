@@ -10,6 +10,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Keep explicit local test-module selection when the path is missing, so pytest
+  reports an error instead of silently running the entire project test suite.
+  Preserve valid path precedence, options and test-failure exit codes.
+
 - Explicitly load one selected capability factory after regular-file and import-
   metadata checks, then parse its strict plain-data contract. Discovery remains
   inert; no audit enablement or behavioral acceptance is added.

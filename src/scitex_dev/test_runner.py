@@ -151,8 +151,8 @@ def _build_pytest_args(config: TestConfig, git_root: str) -> list[str]:
         test_dir = os.path.join(git_root, "tests", "scitex", config.module)
         if not os.path.isdir(test_dir):
             test_dir = os.path.join(git_root, "tests", config.module)
-        if not os.path.isdir(test_dir):
-            test_dir = os.path.join(git_root, "tests")
+        # Preserve an explicit request: pytest reports missing paths as errors.
+        # Falling back to tests/ here would run unrelated tests instead.
         args.append(test_dir)
     else:
         args.append(os.path.join(git_root, "tests"))
