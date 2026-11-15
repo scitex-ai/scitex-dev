@@ -33,7 +33,14 @@ def is_script(filepath: str, config=None) -> bool:
     # Check if file is inside a library directory (e.g., src/)
     parts = path.parts
     for lib_dir in config.library_dirs:
+        if not lib_dir:
+            continue
         if lib_dir in parts:
+            return False
+        library = Path(lib_dir)
+        if (library.is_absolute() or library == Path(".")) and (
+            path.resolve().is_relative_to(library.resolve())
+        ):
             return False
 
     # Check if file is inside a script directory (e.g., scripts/)
