@@ -10,6 +10,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Correct legacy HPC test-runner guidance for failed submissions, saved job IDs,
+  unknown states, polling deadlines and environment variable names. Split local
+  and HPC guides into linked skills within the existing leaf-size budgets.
+
 - Keep explicit local test-module selection when the path is missing, so pytest
   reports an error instead of silently running the entire project test suite.
   Preserve valid path precedence, options and test-failure exit codes.
