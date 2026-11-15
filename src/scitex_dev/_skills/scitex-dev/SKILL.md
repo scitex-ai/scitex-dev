@@ -40,7 +40,7 @@ interfaces:
 - [14_ecosystem.md](14_ecosystem.md) — Package registry, sync_local, sync_all, sync_host, pull_local
 - [15_rename.md](15_rename.md) — bulk_rename, preview_rename, execute_rename
 - [16_docs-search.md](16_docs-search.md) — get_docs, build_docs, search_docs, search
-- [17_test-runner.md](17_test-runner.md) — run_local, run_hpc_sbatch, poll_hpc_job, fetch_hpc_result
+- [17_test-runner.md](17_test-runner.md) — TestConfig and local pytest selection
 - [18_full-update.md](18_full-update.md) — Source-owned release qualification and protected-main publication
 - [19_release-deploy.md](19_release-deploy.md) — Leaf-owned deployment and installed-interface verification
 
@@ -75,6 +75,7 @@ interfaces:
 - [41_agent-setup.md](41_agent-setup.md) — Leaf-owned MCP setup, metadata discovery and skill projection verification
 
 - [42_context-discovery.md](42_context-discovery.md) — Upstream selective MCP discovery and metadata-only context accounting
+- [43_hpc-test-runner.md](43_hpc-test-runner.md) — Legacy Slurm sync, submission, polling and results
 
 ## Quick Reference
 
