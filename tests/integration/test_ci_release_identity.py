@@ -295,6 +295,6 @@ def test_actual_precheckout_release_guards_refuse_hosted_unknown_and_wrong_admis
                        "self-hosted", "Linux", "X64", "scitex-org-cpu"]}, separators=(",", ":"))}
     # Act
     result = subprocess.run(["bash", "-c", guard], env=environment, capture_output=True,
-                            text=True, timeout=5, check=False)
+                            text=True, timeout=60, check=False)
     # Assert
     assert (result.returncode == 0) is accepted

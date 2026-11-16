@@ -333,10 +333,12 @@ def store_in_a_schema_whose_table_names_exist_elsewhere(two_schemas):
     from scitex_dev.store import host_store
 
     base, decoy, target = two_schemas
-    os.environ["SCITEX_STORE_DSN"] = f"{base}?options=-csearch_path%3D{decoy}"
+    # The throwaway cluster's DSN already has a query (?host=<socket>).
+    joiner = "&" if "?" in base else "?"
+    os.environ["SCITEX_STORE_DSN"] = f"{base}{joiner}options=-csearch_path%3D{decoy}"
     _open(host_store(pkg="test_probe", name="probe_blocks")).close()
 
-    os.environ["SCITEX_STORE_DSN"] = f"{base}?options=-csearch_path%3D{target}"
+    os.environ["SCITEX_STORE_DSN"] = f"{base}{joiner}options=-csearch_path%3D{target}"
     opened = _open(host_store(pkg="test_probe", name="probe_blocks"))
     try:
         yield opened

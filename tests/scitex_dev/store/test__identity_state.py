@@ -30,11 +30,11 @@ import pytest
 
 from scitex_dev.store import NEW_RECORD, Store, StoreTarget, WriterPolicy
 
-from .conftest import BASE_DSN
+from .conftest import scoped_dsn
 
 
 def _open(schema_name: str, card_schema, node: str) -> Store:
-    dsn = f"{BASE_DSN}?options=-csearch_path%3D{schema_name}"
+    dsn = scoped_dsn(schema_name)
     return Store(
         StoreTarget.postgres(dsn, pkg="cards"),
         card_schema,
