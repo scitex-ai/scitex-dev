@@ -2,7 +2,7 @@
 description: |
   [TOPIC] Scitexification Stage 2 — Session + config
   [DETAILS] Stage 2 of the 5-stage scitexification arc: the script
-  entry-point becomes `@stx.session.start(...)`; magic numbers and
+  entry-point becomes an `@stx.session`-decorated `main`; magic numbers and
   hard-coded paths become `CONFIG.<KEY>` lookups against `config/*.yaml`
   (deep-merged); ad-hoc `print` becomes the session logger. Once stage 2
   lands, every later session run gets a dated output dir, a per-run
@@ -16,7 +16,7 @@ tags: [scitexification, scitexification-session-config]
 # Stage 2 — Session + config
 
 The structural step. The script's `if __name__ == "__main__": main()`
-becomes an `@stx.session.start(...)`-decorated `main`; magic numbers move
+becomes an `@stx.session`-decorated `main`; magic numbers move
 to `config/*.yaml` and are read as `CONFIG.<KEY>`; bare `print` calls
 become the injected `logger`. The program's *shape* does not change — its
 entry-point and its parameter surface do.
@@ -31,7 +31,7 @@ entry-point and its parameter surface do.
 ```python
 import scitex as stx
 
-@stx.session.start
+@stx.session
 def main(CONFIG=stx.session.INJECTED, logger=stx.session.INJECTED,
          plt=stx.session.INJECTED, COLORS=stx.session.INJECTED,
          rngg=stx.session.INJECTED):
@@ -40,8 +40,17 @@ def main(CONFIG=stx.session.INJECTED, logger=stx.session.INJECTED,
     logger.info(f"loaded {len(df)} rows")
     ...
     return 0
+
+if __name__ == "__main__":
+    main()
 ```
 
+- Use the bare decorator `@stx.session`. Do **not** write
+  `@stx.session.start` — `start` is an internal, deprecated low-level
+  function (`start(sys, plt, ...)`), not a decorator; it binds your
+  `main` to its `sys` parameter.
+- Defaults are `stx.session.INJECTED`. The old top-level `stx.INJECTED`
+  is deprecated (it emits a `DeprecationWarning`).
 - **Minimum** injection is `CONFIG` + `logger`; the full five-tuple
   (`CONFIG, logger, plt, COLORS, rngg`) is supported and recommended —
   `plt` is the session-bound `stx.plt` (Stage 3), `rngg` the seeded RNG
@@ -111,7 +120,7 @@ stx.io.load(eval(CONFIG.PATH.RAW_CSV))   # PATH values are f-strings → eval
 | `argparse` / `sys.argv` flags | move defaults to `config/PARAMS.yaml`; keep only true *invocation* flags |
 | module-scope `MAGIC = 0.5` | `CONFIG.MAGIC` (one YAML line) |
 | `hydra` / `gin` config | port the resolved values into `config/*.yaml`; drop the framework |
-| `click` CLI | the `@stx.session.start` docstring + CONFIG replaces most of it |
+| `click` CLI | the `@stx.session` docstring + CONFIG replaces most of it |
 | `logging.getLogger(...)` / `print` | the injected `logger` (`.info/.warning/.error`) |
 
 Don't run two config systems at once: either fully on `CONFIG` or, for a
@@ -126,7 +135,7 @@ Side-by-side comparison (illustrative text, not a runnable script):
 ```text
 # BEFORE                                    # AFTER (stage 2)
 THRESH = 0.5                                 # config/PARAMS.yaml: THRESHOLD: 0.5
-def main():                                  @stx.session.start
+def main():                                  @stx.session
     df = pd.read_csv("data/raw.csv")         def main(CONFIG=stx.session.INJECTED,
     print("loaded", len(df))                          logger=stx.session.INJECTED):
     ...                                          df = stx.io.load(eval(CONFIG.PATH.RAW_CSV))
@@ -140,7 +149,7 @@ parameter/logging layers moved.
 
 ## Follow-up
 
-- Full `scitex_session` surface (the `@stx.session.start` signature,
+- Full `scitex_session` surface (the `@stx.session` decorator,
   INJECTED params, `SDIR_OUT`/`SDIR_RUN`, YAML deep-merge + CLI/env
   overrides, lifecycle hooks) → **`scitex-session`'s own SKILL.md**.
 - Stage 1 ([`01_io-patterns.md`](01_io-patterns.md)) is the precondition —

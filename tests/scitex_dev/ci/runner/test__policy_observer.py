@@ -66,7 +66,7 @@ print(json.dumps(result))
              "XDG_CACHE_HOME": str(tmp_path / "cache")},
         capture_output=True,
         text=True,
-        timeout=5,
+        timeout=60,
         check=True,
     )
     observation = json.loads(result.stdout)

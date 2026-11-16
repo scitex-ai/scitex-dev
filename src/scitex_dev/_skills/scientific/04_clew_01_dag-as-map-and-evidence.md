@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] Clew DAG — two modes of the same data structure
-  [DETAILS] Conceptual framing for using `scitex-clew` in a research project. The same SHA-256-linked DAG is exposed in two modes — *map* (live, read-write, agents and authors navigate by it during build/exploration) and *evidence* (post-hoc, read-only, reviewers verify the minimal source-to-claim chain). Read this first when adopting Clew on any new project; the procedural playbook is in `04_clew_02_translation-playbook.md`. Use when explaining to collaborators what Clew "is", or when deciding which APIs to call (`add_claim`/`chain` vs `dag`/`rerun`).
+  [DETAILS] Conceptual framing for using `scitex-clew` in a research project. The same SHA-256-linked DAG is exposed in two modes — *map* (live, read-write, agents and authors navigate by it during build/exploration) and *evidence* (post-hoc, read-only, reviewers verify the minimal source-to-claim chain). Read this first when adopting Clew on any new project; the procedural playbook is `06_scitexification/` (stage 4: `04_repro-clew.md`) and the project skeleton is `04_clew_03_translation-template.md`. Use when explaining to collaborators what Clew "is", or when deciding which APIs to call (`add_claim`/`chain` vs `dag`/`rerun`).
 tags: [scitex-scientific-clew-dag-as-map-and-evidence]
 ---
 
@@ -79,8 +79,7 @@ The evidence mode is what makes the same substrate *useful at submission*
 
 ## Related
 
-- [04_clew_02_translation-playbook.md](04_clew_02_translation-playbook.md) — universal agent prompt that operationalises both modes
+- [06_scitexification/SKILL.md](06_scitexification/SKILL.md) — the translation playbook that operationalises both modes (stage 4: claims + provenance)
 - [04_clew_03_translation-template.md](04_clew_03_translation-template.md) — per-project translation template
-- [04_clew_04_translation-notebook-delta.md](04_clew_04_translation-notebook-delta.md) — notebook-cohort delta (BixBench-style)
 - [02_research-project_07_config-and-parameters.md](02_research-project_07_config-and-parameters.md) — `@stx.session` and the `CONFIG` object
 - `scitex-clew/_skills/scitex-clew/` — package-specific API and CLI references

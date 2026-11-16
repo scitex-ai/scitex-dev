@@ -36,11 +36,18 @@ from scitex_dev.store import NEW_RECORD, Store, sync
 
 
 def _fill(store: Store, count: int, prefix: str = "c") -> None:
-    for index in range(count):
-        store.put(
-            {"id": f"{prefix}{index}", "status": "open"},
-            expected_revision=NEW_RECORD,
-        )
+    # ONE durable commit for the whole fill, via the store's own batch().
+    # Unbatched, each put is its own COMMIT, and 2,159 synchronous commits
+    # are bound by fsync latency: 15-78 s locally under CPU load and past the
+    # 300 s pytest-timeout on a shared CI runner (stack: waiting in COMMIT).
+    # Every row is still a real, committed put before sync() runs; only the
+    # number of fsyncs changes, which none of these tests is about.
+    with store.batch():
+        for index in range(count):
+            store.put(
+                {"id": f"{prefix}{index}", "status": "open"},
+                expected_revision=NEW_RECORD,
+            )
 
 
 # -- door 1: the peer-store door (the 2,159) ------------------------------

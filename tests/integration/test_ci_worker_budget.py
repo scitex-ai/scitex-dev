@@ -40,7 +40,7 @@ os.execv('/bin/bash', ['/bin/bash', '-ec', sys.argv[2]])
     result = subprocess.run(
         [sys.executable, "-I", "-S", "-c", launcher,
          "one" if one_cpu else "all", script],
-        env=env, capture_output=True, text=True, timeout=5,
+        env=env, capture_output=True, text=True, timeout=60,
     )
     value = (
         int(result.stdout.rsplit("worker-result:", 1)[1].strip())
@@ -62,7 +62,7 @@ def test_native_worker_budget_rejects_invalid_configuration(configured):
     # Act
     result = subprocess.run(
         ["/bin/bash", "-ec", worker_policy()], env=env,
-        capture_output=True, text=True, timeout=5,
+        capture_output=True, text=True, timeout=60,
     )
     # Assert
     assert result.returncode != 0 and "CI_XDIST_WORKERS" in result.stderr

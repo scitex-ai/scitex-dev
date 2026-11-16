@@ -5,7 +5,7 @@
 
 The cohort pre-submission hook calls::
 
-    scitex-dev gate --stage=pre-submission <capsule-workdir> --json
+    scitex-dev gate --stage=pre-submission <project-workdir> --json
 
 and blocks the submit on exit code 2 (a check failed AND is enforced in
 ``.scitex/dev/config.yaml``), rendering each finding's ``fix_hint`` to the
@@ -32,8 +32,8 @@ def register_gate_command(main_group: click.Group) -> None:
                 "`scitex_dev.gate.checks` entry-point group; a failed "
                 "check BLOCKS (exit 2) only when its id is under "
                 "`gate.enforce` in `.scitex/dev/config.yaml` "
-                "(warn-default). The cohort pre-submission hook calls "
-                "`{prog} gate --stage=pre-submission <capsule-workdir> "
+                "(warn-default). A project's pre-submission hook calls "
+                "`{prog} gate --stage=pre-submission <project-workdir> "
                 "--json` and blocks the submit on exit code 2, "
                 "rendering each finding's fix_hint to the solver. Exit "
                 "0 = pass or advisory-only failures; exit 1 = usage "
@@ -41,7 +41,7 @@ def register_gate_command(main_group: click.Group) -> None:
             ),
             examples=(
                 Example(
-                    "{prog} gate --stage=pre-submission ./capsule-007 --json",
+                    "{prog} gate --stage=pre-submission ./my-project --json",
                     "Run pre-submission checks as JSON.",
                 ),
                 Example("{prog} gate --list", "List registered checks."),

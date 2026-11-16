@@ -146,7 +146,7 @@ The algorithm (`train`) is untouched; only the I/O call sites moved.
   semantics, `verbose=`, error handling) → **`scitex-io`'s own SKILL.md**
   (this chapter teaches *which* call to reach for, not the full API).
 - Stage 2 ([`02_session-config.md`](02_session-config.md)) wraps the
-  entry-point in `@stx.session.start(...)` so these I/O calls land under
+  entry-point in `@stx.session` so these I/O calls land under
   a session-managed, dated output root automatically.
 
 See also: [`00_playbook.md`](00_playbook.md) (universal pre-flight +

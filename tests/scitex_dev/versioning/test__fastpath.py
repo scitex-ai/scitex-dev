@@ -20,6 +20,7 @@ never fails the build on its own.
 
 from __future__ import annotations
 
+import ast
 import json
 import subprocess
 import sys
@@ -330,32 +331,94 @@ def test_standalone_load_never_imports_scitex_dev(standalone):
     assert leaked == [], f"standalone load dragged in {leaked}"
 
 
-def test_standalone_load_costs_less_than_the_package_it_replaces(standalone):
-    """A tripwire with a MEANING, not a stopwatch with a guessed number.
+# The fastpath's declared top-level imports. If this list changes, the
+# module's import block changed, and the reviewer should see it change here.
+DECLARED_IMPORTS = ("__future__", "json", "os", "time")
 
-    The threshold is 100 ms because that is the scale of the thing this
-    module exists to avoid: importing the package costs ~150-250 ms. Crossing
-    100 ms therefore means the cheap path stopped being meaningfully cheaper
-    than the expensive one — the only timing regression worth failing a build
-    over.
 
-    It is deliberately NOT tuned to the observed number. Measured in a plain
-    interpreter the load is ~0.6-5 ms, but this suite runs under coverage
-    tracing on a loaded WSL2 box, where the same work reports 25-40 ms. A
-    threshold set near that would fail on machine load rather than on a code
-    change, and a test that fails for reasons unrelated to the code gets
-    deleted — taking the real signal with it.
+def _modules_added_by(body: str) -> list:
+    """Modules a clean `-S` interpreter gains while running `body`.
 
-    The structural `sys.modules` assertions above are the actual guarantee.
-    This only catches a stdlib import (urllib, say) heavy enough to matter
-    yet invisible to them.
+    `-S` skips `site`, so a venv `.pth` cannot pre-load json/re/os and make
+    the comparison vacuous. The report is written with `repr` so the harness
+    itself imports nothing before the snapshot.
+    """
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-S",
+            "-c",
+            f"import sys\nbefore = set(sys.modules)\n{body}\n"
+            "print(repr(sorted(set(sys.modules) - before)))",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert proc.returncode == 0, f"subprocess failed:\n{proc.stderr}"
+    return ast.literal_eval(proc.stdout.strip().splitlines()[-1])
+
+
+@pytest.fixture(scope="module")
+def import_closure(tmp_path_factory):
+    """What the standalone load pulls in vs what its declared imports pull in.
+
+    Both are measured the same way in fresh interpreters on THIS Python, so
+    the stdlib's own version-to-version import graph (json -> re -> enum ...)
+    is never hard-coded here.
+    """
+    cache = _write(
+        tmp_path_factory.mktemp("closure") / "c.json",
+        _payload(at=time.time() - 60),
+    )
+    declared = _modules_added_by(
+        "; ".join(f"import {name}" for name in DECLARED_IMPORTS)
+    )
+    actual = _modules_added_by(
+        "import importlib.util; "
+        f"spec = importlib.util.spec_from_file_location('_fp', {str(FASTPATH_SRC)!r}); "
+        "fp = importlib.util.module_from_spec(spec); "
+        "spec.loader.exec_module(fp); "
+        f"fp.cache_is_fresh({str(cache)!r})"
+    )
+    # importlib.util is the harness's own loader, not the fastpath's cost.
+    harness = _modules_added_by("import importlib.util")
+    return {"declared": declared, "actual": actual, "harness": harness}
+
+
+def test_import_closure_sees_the_fastpath_load_json(import_closure):
+    """Guards the next test: an empty measurement would make it vacuous."""
+    # Arrange
+    verdict = import_closure
+    # Act
+    seen = "json" in verdict["actual"]
+    # Assert
+    assert seen is True
+
+
+def test_standalone_load_imports_nothing_beyond_its_declared_stdlib(import_closure):
+    """The cheap path must not grow a heavy import — asserted, not timed.
+
+    This used to be an absolute wall-clock budget (`< 100 ms`), meant to catch
+    "a stdlib import (urllib, say) heavy enough to matter yet invisible to"
+    the `scitex_dev.*` checks above. On a loaded shared CI runner the same
+    unchanged code measured 141 ms and failed the build on machine load. A
+    relative timing does not rescue it either: the package became lazy
+    (`import scitex_dev` is now ~0.5 ms), so "cheaper than the package" no
+    longer separates anything. What the budget was FOR is a structural fact:
+    the standalone load may only import what its own import block declares
+    (plus that stdlib's transitive closure). Any new import — urllib, ssl,
+    pathlib at module level — shows up here by name, under any load.
+    The wall-clock is still printed by the `standalone` fixture.
     """
     # Arrange
-    verdict = standalone
+    verdict = import_closure
+    allowed = set(verdict["declared"]) | set(verdict["harness"])
     # Act
-    elapsed = verdict["elapsed_ms"]
+    extra = sorted(set(verdict["actual"]) - allowed)
     # Assert
-    assert elapsed < 100, f"fastpath standalone load regressed to {elapsed:.1f} ms"
+    assert extra == [], f"fastpath standalone load now also imports {extra}"
 
 
 @pytest.fixture(scope="module")

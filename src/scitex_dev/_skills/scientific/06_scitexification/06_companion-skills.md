@@ -19,7 +19,7 @@ four canonical companions:
 
 | Companion skill | What it provides for scitexification |
 |---|---|
-| **scitex.session** | The `@stx.session.start(...)` decorator, the CONFIG injection contract (`CONFIG`, `COLORS`, `logger`, `plt`, `rngg`), `SDIR_OUT` / `SDIR_RUN` semantics, YAML deep-merge + CLI/env overrides. **Required for stage 2** (session + config). |
+| **scitex.session** | The `@stx.session` decorator, the CONFIG injection contract (`CONFIG`, `COLORS`, `logger`, `plt`, `rngg`), `SDIR_OUT` / `SDIR_RUN` semantics, YAML deep-merge + CLI/env overrides. **Required for stage 2** (session + config). |
 | **scitex.io** | `stx.io.save(...)` / `stx.io.load(...)` with the per-extension saver/loader registry, the `symlink_to=eval(CONFIG.PATH.X)` cross-stage I/O pattern, post-save / post-load hook registration. **Required for stage 1** (I/O patterns) and **stage 4** (claims save/load). |
 | **scitex.plt + figrecipe** | `stx.plt` figure objects, FigRecipe publication-quality primitives, the `stx.io.save(fig, ...)` DAG-binding for figures. **Required for stage 3** (figures). |
 | **scitex.clew** | Claim registration, evidence-binding (the DAG that anchors a claim to a source file), `list_claims()` / `verify_claim()` / `render_dag()` primitives, validity-chain semantics. **Required for stage 4** (claims + provenance) and load-bearing for the honest-grounding principle below. |
@@ -64,8 +64,8 @@ double-count the same content. The contract is:
 - The skills export tool mounts `~/.claude/skills/scitex/scitexification/`
   with **every sibling `.md` under the `06_scitexification/` directory
   in scitex-dev's `_skills/scientific/`** — including this `00_playbook.md`,
-  the (future) `01_io-patterns.md` … `05_naming-and-numbering.md`
-  chapters, and the umbrella `SKILL.md` itself.
+  the stage chapters `01_io-patterns.md` … `05_naming-and-numbering.md`,
+  the supporting chapters `06`–`13`, and the umbrella `SKILL.md` itself.
 - An agent that loads `scitexification` therefore gets both the SKILL.md
   overview AND this playbook in its skills context, without needing to
   list the narrower tag separately.

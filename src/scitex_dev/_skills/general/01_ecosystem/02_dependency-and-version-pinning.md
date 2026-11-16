@@ -3,7 +3,7 @@ description: |
   [TOPIC] Ecosystem dependency and version pinning
   [DETAILS] Declare required runtime providers, preserve standalone leaf use,
   avoid dependency cycles and qualify resolved profiles. Use compatible leaf
-  floors and the umbrella's exact member pins under the release/pin doctrine.
+  floors everywhere (umbrella included); exact versions only in lock files.
   Distinguish current package profiles from the target extra/group policy.
 tags: [scitex-general-ecosystem-dependency-and-version-pinning]
 ---
@@ -14,7 +14,7 @@ Use [package ownership](01_upstream-and-downstream.md) to choose the provider
 of a capability. Inspect its source, declared dependencies and supported
 installation profile before changing a dependency or recommending a command.
 The [release and pin doctrine](../05_development/14_release-and-pin-doctrine.md)
-controls coordinated release and umbrella pinning.
+controls coordinated release and pinning.
 
 ## Declare the actual runtime graph
 
@@ -34,23 +34,25 @@ Avoid dependency cycles and keep the implementation with its domain owner.
 | Package to Dev | Distinguish runtime discovery/tooling from test-only utilities; declare the applicable dependency. |
 | Leaf to umbrella | Keep local domain operations independent of the umbrella; review example/test dependencies separately. |
 | Leaf application to Hub | Keep domain behavior reusable outside the service; use SDK contracts and thin host adapters for identity/project integration. |
-| Umbrella to members | Delegate to owning providers and exact-pin the qualified coordinated cohort. |
+| Umbrella to members | Delegate to owning providers; declare compatible `>=` floors (no `==` member pins). |
 
 A lower bound tells the installer which versions it may select. It does not
 prove that every selected version combination works. An import-only smoke
 check or a compatible dependency graph also does not establish behavior.
 
-## Minimum floors and deterministic pins
+## Minimum floors and lock files
 
 A leaf generally declares a compatible minimum for each required SciTeX
 provider. Raise that floor when its implementation starts using an interface
 introduced by a newer provider version, and verify the documented minimum
 where supported by the owning test procedure.
 
-The umbrella is the deterministic pin point: it exact-pins coordinated SciTeX
-members. Do not apply a blanket ban on exact pins to the umbrella, or copy its
-entire exact-pinned cohort into every leaf. A standalone leaf can resolve a
-newer compatible provider; an umbrella installation selects its qualified pins.
+The umbrella follows the same rule: compatible `>=` floors for its members, no
+`==` member pins ([scitex-python#393](https://github.com/scitex-ai/scitex-python/pull/393)). Exact `==` pins in library
+metadata act as ceilings: they silently downgraded develop components and made
+a develop `scitex-session` uninstallable alongside the umbrella. Exact,
+reproducible versions belong in the experiment's or deployment's lock file
+(`uv.lock`, `requirements.lock`).
 
 Use the release/pin doctrine for third-party bounds, deployment pins and
 coordinated waves. Document a compatibility or security bound with its reason
@@ -82,7 +84,8 @@ completeness; source and installed evidence remain necessary.
 1. Implement and test the capability in its owning provider.
 2. Qualify and publish through that provider's normal release procedure.
 3. Update consumers that use the new interface, including their minimum floors.
-4. Refresh the umbrella's exact pins only against published, qualified members.
+4. Raise the umbrella's floors only when it relies on a new member interface;
+   refresh experiment/deployment lock files against published, qualified members.
 5. Resolve and test the intended consumer cohort, then qualify the artifact and
    any host rollout separately.
 
@@ -95,7 +98,7 @@ published versions and failed qualification evidence.
 
 - Identify the owning runtime capability and justify every dependency.
 - Keep leaf domain operation independent of the umbrella and hosted service.
-- Check peer minima and the umbrella's exact coordinated pins.
+- Check peer minima (umbrella included) and the consumer's lock file.
 - Inspect the actual optional, test and documentation profiles.
 - Verify normal resolution, required behavior and error cases in owned fixtures.
 - Record the source, installed versions, artifacts and tested interface scope.

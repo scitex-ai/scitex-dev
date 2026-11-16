@@ -1,7 +1,7 @@
 ---
 name: scitexification
 description: |
-  [WHAT] Scitexification — the verb: translate existing code (a script, a notebook, a small repo, a published-paper supplement) into SciTeX form so it gains the ecosystem's session-managed I/O, scitex-clew evidence binding, publication-quality figures, and project structure. Single source of truth for the migration act itself, package-agnostic; per-package patterns delegate to the per-pkg SKILL.md, and Clew-specific specialization layers on top of this skill via `scientific/04_clew_*`.
+  [WHAT] Scitexification — the verb: translate existing code (a script, a notebook, a small repo, a published-paper supplement) into SciTeX form so it gains the ecosystem's session-managed I/O, scitex-clew evidence binding, publication-quality figures, and project structure. Single source of truth for the migration act itself, package-agnostic and project-agnostic; per-package patterns delegate to the per-pkg SKILL.md, and Clew background lives in `scientific/04_clew_01` (DAG as map/evidence) and `scientific/04_clew_03` (project skeleton).
   [WHEN] You have existing code that works and want to bring it into the SciTeX ecosystem with minimal rewrite, OR an agent is asked to translate a research bundle, paper supplement, or one-off notebook into a SciTeX project. Load this skill BEFORE picking the per-chapter topic.
   [HOW] Read this SKILL.md first to orient on the 5-stage translation arc; then drill into the topic chapter you need next (`01_io-patterns`, `02_session-config`, `03_plt-patterns`, `04_repro-clew`, `05_naming-and-numbering`). Per-package details (full stx.io API surface, figrecipe figure types, etc.) live in the corresponding per-pkg SKILL.md — this skill references them rather than restating.
 tags: [scitexification]
@@ -45,9 +45,28 @@ package teams own the surface area they ship.
 > every claim, ground where possible, and when ungroundable include the
 > claim with `null` + a reason, NEVER silently omit" — as a general
 > scientific-integrity norm independent of any specific evaluator. The
-> per-chapter files (01–05) drill into stage-specific patterns; the
-> `04_clew_*` siblings are clew-tracked specialisations that compose on
-> top of the universal playbook.
+> per-chapter files (01–05) drill into stage-specific patterns.
+
+## Newcomer quick start (read in this order)
+
+1. [00_playbook.md](00_playbook.md) — vocabulary, universal inputs
+   (`$SRC`, `$WORKDIR`, optional `$QUESTIONS_OR_GOALS`), what
+   scitexification is and is not.
+2. [07_preflight-and-dispatch.md](07_preflight-and-dispatch.md) — the
+   pre-flight checklist and how to pick a starting phase for *your*
+   source (existing results / notebook / documented recipe / infer).
+3. Stage chapters in order: [01](01_io-patterns.md) →
+   [02](02_session-config.md) (stop here for a runnable project) →
+   [03](03_plt-patterns.md) → [04](04_repro-clew.md) →
+   [05](05_naming-and-numbering.md).
+4. [08_honest-grounding.md](08_honest-grounding.md) and
+   [09_done-and-constraints.md](09_done-and-constraints.md) — when you
+   are done, and what you must never do.
+
+Everything here applies to any real-world research project. Anything
+specific to one study, dataset, or evaluation harness (scoring rules,
+run launchers, held-out answers) belongs in that project's own repo or
+project-private skill, not in this skill.
 
 ## The 5-stage translation arc
 

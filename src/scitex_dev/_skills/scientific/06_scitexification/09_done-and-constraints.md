@@ -77,11 +77,16 @@ Deliberately out of scope (each has its own dedicated home):
 - **Per-package API surface** (full `stx.io` type matrix, FigRecipe
   figure types, scitex-clew primitives) → the per-pkg SKILL.md in
   `~/.claude/skills/scitex/<pkg>/`.
-- **Clew-specific / experiment-specific specialisation** (evaluator-blind
-  scoring, run dispatch, completion signalling, output/results
-  schemas) → [`../04_clew_*`](../). Read those AFTER this playbook
-  when working in a clew-tracked flow.
+- **Clew background** — what the clew DAG is and a concrete
+  clew-tracked project skeleton →
+  [`../04_clew_01_dag-as-map-and-evidence.md`](../04_clew_01_dag-as-map-and-evidence.md)
+  and
+  [`../04_clew_03_translation-template.md`](../04_clew_03_translation-template.md).
+- **Evaluator- or harness-specific layers** (scoring against reference
+  answers, run launchers, completion signalling, a grader's results
+  schema) → the consuming project's own repo or project-private skill.
+  They are never part of this general skill.
 - **The discovery contract** (consumer-side
   `spec.claude.skills: [scitexification]` auto-loading) — tracked
-  separately in the SAC ↔ scitex-dev contract thread; not a
-  scitexification concern.
+  separately in scitex-dev's skills tooling; not a scitexification
+  concern.

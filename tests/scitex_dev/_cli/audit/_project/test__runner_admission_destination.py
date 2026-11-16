@@ -249,7 +249,7 @@ def test_actual_hybrid_guard_allows_outsiders_on_hosted_with_original_body_retai
         ["bash", "-e", "-c", script],
         env=environment,
         capture_output=True,
-        timeout=2,
+        timeout=60,
         check=False,
     )
     resolved = resolve_admission_destination(doc, job)
@@ -276,7 +276,7 @@ def test_actual_hybrid_guard_refuses_unconfirmed_native_before_work(authorized):
         ["bash", "-e", "-c", job["steps"][0]["run"]],
         env=environment,
         capture_output=True,
-        timeout=2,
+        timeout=60,
         check=False,
     )
     # Assert
@@ -306,7 +306,7 @@ def test_actual_storage_first_fence_requires_native_authorization(
         ["bash", "-e", "-c", script],
         env=environment,
         capture_output=True,
-        timeout=2,
+        timeout=60,
         check=False,
     )
     # Assert

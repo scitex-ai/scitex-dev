@@ -35,7 +35,7 @@ from __future__ import annotations
 
 import pytest
 
-from .conftest import BASE_DSN
+from .conftest import scoped_dsn
 
 from scitex_dev.store import (
     FieldKind,
@@ -58,7 +58,7 @@ def probe_schema(pg_schemas) -> str:
 @pytest.fixture
 def store(probe_schema, card_schema) -> Store:
     """A created store, so every object create_sql builds is present."""
-    dsn = f"{BASE_DSN}?options=-csearch_path%3D{probe_schema}"
+    dsn = scoped_dsn(probe_schema)
     store = Store(
         StoreTarget.postgres(dsn, pkg="cards"),
         card_schema,
@@ -186,7 +186,7 @@ def test_reopening_recreates_an_index_that_went_missing(
     # Act
     reopened = Store(
         StoreTarget.postgres(
-            f"{BASE_DSN}?options=-csearch_path%3D{probe_schema}", pkg="cards"
+            scoped_dsn(probe_schema), pkg="cards"
         ),
         card_schema,
         node="node-probe",

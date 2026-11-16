@@ -262,10 +262,10 @@ def run_checks(
     from ._check_path_resolver import check_ps182_rolled_own_path_resolver
 
     check_ps182_rolled_own_path_resolver(repo_root, Violation, violations)
-    # PS-PATH / PS-CLEW / PS-AGENT — paper-scitex-clew MVP lint set.
+    # PS-PATH / PS-CLEW / PS-AGENT — research-project clew lint set.
     # Artifact-gated (only fire when PATH.yaml / clew.add_claim /
     # scripts/agent/ are present); safe to run on every project type.
-    # See PR #97 and operator directive 2026-06-01.
+    # See PR #97.
     from ._check_path_yaml import (
         check_ps_path_001_outer_wrapper,
         check_ps_path_002_bare_string_leaf,
