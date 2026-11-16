@@ -1,4 +1,4 @@
-"""MCP tool registration for scitex-linter."""
+"""MCP tools for the linter engine owned by scitex-dev."""
 
 
 def register_all_tools(mcp) -> None:
@@ -14,22 +14,24 @@ def _register_skills_tools(mcp) -> None:
 
     @mcp.tool()
     def linter_skills_list() -> dict:
-        """Use when you need to see what detailed docs exist for scitex-linter (47 SciTeX convention rules across 7 categories: FM filenames, I imports, IO save/load, P plot, PA path, S style, ST structure)."""
+        """List scitex-dev's bundled linter skill pages and their installed owner metadata."""
         try:
-            from scitex_dev.skills import list_skills
+            from scitex_dev.ecosystem import list_skills
 
-            result = list_skills(package="scitex-linter")
-            return {"success": True, "skills": result.get("scitex-linter", [])}
+            result = list_skills(package="scitex-dev-linter")
+            return {"success": True, "skills": result.get("scitex-dev-linter", [])}
         except ImportError:
             return {"success": False, "error": "scitex-dev not installed"}
 
     @mcp.tool()
     def linter_skills_get(name: str = None) -> dict:
-        """Use when you need to read a specific scitex-linter skill page covering the 47 SciTeX convention rules across 7 categories (FM filenames, I imports, IO save/load, P plot, PA path, S style, ST structure)."""
+        """Read a bundled scitex-dev linter skill by name; omit name for its overview."""
         try:
-            from scitex_dev.skills import get_skill
+            from scitex_dev.ecosystem import get_skill
 
-            content = get_skill(package="scitex-linter", name=name)
+            content = get_skill(
+                package="scitex-dev-linter", name=name, owner="scitex-dev"
+            )
             if content:
                 return {"success": True, "name": name, "content": content}
             return {"success": False, "error": f"Skill '{name}' not found"}

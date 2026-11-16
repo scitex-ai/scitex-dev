@@ -12,7 +12,11 @@ def test_dev_server_lists_and_dispatches_linter_rules():
     async def exercise():
         async with Client(mcp) as client:
             names = {tool.name for tool in await client.list_tools()}
-            assert {"dev_config_show", "linter_check_source", "linter_list_rules"} <= names
+            assert {
+                "dev_config_show",
+                "linter_check_source",
+                "linter_list_rules",
+            } <= names
             result = await client.call_tool("linter_list_rules", {"category": "io"})
             assert not result.is_error
             data = json.loads(result.content[0].text)

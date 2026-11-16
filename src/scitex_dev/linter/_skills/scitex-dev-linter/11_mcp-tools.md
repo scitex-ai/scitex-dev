@@ -1,25 +1,28 @@
 ---
 description: |
-  [TOPIC] Mcp Tools
-  [DETAILS] MCP tools for AI agents — check code, list rules.
+  [TOPIC] Linter MCP tools
+  [DETAILS] Discover rules, check source and read linter skills through scitex-dev.
 tags: [scitex-dev-linter-mcp-tools]
 ---
 
-# MCP Tools
+# Linter MCP tools
 
-| Tool | Description |
-|------|-------------|
-| `linter_check` | Lint a file or directory; returns per-violation `(rule_id, line, message)` |
-| `linter_check_source` | Lint an in-memory Python source string (no file needed) |
-| `linter_list_rules` | Browse the 47-rule catalog, optionally filtered by `category` (I/IO/P/PA/S/FM/ST) |
+The linter engine is owned by scitex-dev. Its standalone MCP server registers
+the tools below. Through the SciTeX umbrella, each name gains one `dev_` prefix,
+for example `dev_linter_list_rules`.
 
-## Typical usage
+| Standalone Dev name | Purpose |
+| --- | --- |
+| `linter_check` | Lint a file, filtered by severity or category |
+| `linter_check_source` | Lint an in-memory Python source string |
+| `linter_list_rules` | List built-in and installed plugin rules |
+| `linter_skills_list` | List bundled linter skill pages |
+| `linter_skills_get` | Read one linter skill; omit `name` for the overview |
 
-```
-linter_list_rules(category="IO")   # show STX-IO* rules
-linter_check(path="src/")           # lint a whole tree
-linter_check_source(source="...")   # lint a snippet before committing
-```
+Call `linter_list_rules` for current IDs, categories and severities instead of
+assuming a fixed rule count. For example, `category="io"` filters I/O rules.
+Pass the source text to `linter_check_source` to check a snippet without a file.
 
-Each violation pairs with a rule ID (e.g. `STX-IO001`); look it up with
-`linter_list_rules` to get the full rationale and fix guidance.
+Skills use the `scitex-dev-linter` namespace registered by the scitex-dev
+distribution. Discovery and reads use the shared installed-provider dispatcher;
+there is no dependency on the retired scitex-linter package.

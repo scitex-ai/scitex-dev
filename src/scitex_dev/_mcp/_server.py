@@ -12,6 +12,7 @@ from typing import Any
 from fastmcp import FastMCP
 
 from .._ecosystem._mcp._core import register_docs_tools
+from ..linter._mcp.tools import register_all_tools as _register_linter_tools
 
 mcp = FastMCP(
     name="scitex-dev",
@@ -30,8 +31,6 @@ register_docs_tools(mcp)
 
 # The linter engine belongs to Dev. Register it on the owning server so
 # standalone Dev and the umbrella's dev_ mount expose the same capability.
-from ..linter._mcp.tools import register_all_tools as _register_linter_tools
-
 _register_linter_tools(mcp)
 
 
