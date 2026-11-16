@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Classify auditor output lines against declared `audit.skip-rules`.
 
 ``audit-all`` captures each sub-auditor's stdout/stderr, so masking is
@@ -283,10 +284,14 @@ def render_inventory(report: MaskReport, distribution: str) -> list[str]:
     lines = [
         "",
         INVENTORY_HEADER,
-        f"{distribution}: {report.masked_count} violation(s) masked "
-        f"by {n_rules} declared skip rule(s).",
-        "These are DEFERRED, not fixed — the run is green because a "
-        "campaign owns them, not because the code is clean.",
+        (
+            f"{distribution}: {report.masked_count} violation(s) masked "
+            f"by {n_rules} declared skip rule(s)."
+        ),
+        (
+            "These are DEFERRED, not fixed — the run is green because a "
+            "campaign owns them, not because the code is clean."
+        ),
     ]
     for entry in report.skip_rules:
         hits = report.masked.get(entry.rule, [])
@@ -374,23 +379,21 @@ def resolve_skip_rules(distributions, explicit_path):
     resolve whose config is malformed raises, and the caller exits 2. A
     deferral config we cannot trust must not be graded as if the repo
     had declared no deferrals at all.
+
+    The target resolver returns ``(None, None)`` for an unresolved target.
+    Unexpected failures propagate instead of becoming empty declarations.
     """
     from pathlib import Path
 
     from ...audit._config._skip_rules import load_skip_rules
+    from ...audit._target_tree import resolve_target_tree
 
     out: dict[str, list] = {}
     for distribution in distributions:
         if explicit_path:
             root = Path(explicit_path)
         else:
-            try:
-                from ...audit._target_tree import resolve_target_tree
-
-                root, _ = resolve_target_tree(distribution, None)
-            except Exception:
-                out[distribution] = []
-                continue
+            root, _ = resolve_target_tree(distribution, None)
         out[distribution] = load_skip_rules(Path(root)) if root is not None else []
     return out
 
