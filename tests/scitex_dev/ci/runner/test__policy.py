@@ -51,7 +51,7 @@ def test_unrestricted_group_never_gains_authorization_from_busy_or_labels(field,
     g = group([])
     g["restricted_to_workflows"] = False
     # Act
-    result = _policy.assess_pool(pool(), [g], {6: [1, 2, 3, 4, 5]}, expected_workflows=[])
+    result = _policy.assess_pool(pool(), [g], {6: list(range(1, len(_policy.COMPANY_RUNNERS) + 1))}, expected_workflows=[])
     value = len(result["groups"]) if field == "groups" else result.get(field, result["activity"].get(field))
     # Assert
     assert value == expected
@@ -61,7 +61,7 @@ def test_reviewed_exact_workflows_and_online_registration_are_qualified():
     # Arrange
     ref = "scitex-ai/.github/.github/workflows/pytest-matrix.yml@" + "a" * 40
     # Act
-    result = _policy.assess_pool(pool(), [group([ref])], {6: [1, 2, 3, 4, 5]}, expected_workflows=[ref])
+    result = _policy.assess_pool(pool(), [group([ref])], {6: list(range(1, len(_policy.COMPANY_RUNNERS) + 1))}, expected_workflows=[ref])
     # Assert
     assert result["state"] == "conformant"
 
@@ -74,7 +74,7 @@ def test_group_identity_and_repository_availability_match_admission_destination(
     g = group([ref])
     g[field] = value
     # Act
-    result = _policy.assess_pool(pool(), [g], {g["id"]: [1, 2, 3, 4, 5]}, expected_workflows=[ref])
+    result = _policy.assess_pool(pool(), [g], {g["id"]: list(range(1, len(_policy.COMPANY_RUNNERS) + 1))}, expected_workflows=[ref])
     # Assert
     assert result["state"] == "violation"
 
@@ -85,7 +85,7 @@ def test_mutable_or_foreign_refs_remain_unqualified(refs):
     # Arrange
     g = group(refs)
     # Act
-    result = _policy.assess_pool(pool(), [g], {6: [1, 2, 3, 4, 5]}, expected_workflows=refs)
+    result = _policy.assess_pool(pool(), [g], {6: list(range(1, len(_policy.COMPANY_RUNNERS) + 1))}, expected_workflows=refs)
     # Assert
     assert result["state"] == "violation"
 
@@ -97,7 +97,7 @@ def test_default_or_unknown_group_cannot_authorize_company_resources(flag, state
     declared = group(refs)
     declared["default"] = flag
     # Act
-    result = _policy.assess_pool(pool(), [declared], {6: [1, 2, 3, 4, 5]}, expected_workflows=refs)
+    result = _policy.assess_pool(pool(), [declared], {6: list(range(1, len(_policy.COMPANY_RUNNERS) + 1))}, expected_workflows=refs)
     # Assert
     assert result["state"] == state
 
@@ -107,7 +107,7 @@ def test_temporary_company_group_is_not_the_final_organization_pool():
     refs = ["scitex-ai/.github/.github/workflows/runner-health.yml@refs/heads/main"]
     declared = {**group(refs), "id": 8, "name": "scitex-company-ci"}
     # Act
-    result = _policy.assess_pool(pool(), [declared], {8: [1, 2, 3, 4, 5]}, expected_workflows=refs)
+    result = _policy.assess_pool(pool(), [declared], {8: list(range(1, len(_policy.COMPANY_RUNNERS) + 1))}, expected_workflows=refs)
     # Assert
     assert result["state"] == "violation"
 
@@ -409,7 +409,7 @@ def test_protected_main_literal_is_accepted_only_with_an_explicit_contract():
     # Arrange
     refs = list(_policy_contract.BRANCH_SELECTION)
     # Act
-    result = _policy.assess_pool(pool(), [group(refs)], {6: [1, 2, 3, 4, 5]}, expected_workflows=refs)
+    result = _policy.assess_pool(pool(), [group(refs)], {6: list(range(1, len(_policy.COMPANY_RUNNERS) + 1))}, expected_workflows=refs)
     # Assert
     assert result["state"] == "conformant"
 
@@ -418,7 +418,7 @@ def test_duplicate_literal_ref_does_not_gain_pool_authorization():
     # Arrange
     refs = list(_policy_contract.BRANCH_SELECTION)
     # Act
-    result = _policy.assess_pool(pool(), [group(refs + refs[:1])], {6: [1, 2, 3, 4, 5]}, expected_workflows=refs)
+    result = _policy.assess_pool(pool(), [group(refs + refs[:1])], {6: list(range(1, len(_policy.COMPANY_RUNNERS) + 1))}, expected_workflows=refs)
     # Assert
     assert result["state"] == "violation"
 

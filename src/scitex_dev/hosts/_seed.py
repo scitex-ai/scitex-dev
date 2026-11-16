@@ -227,6 +227,12 @@ hosts:
     runner_labels:
     # Measured 2026-10-02 from the org Actions API: scitex-ci-02.
       - [self-hosted, Linux, X64, scitex-ci, scitex-org-cpu, scitex-local-cpu]
+    # 2026-11-16: seven more org executors on this host, scitex-ci-02-02..08
+    # (actions-runner-org-02..08). Registered 2026-10-08 with the full org label
+    # set (runner _diag), stripped by hand to [scitex-compute-02], then restored
+    # to the scitex-org-cpu pool by the operator. All seven share ONE label
+    # set, so it is ONE destination here (this list is destinations, not a count).
+      - [self-hosted, Linux, X64, scitex-compute-02, scitex-org-cpu]
   scitex-compute-03:
     kind: compute
     ssh_alias: scitex-compute-03
