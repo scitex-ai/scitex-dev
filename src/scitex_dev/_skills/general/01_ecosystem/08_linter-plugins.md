@@ -14,7 +14,7 @@ Lint rules are **owned by the package whose API they enforce**, not by `scitex-d
 
 | Concern | Lives in | Reason |
 |---|---|---|
-| Engine: `Rule` dataclass, AST framework, `lint_source`, plugin loader, CLI, severity machinery | `scitex-dev` (`scitex_dev.linter`) | Most-depended-on dev tool — every leaf can plug in without circular deps. |
+| Engine (the DISPATCHER): `Rule` dataclass, AST framework, `lint_source`, plugin loader, CLI, severity machinery, pragmas (`# stx-allow`, file-level `# stx-allow-file`), rule **scopes**, required **capabilities** | `scitex-dev` (`scitex_dev.linter`) | Most-depended-on dev tool — every leaf can plug in without circular deps. |
 | Rules + their AST checkers (e.g. P006 `scatter(..., s=...)`, IO001 `np.save → stx.io.save`) | The package whose API they discuss (`figrecipe._linter_plugin`, `scitex_io._linter_plugin`, …) | Rule and API change in lockstep — a rename breaks both at the same PR. |
 
 When `scitex-dev linter` runs, it discovers every package that registers a plugin and merges the rule set. Users see a single rule list (`scitex-dev linter list-rules-all`); they don't care which package produced which rule.
@@ -68,8 +68,40 @@ The name (`figure` here) is arbitrary but should be unique across the ecosystem.
 - **`id`** — `STX-<CAT><NNN>` where `<CAT>` is the namespace (`P` plot, `IO` i/o, `S` structure, `FM` figure-mm, `I` import, `PA` path, `ST` stats, `EH` error-handling). Allocate ids in the namespace owned by the package whose API the rule enforces; avoid colliding with engine-shipped ids.
 - **`severity`** — `error` blocks CI; `warning` is the default for lints that flag a real anti-pattern; `info` is a suggestion ("consider X instead").
 - **`requires`** — name of the runtime package that must be importable for the rule to fire. Used to suppress noise on machines where the relevant dep isn't installed (e.g. P006 only fires when `figrecipe` is present).
+- **`scope`** — WHERE the rule may fire (see [Rule scopes](#rule-scopes-and-required-capabilities)). Default `""` = every linted file.
 - **`message`** — one line, present tense, names the offending construct.
 - **`suggestion`** — one line, names the replacement. End with a period.
+
+## Rule scopes and required capabilities
+
+Two engine guarantees every leaf plugin shares, so no leaf re-implements them
+(import from `scitex_dev.linter.spi`; scitex-dev >= 0.63.0):
+
+**`Rule.scope`** — one false-positive gate, applied by the engine to engine
+call rules AND plugin checkers alike, after the whole module is visited:
+
+| `scope` | Fires in |
+|---|---|
+| `""` (`SCOPE_ANY`, default) | every linted file |
+| `"research-script"` (`SCOPE_RESEARCH_SCRIPT`) | research scripts only: a module declaring `@stx.session` / `@stx.module`, or a file under a `script_dirs` entry (`scripts/`) of a `project-type: research` project. Never test files, never library code without an entry point. `spi.is_research_script()` is the same predicate. |
+
+A rule for "research code must not bypass the API" (raw `open()`,
+`Path.write_text`, `shutil.copy`, ...) declares
+`scope=SCOPE_RESEARCH_SCRIPT`; its checker emits unconditionally and the
+engine drops out-of-scope findings. An unknown scope value fails plugin
+loading.
+
+**`capabilities`** — a payload key listing coverage the plugin provides
+(`"capabilities": ["raw-io"]` from scitex-io). The engine requires some for
+a project type (`spi.REQUIRED_CAPABILITIES`, currently
+`research -> raw-io (scitex-io>=0.5.0)`). When no installed plugin declares a
+required capability, linting a file of that project raises
+`LinterPluginError` — a research project never lints "clean" because the
+plugin that owns provenance coverage is missing or too old.
+
+The engine ships **no call->rule or axes-hint tables of its own**:
+`STX-IO*`/`STX-PA*` mappings come from scitex-io, `STX-ST*` from
+scitex-stats, `STX-P*`/`STX-FM*` (and the `axes_hints`) from figrecipe.
 
 ## Tests live with the rule
 
@@ -115,7 +147,7 @@ This is what catches READMEs that *teach* the wrong API — a class of bug nothi
 ## Migration status (2026-Q2)
 
 - **Engine**: `scitex-dev` ships it. The legacy `scitex-linter` package is a thin alias that still works; the `scitex-linter` console script and `python -m scitex_linter` are kept for the soft-migration window.
-- **Plugins**: `figrecipe` ships the `P0xx` (plot) and `FM0xx` + `FIG001` (figure) families — a growing set, so read it live with `scitex-dev linter list-rules --json` instead of trusting an id range quoted here. Other packages with `_linter_plugin.py` declared: `scitex_io`, `scitex_stats`, `scitex_audio`, `scitex_clew`, `scitex_notification`. Engine-shipped (legacy) rules `S*`, `I*`, `IO*`, `PA*`, `ST*`, `EH*` will migrate into their owning packages over subsequent releases.
+- **Plugins**: `figrecipe` ships the `P0xx` (plot) and `FM0xx` + `FIG001` (figure) families — a growing set, so read it live with `scitex-dev linter list-rules --json` instead of trusting an id range quoted here. Other packages with `_linter_plugin.py` declared: `scitex_io`, `scitex_stats`, `scitex_audio`, `scitex_clew`, `scitex_notification`. `IO*`/`PA*` (including the raw-file-I/O family PA002 + IO016-IO019) are owned and emitted by scitex-io, `ST*` by scitex-stats; the engine keeps only cross-cutting `S*`, `I*`, `EH*`, `NM*`, `TQ*`, `NL*`, `NET*`, `HPC*`, `EX*`. Remaining engine-side emitter of a leaf rule: the `print()`-in-session check for figrecipe's `STX-P005`.
 - **Console scripts**: `scitex-dev linter <subcommand>` is the canonical path. `scitex-linter <subcommand>` aliases it.
 
 ## Project-auditor plugins

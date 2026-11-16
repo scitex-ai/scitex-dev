@@ -10,6 +10,26 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Linter plugin SPI: `Rule.scope` (`""` or `"research-script"`). The engine
+  applies the scope uniformly to engine call rules and plugin checkers once
+  the module is fully visited, so leaf plugins share one false-positive gate
+  (`spi.SCOPE_RESEARCH_SCRIPT`, `spi.is_research_script`). Plugins declare
+  coverage via a new payload key `capabilities`; `lint_file` (CLI
+  `validate-files`, edit hook, MCP, sweep) raises `LinterPluginError` when a
+  `project-type: research` project has no provider of `raw-io` (scitex-io
+  >= 0.5.0) instead of reporting a clean run.
+- Linter: the engine no longer emits leaf-owned rules. Removed the hard-coded
+  STX-PA002 `open()` check (now scitex-io's, research-script scoped) and the
+  duplicated IO/ST/P/PA call->rule and axes-hint tables in `_rule_tables.py`
+  (plugins' tables were already the superset). This also deletes the
+  hyphenated `STX-PA-003`/`STX-PA-004` ids that never resolved and the dead
+  `Path.mkdir` heuristic behind them. Axes hints now come from the plugins'
+  `axes_hints`. Requires scitex-io >= 0.5.0 for research projects.
+- Linter: auditable file-level opt-out `# stx-allow-file: <IDS> (reason: ...)`;
+  the reason is mandatory (STX-EX001 rejects malformed pragmas) and applied
+  exemptions are listed by `validate-files` (text block and JSON
+  `_meta.exemptions`).
+
 - Correct legacy HPC test-runner guidance for failed submissions, saved job IDs,
   unknown states, polling deadlines and environment variable names. Split local
   and HPC guides into linked skills within the existing leaf-size budgets.
