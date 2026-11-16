@@ -1,14 +1,14 @@
 ---
 description: |
   [TOPIC] Private skills for consumer projects (research repos, paper repos, internal apps)
-  [DETAILS] Where to put project-specific agent-facing knowledge in a SciTeX *consumer* project (e.g. `paper-scitex-clew`, an internal analysis repo, a fleet ops repo) — distinct from public-package skill rules in `../general/03_interface/04_skills/06_public-vs-private.md` (which is for package authors). Covers the 4-layer skill stack (public-package, fleet-private, consumer-project-private, consumer-project gitignored notes), when content belongs in each layer, how consumer projects pull in the public skill mirror at `~/.claude/skills/scitex/...`, the lift-up rule (when a project-private note becomes reusable enough to graduate to a public package skill), and concrete examples from `paper-scitex-clew`.
+  [DETAILS] Where to put project-specific agent-facing knowledge in a SciTeX *consumer* project (e.g. a paper repo, an internal analysis repo, a fleet ops repo) — distinct from public-package skill rules in `../general/03_interface/04_skills/06_public-vs-private.md` (which is for package authors). Covers the 4-layer skill stack (public-package, fleet-private, consumer-project-private, consumer-project gitignored notes), when content belongs in each layer, how consumer projects pull in the public skill mirror at `~/.claude/skills/scitex/...`, the lift-up rule (when a project-private note becomes reusable enough to graduate to a public package skill), and a concrete example paper-repo layout.
 tags: [scitex-scientific-private-skills-consumer-project]
 ---
 
 # Private skills for consumer projects
 
 A *consumer project* uses SciTeX packages but is not itself a SciTeX
-package — research repos (`paper-scitex-clew`), internal analysis
+package — research repos (e.g. `paper-my-study`), internal analysis
 repos, fleet-ops repos, paper-companion code bundles. The
 public-vs-private decision rule for *packages* lives in
 [`../general/03_interface/04_skills/06_public-vs-private.md`](../general/03_interface/04_skills/06_public-vs-private.md);
@@ -40,7 +40,7 @@ clone gets them. Examples:
   `02_*` order; never run `99_*` standalone").
 - Project-specific naming rules that diverge from ecosystem default.
 - A collaborator-onboarding checklist.
-- Anti-patterns specific to this paper / capsule cohort.
+- Anti-patterns specific to this paper / dataset.
 
 Not appropriate for layer 3:
 
@@ -80,13 +80,14 @@ over time. Watch for these signals and promote upward:
    layer 3.
 3. **Fleet-internal but reusable across projects** → layer 2.
 
-Example: `paper-scitex-clew/GITIGNORED/AGENT_PROMPT.md` (layer 4)
-described a project-internal universal agent prompt for capsule
-translation. Once the design stabilised, it was lifted to
-`scitex-dev/_skills/scientific/04_clew_02_translation-playbook.md`
-(layer 1) so any project — not just `paper-scitex-clew` — can declare
-`spec.skills.required: [scitex-scientific-clew-translation-playbook]`
-on its sac yaml and get the canonical playbook auto-imported.
+Example: a paper repo's `GITIGNORED/AGENT_PROMPT.md` (layer 4)
+held a project-internal "translate this code into SciTeX" prompt. The
+project-agnostic part was lifted to
+`scitex-dev/_skills/scientific/06_scitexification/` (layer 1) so any
+project can declare `spec.skills.required: [scitexification]` and get
+the canonical playbook. The project-specific remainder (its data
+access, evaluation harness, deadlines) stayed in that repo's layer-3
+skill — lift only what is true for every project.
 
 ## Decision tree
 
@@ -135,16 +136,16 @@ scitex-agent-container's GITIGNORED/FEATURE_REQUESTS.md.
 Workaround until fixed: include the absolute path to the hard skill
 leaf in the mission text and treat soft skills as documentation-only.
 
-## Concrete consumer-project layout — `paper-scitex-clew`
+## Concrete consumer-project layout — an example paper repo
 
-Annotated tree showing how the four layers manifest in one
-already-running consumer project:
+Annotated tree showing how the four layers manifest in a typical
+consumer project (`paper-my-study` is illustrative):
 
 ```
-paper-scitex-clew/                              # consumer project root
-├── .claude/skills/paper-scitex-clew/           # layer 3 (project-private, tracked)
+paper-my-study/                                 # consumer project root
+├── .claude/skills/paper-my-study/              # layer 3 (project-private, tracked)
 │   ├── SKILL.md
-│   └── 01_capsule-cohort-discipline.md
+│   └── 01_dataset-discipline.md
 ├── docs/to_claude/                             # layer 4 (gitignored, local context)
 ├── GITIGNORED/                                 # layer 4 (gitignored, scratch)
 │   ├── FAILED_PATTERNS.md                      # → may lift to layer 1 once stable
@@ -154,12 +155,12 @@ paper-scitex-clew/                              # consumer project root
 
 ~/.claude/skills/scitex/scientific/             # layer 1 mirror (consumer-side)
 ├── 04_clew_01_dag-as-map-and-evidence.md      # ← from scitex-dev/_skills/scientific/
-├── 04_clew_02_translation-playbook.md         # ← from scitex-dev (was paper's GITIGNORED)
+├── 06_scitexification/                        # ← from scitex-dev (was a paper's GITIGNORED prompt)
 └── ...
 
 ~/.claude/projects/<encoded>/memory/            # layer 4 (auto-memory, machine-local)
-├── feedback_spartan_home_is_login_only.md
-└── project_constraints_improve_accuracy_hypothesis.md
+├── feedback_cluster_home_is_login_only.md
+└── project_hypothesis_notes.md
 ```
 
 ## Anti-patterns

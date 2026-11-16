@@ -401,9 +401,9 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
         "W",
         "research-test-prefix-mismatch",
     ),
-    # ── PS-PATH / PS-CLEW / PS-AGENT — paper-scitex-clew MVP lint set ──
-    # See PR #97 and operator directive 2026-06-01: skill page + lint rules
-    # both anchored on the same "template must always work" north star.
+    # ── PS-PATH / PS-CLEW / PS-AGENT — research-project clew lint set ──
+    # See PR #97: skill page + lint rules both anchored on the same
+    # "template must always work" north star. Artifact-gated, project-agnostic.
     (
         "PS-PATH-001",
         "§1",
@@ -451,11 +451,9 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
             "self-verify block after the registration loop: "
             "`for c in registered: result = "
             "clew.verify_claim(c.claim_id); assert "
-            "result['source_verified']`. Canonical pattern: "
-            "paper-scitex-clew commit 87a0f7b "
-            "(`scripts/cohorts/_shared/prompts/examples/"
-            "cohort_a_capsule_01_minimal/scripts/agent/"
-            "03_register_claims.py`). Operator directive 2026-06-01."
+            "result['source_verified']`. See "
+            "_skills/scientific/06_scitexification/04_repro-clew.md "
+            "§`The validity gate`."
         ),
         "W",
         "clew-add-claim-without-self-verify",
@@ -469,8 +467,8 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
             "`data/results/claims.json` file (neither "
             "`Path(...).write_text(...)` nor "
             "`stx.io.save(..., '...claims.json')`). The DAG terminus "
-            "MUST be a real file — the launcher's verifier reads "
-            "`data/results/claims.json` to score the run. After all "
+            "MUST be a real file — `clew verify`, reviewers and any "
+            "downstream verifier read `data/results/claims.json`. After all "
             "`add_claim()` calls, persist the canonical claims.json, "
             "e.g. `Path(eval(CONFIG.PATH.CLAIMS_JSON))"
             ".write_text(json.dumps(payload, indent=2))`."

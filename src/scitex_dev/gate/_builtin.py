@@ -4,10 +4,10 @@
 """scitex-dev's own built-in GateCheck(s).
 
 Ships a single trivial pre-submission check — ``gate-workdir-present`` —
-so the cohort's pre/post-submission hooks can wire and test
+so a project's pre/post-submission hooks can wire and test
 ``scitex-dev gate --stage=pre-submission <workdir>`` end-to-end BEFORE
 scitex-clew's source-reachability and scitex-dataset's format checks
-register (paper-scitex-clew explicitly asked for this skeleton).
+register.
 
 Registered via an INTERNAL provider (always merged by
 ``discover_gate_checks``), not an entry point — so scitex-dev never
@@ -25,7 +25,7 @@ from ._spec import Finding, GateCheck, GateResult
 def _workdir_present(workdir: Path, config: Mapping) -> GateResult:
     """Pass iff ``workdir`` exists and is a directory.
 
-    Deliberately minimal — it validates the HOOK WIRING (a real capsule
+    Deliberately minimal — it validates the HOOK WIRING (a real project
     workdir was passed) rather than any package's provenance. Its value
     is being installable-free: it lets the hook be built and exercised
     while the real package checks are still in flight.
@@ -42,7 +42,7 @@ def _workdir_present(workdir: Path, config: Mapping) -> GateResult:
                 message=f"submission workdir does not exist or is not a directory: {p}",
                 severity="error",
                 fix_hint=(
-                    "pass an existing capsule workdir to "
+                    "pass an existing project workdir to "
                     "`scitex-dev gate --stage=pre-submission <workdir>`"
                 ),
             ),

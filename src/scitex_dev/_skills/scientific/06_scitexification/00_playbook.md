@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] Universal scitexify playbook — the layer-agnostic translation act.
-  [DETAILS] Canonical playbook for **scitexification**: the act of taking ANY scientific problem (a script, a notebook, a small repo, a paper supplement, a published analysis) and translating it into a SciTeX project — canonical structure, `@stx.session` discipline, DAG/pipeline conventions, source-grounded outputs — then re-solving it within that structure. This leaf is the GENERAL layer: it COINS the vocabulary (`scitexify` verb / `scitexification` noun) and fixes the universal contract. Experiment-specific layers (experiment-specific evaluation/scoring/output gates, etc.) live separately and compose ON TOP of this skill via `04_clew_*`. The core scientific-integrity principle — "honest source-grounding WITHOUT over-abstaining: attempt every claim, ground where possible, and when ungroundable include the claim explicitly with `null` + a reason — NEVER silently omit" — is framed here as a general scientific norm, not an output-schema rule. To actually translate-and-resolve, scitexification DEPENDS on four package-level companion skills that supply the API knowledge: scitex.session (the `@stx.session` framework), scitex.io (save/load I/O), scitex.plt + figrecipe (figures), and scitex.clew (provenance / source-grounding / validity chain). Load these alongside this playbook — see the "Required companion skills" section below for the canonical declaration and the SAC `spec.skills.required` snippet.
+  [DETAILS] Canonical playbook for **scitexification**: the act of taking ANY scientific problem (a script, a notebook, a small repo, a paper supplement, a published analysis) and translating it into a SciTeX project — canonical structure, `@stx.session` discipline, DAG/pipeline conventions, source-grounded outputs — then re-solving it within that structure. This leaf is the GENERAL layer: it COINS the vocabulary (`scitexify` verb / `scitexification` noun) and fixes the universal contract. Project- or evaluator-specific layers (scoring, run launchers, output gates) live in the consuming project, never in this skill. The core scientific-integrity principle — "honest source-grounding WITHOUT over-abstaining: attempt every claim, ground where possible, and when ungroundable include the claim explicitly with `null` + a reason — NEVER silently omit" — is framed here as a general scientific norm, not an output-schema rule. To actually translate-and-resolve, scitexification DEPENDS on four package-level companion skills that supply the API knowledge: scitex.session (the `@stx.session` framework), scitex.io (save/load I/O), scitex.plt + figrecipe (figures), and scitex.clew (provenance / source-grounding / validity chain). Load these alongside this playbook — see the "Required companion skills" section below for the canonical declaration and the SAC `spec.skills.required` snippet.
 tags: [scitex-scientific-scitexification-playbook]
 requires:
   - scitex-session
@@ -52,7 +52,7 @@ is meaningful. Stop at any stage; the remaining work is strictly additive.
 | Stage | What changes | What stays the same |
 |---|---|---|
 | 1. I/O patterns | Every `open()` / `np.load` / `pd.read_csv` / `pickle.load` → `stx.io.load(...)`. Every `np.save` / `pickle.dump` / `df.to_csv` → `stx.io.save(..., symlink_to=eval(CONFIG.PATH.X))`. The DAG (output of step N = input of step N+1) becomes visible at the filesystem level. | Your algorithm. Your data shapes. Your business logic. |
-| 2. Session + config | The script entry-point becomes `@stx.session.start(...)`. Magic numbers + paths become `CONFIG.<KEY>` lookups against `config/*.yaml`. Logging becomes the session logger. | Function-call structure. Module organisation. Test cases. |
+| 2. Session + config | The script entry-point becomes an `@stx.session`-decorated `main`. Magic numbers + paths become `CONFIG.<KEY>` lookups against `config/*.yaml`. Logging becomes the session logger. | Function-call structure. Module organisation. Test cases. |
 | 3. Figures | Every `plt.savefig(...)` → `stx.io.save(fig, ...)` so the figure is bound to a session output. Visual choices ladder up to FigRecipe's publication-quality primitives. | Figure intent (what comparison, what axis labels). What information the figure carries. |
 | 4. Claims + provenance | Final-mile assertions (numbers in the abstract / conclusions) become **registered claims**, each evidence-bound to the file that produced it. Hand-written result JSON is replaced by an iterate-and-filter over registered claims. | What you are claiming. Your numbers. |
 | 5. Naming + numbering | `cnn_v3_final_FIXED2.py` → `scripts/03_cnn.py` (zero-filled, sortable, mirrored under `tests/`). IDs and ordinals become readable symlinks per `02_research-project_09`. | Your filenames as a *concept*. The numbers themselves (after zero-fill). |
@@ -134,10 +134,8 @@ Deliberately out of scope — the boundary list lives in
 - [`../04_clew_01_dag-as-map-and-evidence.md`](../04_clew_01_dag-as-map-and-evidence.md)
   — DAG-as-map vs DAG-as-evidence framing. Read after this playbook
   when adopting clew.
-- [`../04_clew_02_translation-playbook.md`](../04_clew_02_translation-playbook.md)
-  — clew-specific translation playbook. Specialisation of stages 1+2+4
-  for the clew-tracked flow.
 - [`../04_clew_03_translation-template.md`](../04_clew_03_translation-template.md)
-  — concrete project skeleton for clew-tracked translation.
+  — concrete project skeleton (Makefile, scripts, validity gate) for a
+  clew-tracked scitexification.
 - [`../02_research-project_07_config-and-parameters.md`](../02_research-project_07_config-and-parameters.md)
   — `@stx.session` reference (required by stage 2).
