@@ -1,0 +1,578 @@
+{
+  "source": "GitHub Actions API read-only projection observed 2026-11-16",
+  "repo": "scitex-ai/scitex-db",
+  "pr": 103,
+  "head": "2d24741a722a9e6b3c969a538655c06ccd3be259",
+  "checks": [
+    {
+      "id": 133023845563,
+      "name": "call / owner-bypass",
+      "node_id": "CR_kwDOR5Vtq88AAAAe-NbMuw",
+      "head_sha": "2d24741a722a9e6b3c969a538655c06ccd3be259",
+      "external_id": "ca4c58a0-c43d-540e-92f1-78deccd11e2e",
+      "url": "https://api.github.com/repos/scitex-ai/scitex-db/check-runs/133023845563",
+      "html_url": "https://github.com/scitex-ai/scitex-db/actions/runs/43782866765/job/133023845563",
+      "details_url": "https://github.com/scitex-ai/scitex-db/actions/runs/43782866765/job/133023845563",
+      "status": "completed",
+      "conclusion": "skipped",
+      "started_at": "2026-11-16T00:51:57Z",
+      "completed_at": "2026-11-16T00:51:56Z",
+      "output": {
+        "title": null,
+        "summary": null,
+        "text": null,
+        "annotations_count": 0,
+        "annotations_url": "https://api.github.com/repos/scitex-ai/scitex-db/check-runs/133023845563/annotations"
+      },
+      "check_suite": {
+        "id": 118531519471
+      },
+      "app": {
+        "id": 15368,
+        "client_id": "Iv1.05c79e9ad1f6bdfa",
+        "slug": "github-actions",
+        "node_id": "MDM6QXBwMTUzNjg=",
+        "owner": {
+          "login": "github",
+          "id": 9919,
+          "node_id": "MDEyOk9yZ2FuaXphdGlvbjk5MTk=",
+          "avatar_url": "https://avatars.githubusercontent.com/u/9919?v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/github",
+          "html_url": "https://github.com/github",
+          "followers_url": "https://api.github.com/users/github/followers",
+          "following_url": "https://api.github.com/users/github/following{/other_user}",
+          "gists_url": "https://api.github.com/users/github/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/github/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/github/subscriptions",
+          "organizations_url": "https://api.github.com/users/github/orgs",
+          "repos_url": "https://api.github.com/users/github/repos",
+          "events_url": "https://api.github.com/users/github/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/github/received_events",
+          "type": "Organization",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "name": "GitHub Actions",
+        "description": "Automate your workflow from idea to production",
+        "external_url": "https://help.github.com/en/actions",
+        "html_url": "https://github.com/apps/github-actions",
+        "created_at": "2018-07-30T09:30:17Z",
+        "updated_at": "2026-06-18T16:17:48Z",
+        "permissions": {
+          "actions": "write",
+          "administration": "read",
+          "artifact_metadata": "write",
+          "attestations": "write",
+          "checks": "write",
+          "code_quality": "write",
+          "contents": "write",
+          "copilot_requests": "write",
+          "deployments": "write",
+          "discussions": "write",
+          "drives": "write",
+          "issues": "write",
+          "merge_queues": "write",
+          "metadata": "read",
+          "models": "read",
+          "packages": "write",
+          "pages": "write",
+          "pull_requests": "write",
+          "repository_hooks": "write",
+          "repository_projects": "write",
+          "security_events": "write",
+          "statuses": "write",
+          "vulnerability_alerts": "read"
+        },
+        "events": [
+          "branch_protection_rule",
+          "check_run",
+          "check_suite",
+          "create",
+          "delete",
+          "deployment",
+          "deployment_status",
+          "discussion",
+          "discussion_comment",
+          "fork",
+          "gollum",
+          "issues",
+          "issue_comment",
+          "label",
+          "merge_group",
+          "milestone",
+          "page_build",
+          "public",
+          "pull_request",
+          "pull_request_review",
+          "pull_request_review_comment",
+          "push",
+          "registry_package",
+          "release",
+          "repository",
+          "repository_dispatch",
+          "status",
+          "watch",
+          "workflow_dispatch",
+          "workflow_run"
+        ]
+      },
+      "pull_requests": [
+        {
+          "url": "https://api.github.com/repos/scitex-ai/scitex-db/pulls/103",
+          "id": 5327978318,
+          "number": 103,
+          "head": {
+            "ref": "fix/sqlite-array-shapes-1116",
+            "sha": "2d24741a722a9e6b3c969a538655c06ccd3be259",
+            "repo": {
+              "id": 1200975275,
+              "url": "https://api.github.com/repos/scitex-ai/scitex-db",
+              "name": "scitex-db"
+            }
+          },
+          "base": {
+            "ref": "develop",
+            "sha": "72f875fe8a6dbb7cec51e3ce1af0198470f28553",
+            "repo": {
+              "id": 1200975275,
+              "url": "https://api.github.com/repos/scitex-ai/scitex-db",
+              "name": "scitex-db"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 133023844165,
+      "name": "call / CLAssistant",
+      "node_id": "CR_kwDOR5Vtq88AAAAe-NbHRQ",
+      "head_sha": "2d24741a722a9e6b3c969a538655c06ccd3be259",
+      "external_id": "6e8cfbc2-b553-5774-a0d9-a3ca327636fc",
+      "url": "https://api.github.com/repos/scitex-ai/scitex-db/check-runs/133023844165",
+      "html_url": "https://github.com/scitex-ai/scitex-db/actions/runs/43782866765/job/133023844165",
+      "details_url": "https://github.com/scitex-ai/scitex-db/actions/runs/43782866765/job/133023844165",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-16T00:51:59Z",
+      "completed_at": "2026-11-16T00:52:15Z",
+      "output": {
+        "title": null,
+        "summary": null,
+        "text": null,
+        "annotations_count": 2,
+        "annotations_url": "https://api.github.com/repos/scitex-ai/scitex-db/check-runs/133023844165/annotations"
+      },
+      "check_suite": {
+        "id": 118531519471
+      },
+      "app": {
+        "id": 15368,
+        "client_id": "Iv1.05c79e9ad1f6bdfa",
+        "slug": "github-actions",
+        "node_id": "MDM6QXBwMTUzNjg=",
+        "owner": {
+          "login": "github",
+          "id": 9919,
+          "node_id": "MDEyOk9yZ2FuaXphdGlvbjk5MTk=",
+          "avatar_url": "https://avatars.githubusercontent.com/u/9919?v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/github",
+          "html_url": "https://github.com/github",
+          "followers_url": "https://api.github.com/users/github/followers",
+          "following_url": "https://api.github.com/users/github/following{/other_user}",
+          "gists_url": "https://api.github.com/users/github/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/github/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/github/subscriptions",
+          "organizations_url": "https://api.github.com/users/github/orgs",
+          "repos_url": "https://api.github.com/users/github/repos",
+          "events_url": "https://api.github.com/users/github/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/github/received_events",
+          "type": "Organization",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "name": "GitHub Actions",
+        "description": "Automate your workflow from idea to production",
+        "external_url": "https://help.github.com/en/actions",
+        "html_url": "https://github.com/apps/github-actions",
+        "created_at": "2018-07-30T09:30:17Z",
+        "updated_at": "2026-06-18T16:17:48Z",
+        "permissions": {
+          "actions": "write",
+          "administration": "read",
+          "artifact_metadata": "write",
+          "attestations": "write",
+          "checks": "write",
+          "code_quality": "write",
+          "contents": "write",
+          "copilot_requests": "write",
+          "deployments": "write",
+          "discussions": "write",
+          "drives": "write",
+          "issues": "write",
+          "merge_queues": "write",
+          "metadata": "read",
+          "models": "read",
+          "packages": "write",
+          "pages": "write",
+          "pull_requests": "write",
+          "repository_hooks": "write",
+          "repository_projects": "write",
+          "security_events": "write",
+          "statuses": "write",
+          "vulnerability_alerts": "read"
+        },
+        "events": [
+          "branch_protection_rule",
+          "check_run",
+          "check_suite",
+          "create",
+          "delete",
+          "deployment",
+          "deployment_status",
+          "discussion",
+          "discussion_comment",
+          "fork",
+          "gollum",
+          "issues",
+          "issue_comment",
+          "label",
+          "merge_group",
+          "milestone",
+          "page_build",
+          "public",
+          "pull_request",
+          "pull_request_review",
+          "pull_request_review_comment",
+          "push",
+          "registry_package",
+          "release",
+          "repository",
+          "repository_dispatch",
+          "status",
+          "watch",
+          "workflow_dispatch",
+          "workflow_run"
+        ]
+      },
+      "pull_requests": [
+        {
+          "url": "https://api.github.com/repos/scitex-ai/scitex-db/pulls/103",
+          "id": 5327978318,
+          "number": 103,
+          "head": {
+            "ref": "fix/sqlite-array-shapes-1116",
+            "sha": "2d24741a722a9e6b3c969a538655c06ccd3be259",
+            "repo": {
+              "id": 1200975275,
+              "url": "https://api.github.com/repos/scitex-ai/scitex-db",
+              "name": "scitex-db"
+            }
+          },
+          "base": {
+            "ref": "develop",
+            "sha": "72f875fe8a6dbb7cec51e3ce1af0198470f28553",
+            "repo": {
+              "id": 1200975275,
+              "url": "https://api.github.com/repos/scitex-ai/scitex-db",
+              "name": "scitex-db"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 133023814563,
+      "name": "dep-hygiene-smoke",
+      "node_id": "CR_kwDOR5Vtq88AAAAe-NZTow",
+      "head_sha": "2d24741a722a9e6b3c969a538655c06ccd3be259",
+      "external_id": "03637731-6e89-5204-b1a5-b13485751f86",
+      "url": "https://api.github.com/repos/scitex-ai/scitex-db/check-runs/133023814563",
+      "html_url": "https://github.com/scitex-ai/scitex-db/actions/runs/43782867819/job/133023814563",
+      "details_url": "https://github.com/scitex-ai/scitex-db/actions/runs/43782867819/job/133023814563",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-16T00:58:22Z",
+      "completed_at": "2026-11-16T00:58:38Z",
+      "output": {
+        "title": null,
+        "summary": null,
+        "text": null,
+        "annotations_count": 3,
+        "annotations_url": "https://api.github.com/repos/scitex-ai/scitex-db/check-runs/133023814563/annotations"
+      },
+      "check_suite": {
+        "id": 118531522190
+      },
+      "app": {
+        "id": 15368,
+        "client_id": "Iv1.05c79e9ad1f6bdfa",
+        "slug": "github-actions",
+        "node_id": "MDM6QXBwMTUzNjg=",
+        "owner": {
+          "login": "github",
+          "id": 9919,
+          "node_id": "MDEyOk9yZ2FuaXphdGlvbjk5MTk=",
+          "avatar_url": "https://avatars.githubusercontent.com/u/9919?v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/github",
+          "html_url": "https://github.com/github",
+          "followers_url": "https://api.github.com/users/github/followers",
+          "following_url": "https://api.github.com/users/github/following{/other_user}",
+          "gists_url": "https://api.github.com/users/github/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/github/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/github/subscriptions",
+          "organizations_url": "https://api.github.com/users/github/orgs",
+          "repos_url": "https://api.github.com/users/github/repos",
+          "events_url": "https://api.github.com/users/github/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/github/received_events",
+          "type": "Organization",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "name": "GitHub Actions",
+        "description": "Automate your workflow from idea to production",
+        "external_url": "https://help.github.com/en/actions",
+        "html_url": "https://github.com/apps/github-actions",
+        "created_at": "2018-07-30T09:30:17Z",
+        "updated_at": "2026-06-18T16:17:48Z",
+        "permissions": {
+          "actions": "write",
+          "administration": "read",
+          "artifact_metadata": "write",
+          "attestations": "write",
+          "checks": "write",
+          "code_quality": "write",
+          "contents": "write",
+          "copilot_requests": "write",
+          "deployments": "write",
+          "discussions": "write",
+          "drives": "write",
+          "issues": "write",
+          "merge_queues": "write",
+          "metadata": "read",
+          "models": "read",
+          "packages": "write",
+          "pages": "write",
+          "pull_requests": "write",
+          "repository_hooks": "write",
+          "repository_projects": "write",
+          "security_events": "write",
+          "statuses": "write",
+          "vulnerability_alerts": "read"
+        },
+        "events": [
+          "branch_protection_rule",
+          "check_run",
+          "check_suite",
+          "create",
+          "delete",
+          "deployment",
+          "deployment_status",
+          "discussion",
+          "discussion_comment",
+          "fork",
+          "gollum",
+          "issues",
+          "issue_comment",
+          "label",
+          "merge_group",
+          "milestone",
+          "page_build",
+          "public",
+          "pull_request",
+          "pull_request_review",
+          "pull_request_review_comment",
+          "push",
+          "registry_package",
+          "release",
+          "repository",
+          "repository_dispatch",
+          "status",
+          "watch",
+          "workflow_dispatch",
+          "workflow_run"
+        ]
+      },
+      "pull_requests": [
+        {
+          "url": "https://api.github.com/repos/scitex-ai/scitex-db/pulls/103",
+          "id": 5327978318,
+          "number": 103,
+          "head": {
+            "ref": "fix/sqlite-array-shapes-1116",
+            "sha": "2d24741a722a9e6b3c969a538655c06ccd3be259",
+            "repo": {
+              "id": 1200975275,
+              "url": "https://api.github.com/repos/scitex-ai/scitex-db",
+              "name": "scitex-db"
+            }
+          },
+          "base": {
+            "ref": "develop",
+            "sha": "72f875fe8a6dbb7cec51e3ce1af0198470f28553",
+            "repo": {
+              "id": 1200975275,
+              "url": "https://api.github.com/repos/scitex-ai/scitex-db",
+              "name": "scitex-db"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 133023814097,
+      "name": "call / runner-admission / admission",
+      "node_id": "CR_kwDOR5Vtq88AAAAe-NZR0Q",
+      "head_sha": "2d24741a722a9e6b3c969a538655c06ccd3be259",
+      "external_id": "de44fcf8-3085-5de0-bae0-11c982542fe0",
+      "url": "https://api.github.com/repos/scitex-ai/scitex-db/check-runs/133023814097",
+      "html_url": "https://github.com/scitex-ai/scitex-db/actions/runs/43782866765/job/133023814097",
+      "details_url": "https://github.com/scitex-ai/scitex-db/actions/runs/43782866765/job/133023814097",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-16T00:51:52Z",
+      "completed_at": "2026-11-16T00:51:56Z",
+      "output": {
+        "title": null,
+        "summary": null,
+        "text": null,
+        "annotations_count": 1,
+        "annotations_url": "https://api.github.com/repos/scitex-ai/scitex-db/check-runs/133023814097/annotations"
+      },
+      "check_suite": {
+        "id": 118531519471
+      },
+      "app": {
+        "id": 15368,
+        "client_id": "Iv1.05c79e9ad1f6bdfa",
+        "slug": "github-actions",
+        "node_id": "MDM6QXBwMTUzNjg=",
+        "owner": {
+          "login": "github",
+          "id": 9919,
+          "node_id": "MDEyOk9yZ2FuaXphdGlvbjk5MTk=",
+          "avatar_url": "https://avatars.githubusercontent.com/u/9919?v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/github",
+          "html_url": "https://github.com/github",
+          "followers_url": "https://api.github.com/users/github/followers",
+          "following_url": "https://api.github.com/users/github/following{/other_user}",
+          "gists_url": "https://api.github.com/users/github/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/github/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/github/subscriptions",
+          "organizations_url": "https://api.github.com/users/github/orgs",
+          "repos_url": "https://api.github.com/users/github/repos",
+          "events_url": "https://api.github.com/users/github/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/github/received_events",
+          "type": "Organization",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "name": "GitHub Actions",
+        "description": "Automate your workflow from idea to production",
+        "external_url": "https://help.github.com/en/actions",
+        "html_url": "https://github.com/apps/github-actions",
+        "created_at": "2018-07-30T09:30:17Z",
+        "updated_at": "2026-06-18T16:17:48Z",
+        "permissions": {
+          "actions": "write",
+          "administration": "read",
+          "artifact_metadata": "write",
+          "attestations": "write",
+          "checks": "write",
+          "code_quality": "write",
+          "contents": "write",
+          "copilot_requests": "write",
+          "deployments": "write",
+          "discussions": "write",
+          "drives": "write",
+          "issues": "write",
+          "merge_queues": "write",
+          "metadata": "read",
+          "models": "read",
+          "packages": "write",
+          "pages": "write",
+          "pull_requests": "write",
+          "repository_hooks": "write",
+          "repository_projects": "write",
+          "security_events": "write",
+          "statuses": "write",
+          "vulnerability_alerts": "read"
+        },
+        "events": [
+          "branch_protection_rule",
+          "check_run",
+          "check_suite",
+          "create",
+          "delete",
+          "deployment",
+          "deployment_status",
+          "discussion",
+          "discussion_comment",
+          "fork",
+          "gollum",
+          "issues",
+          "issue_comment",
+          "label",
+          "merge_group",
+          "milestone",
+          "page_build",
+          "public",
+          "pull_request",
+          "pull_request_review",
+          "pull_request_review_comment",
+          "push",
+          "registry_package",
+          "release",
+          "repository",
+          "repository_dispatch",
+          "status",
+          "watch",
+          "workflow_dispatch",
+          "workflow_run"
+        ]
+      },
+      "pull_requests": [
+        {
+          "url": "https://api.github.com/repos/scitex-ai/scitex-db/pulls/103",
+          "id": 5327978318,
+          "number": 103,
+          "head": {
+            "ref": "fix/sqlite-array-shapes-1116",
+            "sha": "2d24741a722a9e6b3c969a538655c06ccd3be259",
+            "repo": {
+              "id": 1200975275,
+              "url": "https://api.github.com/repos/scitex-ai/scitex-db",
+              "name": "scitex-db"
+            }
+          },
+          "base": {
+            "ref": "develop",
+            "sha": "72f875fe8a6dbb7cec51e3ce1af0198470f28553",
+            "repo": {
+              "id": 1200975275,
+              "url": "https://api.github.com/repos/scitex-ai/scitex-db",
+              "name": "scitex-db"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "workflow_pages": [
+    {
+      "workflow_runs": [
+        {
+          "id": 43782868454,
+          "name": "ci",
+          "event": "pull_request",
+          "head_sha": "2d24741a722a9e6b3c969a538655c06ccd3be259",
+          "status": "pending",
+          "conclusion": null
+        }
+      ]
+    }
+  ]
+}

@@ -66,6 +66,7 @@ from ._exit_codes import (
 )
 from ._gh import gh_json
 from ._readiness import MergeReadiness, Readiness
+from ._workflow_waits import apply_workflow_waits
 
 __all__ = [
     "CheckRun",
@@ -147,7 +148,13 @@ def readiness(pr: str, repo: str) -> MergeReadiness:
         )
 
     checks = _to_checks(runs.get("check_runs") or [], head)
-    return _decide(qualified, head, checks, view)
+    verdict = _decide(qualified, head, checks, view)
+    workflows, workflow_error = gh_json([
+        "gh", "api",
+        f"repos/{repo}/actions/runs?head_sha={head}&per_page=100",
+        "--paginate", "--slurp",
+    ])
+    return apply_workflow_waits(verdict, workflows, workflow_error)
 
 
 def _to_checks(raw: Sequence[dict], head: str) -> tuple[CheckRun, ...]:
