@@ -42,7 +42,7 @@ workdir*:
 ```bash
 export APPTAINER_TMPDIR=/tmp APPTAINER_CACHEDIR=/tmp/.apptainer-cache
 # (a) PULL a pre-built published image — preferred when the source provides one
-#     (e.g. a CodeOcean compute capsule names one in REPRODUCING.md, anonymously pullable):
+#     (e.g. its README / reproduction notes name a public, pullable image):
 apptainer build env.sif docker://<registry>/<published-image>:<tag>
 # (b) OR BUILD the source's Dockerfile — convert it to a def (`Bootstrap: docker`
 #     + a `%post` carrying the RUN/apt/conda/pip lines); %post runs as root:
@@ -58,8 +58,9 @@ unprivileged container (and none is grantable). Use the apptainer path above
 a Dockerfile-derived def builds under apptainer's rootless fakeroot.
 
 If after honest effort you **cannot** reproduce it, **abstain** (the honest
-null below) — a calibrated "I could not run this" is correct science, scored
-as such, never as a wrong answer. Never substitute an estimate. Full
+null below) — a calibrated "I could not run this" is correct science and
+must be recorded as such, never dressed up as a result. Never substitute
+an estimate. Full
 mechanism + limits: the `scitex-agent-container` skill (nested-apptainer
 builds).
 
@@ -153,11 +154,12 @@ json.dump(results, open("out.json","w"))      claim_type="value", line_number=1,
 - Full scitex-clew primitive surface (`add_claim`, `list_claims`,
   `verify_claim`, `chain`, `render_dag`/`generate_mermaid_dag`, validity
   semantics) → **`scitex-clew`'s own SKILL.md**.
-- Clew-tracked / experiment-specific specialisations (evaluator-blind
-  scoring, output/results schemas, completion signalling) →
-  [`../04_clew_02_translation-playbook.md`](../04_clew_02_translation-playbook.md)
-  and the `../04_clew_*` siblings. Read those after this chapter when
-  working in a clew-tracked flow.
+- A concrete clew-tracked project skeleton (Makefile, `scripts/`
+  layout, validity gate, retry budget) →
+  [`../04_clew_03_translation-template.md`](../04_clew_03_translation-template.md).
+- Evaluator- or harness-specific concerns (scoring against reference
+  answers, results schemas a grader expects, completion signals) are
+  not part of scitexification — they belong in the consuming project.
 - Stages 1–3 are the precondition: the file nodes those stages created are
   the leaves each claim walks back to.
 

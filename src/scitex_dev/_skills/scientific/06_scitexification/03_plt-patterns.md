@@ -32,13 +32,13 @@ every figure's evidence chain.
 ```python
 fig, ax = stx.plt.subplots()          # session-bound plt (Stage 2 injects it)
 ax.plot_line(x, y)                     # figrecipe primitive
-ax.set_xyt("Time (s)", "Amplitude", "Ripple")   # x-label, y-label, title in one call
-stx.io.save(fig, "ripple.png", symlink_to=eval(CONFIG.PATH.FIG_RIPPLE))
-#   → ripple.png  +  ripple.csv   (the plotted data, auto-exported)
+ax.set_xyt("Time (s)", "Amplitude", "Signal")   # x-label, y-label, title in one call
+stx.io.save(fig, "signal.png", symlink_to=eval(CONFIG.PATH.FIG_SIGNAL))
+#   → signal.png  +  signal.csv   (the plotted data, auto-exported)
 ```
 
 `stx.io.save(fig, ...)` is the single rule that replaces every
-`plt.savefig`. The emitted `ripple.csv` is what makes the figure a
+`plt.savefig`. The emitted `signal.csv` is what makes the figure a
 **verifiable artefact** — a reviewer (or a clew claim) can trace the
 rendered pixels back to the numbers, and `make repro` can re-derive both.
 
@@ -74,8 +74,8 @@ requested — pairs with this convention.)
 ## Figures are clew claims (the Stage 4 bridge)
 
 Because the figure carries its `.csv` and is saved under the session DAG,
-a Stage-4 claim can bind to it: *"Figure 3's pathological-channel count
-(N=42) comes from `fig3.csv`, derived from `pool.csv`, derived from
+a Stage-4 claim can bind to it: *"Figure 3's headline count (N=42)
+comes from `fig3.csv`, derived from `summary.csv`, derived from
 `raw/…`."* The recipe + DATA live with the **script output**, never in
 the paper's caption dir (a stray recipe YAML there is build-invisible
 cruft). The manuscript consumes only the rendered media, by **symlink**.

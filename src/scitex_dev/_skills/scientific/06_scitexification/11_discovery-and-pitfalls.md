@@ -3,8 +3,7 @@ description: |
   [TOPIC] Scitexification — tags & discovery, and the migration pitfalls.
   [DETAILS] The parent + sub-tag scheme (`scitexification` umbrella vs
   per-chapter `scitexification.io/.session/.plt/.clew/.naming`), the
-  consumer-side declarative-interface target gated on the SAC discovery
-  contract, the manual `tags-expand` fallback, and the five migration
+  consumer-side declarative-interface target (pending), the manual `tags-expand` fallback, and the five migration
   traps (hand-writing claims.json, stray plt.savefig, mixed path
   idioms, cosmetic renames, skipped tests/ mirroring). Moved verbatim
   out of SKILL.md.
@@ -24,8 +23,8 @@ tags: [scitexification, scitexification.clew]    # chapter 04 only
 tags: [scitexification, scitexification.naming]  # chapter 05 only
 ```
 
-Consumer-side declarative interface (target, gated on the scitex-dev /
-SAC discovery contract — see A2A thread `48d2324b`):
+Consumer-side declarative interface (target; not yet wired — the
+sub-tag syntax is still pending in scitex-dev's skills tooling):
 
 ```yaml
 # <project-root>/.scitex/dev/config.yaml
@@ -42,11 +41,10 @@ manually expand the tag:
 scitex-dev skills tags-expand scitexification
 ```
 
-and read the printed paths. The reference consumer
-([proj-paper-scitex-clew](https://github.com/...)) drives the
-prompt-side migration plan: their bespoke
-`PROMPT_SCITEX_TRANSLATION_FOR_CLEW.md` will be retired once this
-skill ships and is wired through the discovery contract.
+and read the printed paths. A project that used to keep its own
+bespoke "translate this into SciTeX" prompt should load this skill
+instead and keep only its project-specific additions (data access,
+evaluation, deadlines) in its project-private skill.
 
 ## Pitfalls (the migration traps)
 

@@ -58,7 +58,12 @@ src = Path(SRC)
 results_dir   = src / "results"
 has_results     = results_dir.exists() and any(results_dir.iterdir())
 has_notebook    = bool(list(src.rglob("*.ipynb")))
-has_repro_doc   = (src / "REPRODUCING.md").exists()
+# The project's OWN reproduction instructions, whatever it calls them.
+REPRO_ENTRYPOINTS = ("REPRODUCING.md", "REPRODUCE.md", "reproduce.sh",
+                     "run.sh", "run_all.sh", "Makefile", "Snakefile",
+                     "dvc.yaml", "Dockerfile")
+has_repro_doc   = (any((src / n).exists() for n in REPRO_ENTRYPOINTS)
+                   or readme_has_run_commands(src))   # see note below
 
 if has_results:
     phase = "read"        # parse existing result files — fastest
@@ -70,19 +75,28 @@ else:
     phase = "infer"       # explore code/ + data/, infer the entry point
 ```
 
-Note: `has_repro_doc` triggers on `REPRODUCING.md` specifically, not on
-the more common `README.md`. A `README.md` is too broad a signal —
-many notebook bundles carry a stub `README.md` that documents the
-project at a glance rather than the *reproduction recipe*. Triggering
-`repro-doc` on it would misroute the agent into looking for run
-commands that aren't there. The narrower `REPRODUCING.md` convention
-matches the existing `04_clew_02` playbook for the same reason.
+Notes for newcomers:
+
+- **`repro-doc` means "the project tells you how to run it".** That may
+  be a dedicated file (`REPRODUCING.md`, `reproduce.sh`), a build file
+  (`Makefile`, `Snakefile`, `dvc.yaml`), a `Dockerfile`, or a README
+  section. A bare `README.md` alone is too broad a signal — many
+  READMEs describe the project without a runnable recipe. Count a README
+  only when it contains actual run commands (a "Usage" / "Reproduce" /
+  "Run" section with shell or Python commands); otherwise fall through
+  to `infer`.
+- **`read` grounds claims in the files the source shipped.** That is
+  honest but weaker than re-running: prefer re-executing when it is
+  feasible (stage 4.0 in [04_repro-clew.md](04_repro-clew.md)), and say
+  in the claim's evidence which one you did.
+- The order is a default, not a law. If a notebook exists *and* a
+  Makefile drives it, follow the Makefile.
 
 | Phase | Stage-1 tool |
 |---|---|
 | read | direct file reads — `stx.io.load(...)`, pandas / json |
 | notebook | `scitex_notebook.convert_notebook(..., mode="unified")` then `subprocess.run(["python", "stage1.py"])` |
-| repro-doc | follow the documented commands; translate container runtimes (`docker run ...` → `apptainer exec ...` on HPC) as needed |
-| infer | inspect `code/` for `if __name__ == "__main__"` or a `main()`; do not modify the source repo |
+| repro-doc | follow the project's documented commands; translate container runtimes where needed (e.g. `docker run ...` → `apptainer exec ...` where no Docker daemon is available) |
+| infer | inspect the source tree for `if __name__ == "__main__"`, a `main()`, or a CLI entry point; do not modify the source repo |
 
 All four phases converge at `extract → answers/results → claims`.

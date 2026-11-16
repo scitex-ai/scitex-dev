@@ -47,11 +47,11 @@ This skill **does not duplicate** content elsewhere; it composes them.
   `.../figrecipe/`, `.../scitex-clew/`). This skill teaches *which*
   primitive to reach for during translation, not *what* the primitive
   does internally.
-- For **Clew-specific** translation (project-aware DAG, evidence-bound
-  claims, the validity chain): see `04_clew_*` skills. Those are
-  specializations of scitexification stages 1+2+4 for the Clew-tracked
-  flow. If you only need to scitexify and *don't* need Clew
-  verifiability, ignore the `04_clew_*` skills.
+- For **Clew background** (what the DAG is, a concrete clew-tracked
+  project skeleton): see `../04_clew_01_dag-as-map-and-evidence.md` and
+  `../04_clew_03_translation-template.md`. Stage 4
+  ([04_repro-clew.md](04_repro-clew.md)) is the part of this skill that
+  uses them; if you stop at stages 1–3 you can skip them.
 - For **PDF reporting** (recurring scientific PDF deliverables): see
   `03_reporting_*`. Reporting is a *downstream* concern; scitexify first,
   then report.
