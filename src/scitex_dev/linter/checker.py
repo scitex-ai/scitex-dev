@@ -12,7 +12,6 @@ from ._checks import (
     CallChecksMixin,
     ErrorHandlingMixin,
     ImportChecksMixin,
-    RawIOChecksMixin,
     TestQualityMixin,
     own_scitex_package,
 )
@@ -25,7 +24,6 @@ from .rules import Rule
 class SciTeXChecker(
     ImportChecksMixin,
     CallChecksMixin,
-    RawIOChecksMixin,
     ErrorHandlingMixin,
     TestQualityMixin,
     ast.NodeVisitor,
@@ -60,7 +58,6 @@ class SciTeXChecker(
         # `@stx.session def main` further down — we can't know the module
         # is session-decorated at import-visit time. (line, col, src) tuples.
         self._figrecipe_usages: list = []
-        self._raw_io_usages: list = []  # (rule_id, Call); see _checks/_raw_io.py
         from ._plugin_loader import load_plugins
 
         _plugins = load_plugins()
@@ -83,6 +80,7 @@ class SciTeXChecker(
             for key, group in groups.items()
         }
         self._plugin_checkers = _plugins["checkers"]
+        self._plugin_axes_hints = _plugins.get("axes_hints", {})
 
     # -- Assignment visitors --
 
@@ -345,8 +343,30 @@ class SciTeXChecker(
 
     # -- Finalization --
 
+    def is_research_script(self) -> bool:
+        """The ``research-script`` scope verdict (valid after the visit)."""
+        from ._research_scope import is_research_script
+
+        return is_research_script(
+            self.filepath,
+            self.config,
+            has_entry_decorator=(
+                self._has_session_decorator or self._has_module_decorator
+            ),
+        )
+
     def get_issues(self) -> list:
         """Return all issues, including post-visit structural checks."""
+        # Rule scopes (plugin SPI): drop `scope="research-script"` findings
+        # — from engine call rules AND plugin checkers, both already in
+        # self.issues — unless this module is a research script. Decided
+        # here, once the whole module is seen, because the @stx.session
+        # main usually sits below the helpers that do the I/O.
+        from ._research_scope import apply_scopes
+
+        self.issues = apply_scopes(
+            self.issues, research_script=self.is_research_script()
+        )
         # STX-S009 / STX-S010 — research script-organization (path/filename
         # rules). They target files UNDER a configured script dir, which
         # is_script() deliberately excludes, so they run BEFORE the is_script
@@ -355,11 +375,6 @@ class SciTeXChecker(
             from ._rules._script_organization import check_script_organization
 
             check_script_organization(self)
-
-        # STX-RIO001-003 + STX-PA002 — deferred raw-I/O emission. Runs before
-        # the is_script early-return: research scripts under `scripts/` are
-        # exactly the files is_script() excludes.
-        self._emit_raw_io()
 
         from ._severity_promotion import finalize_issues
 

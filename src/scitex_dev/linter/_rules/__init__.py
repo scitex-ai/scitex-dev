@@ -6,8 +6,6 @@ After the per-package rule migration, the engine ships only the
 - `EH001` — generic Python error-handling lint
 - `I001-I007` — import hygiene (engine cross-cuts every package)
 - `S001-S008` — structure / `@stx.session` (cross-cuts every package)
-- `RIO001-RIO003` — raw stdlib file I/O (pathlib / shutil) bypassing
-  `stx.io` in research scripts (no owning leaf package: it is stdlib)
 - `EX001` — malformed file-level `stx-allow-file` exemption pragma
 
 Rules that talk about a specific package's API live in that package's
@@ -44,7 +42,6 @@ from ._lookup import reset as reset_lookup_cache  # noqa: F401
 from ._network_timeout import NET001
 from ._no_mocks import NM001, NM002, NM003
 from ._numeric_literals import NL001
-from ._raw_io import RIO001, RIO002, RIO003
 from ._script_organization import S009, S010
 from ._session_figure import P010
 from ._session_structure import (
@@ -78,9 +75,6 @@ ALL_RULES = {
     NM002.id: NM002,
     NM003.id: NM003,
     P010.id: P010,
-    RIO001.id: RIO001,
-    RIO002.id: RIO002,
-    RIO003.id: RIO003,
     S001.id: S001,
     S002.id: S002,
     S003.id: S003,
@@ -126,9 +120,6 @@ __all__ = [
     "NM002",
     "NM003",
     "P010",
-    "RIO001",
-    "RIO002",
-    "RIO003",
     "S001",
     "S002",
     "S003",
