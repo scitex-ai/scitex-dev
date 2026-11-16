@@ -36,6 +36,9 @@ S001 = Rule(
         "What @stx.session wires up (see `help(scitex.session.start)` / the "
         "scitex 'session' skill): provenance/clew lineage, run logging, CONFIG "
         "load, reproducible RNG, figrecipe-styled plt + recorded saves.\n"
+        "If this script must NOT be a session (instrumentation that would record\n"
+        "itself into the store it measures), opt out auditably in its header:\n"
+        "  # stx-allow-file: STX-S001  (reason: <why it must not be a session>)\n"
         "If this is library code (not a script), add its directory to library_dirs:\n"
         "  [tool.scitex-linter]\n"
         '  library_dirs = ["src", "tests", "apps", "config", "docs"]\n'

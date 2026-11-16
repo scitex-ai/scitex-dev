@@ -130,6 +130,10 @@ class CallChecksMixin:
     def _check_call(self, node: ast.Call) -> None:
         """Check function calls against Phase 2 rules."""
         func = node.func
+        # Raw file I/O (bare open() -> STX-PA002, pathlib/shutil -> STX-RIO*)
+        # is recorded here and emitted once the module is fully seen — see
+        # _checks/_raw_io.py for why it must be deferred.
+        self._rio_record(node)
 
         # module.func() pattern -- e.g., np.save(), stats.ttest_ind()
         if isinstance(func, ast.Attribute):
@@ -257,9 +261,6 @@ class CallChecksMixin:
             ):
                 line = self._get_source(node.lineno)
                 self._add(_rule_tables.PRINT_RULE, node.lineno, node.col_offset, line)
-            elif func.id == "open" and self._has_session_decorator:
-                line = self._get_source(node.lineno)
-                self._add(rules.PA002, node.lineno, node.col_offset, line)
             # NM003 — bare call to a mock symbol: Mock(), MagicMock(), patch(...)
             elif func.id in self._MOCK_SYMBOLS:
                 line = self._get_source(node.lineno)

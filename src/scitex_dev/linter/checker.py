@@ -8,14 +8,15 @@ import ast
 from dataclasses import replace
 
 from . import rules
-from ._issue import Issue
 from ._checks import (
     CallChecksMixin,
     ErrorHandlingMixin,
     ImportChecksMixin,
+    RawIOChecksMixin,
     TestQualityMixin,
     own_scitex_package,
 )
+from ._issue import Issue
 from ._rules import lookup as _lk
 from ._source_helpers import _is_allowed_by_comment, is_script
 from .rules import Rule
@@ -24,6 +25,7 @@ from .rules import Rule
 class SciTeXChecker(
     ImportChecksMixin,
     CallChecksMixin,
+    RawIOChecksMixin,
     ErrorHandlingMixin,
     TestQualityMixin,
     ast.NodeVisitor,
@@ -58,6 +60,7 @@ class SciTeXChecker(
         # `@stx.session def main` further down — we can't know the module
         # is session-decorated at import-visit time. (line, col, src) tuples.
         self._figrecipe_usages: list = []
+        self._raw_io_usages: list = []  # (rule_id, Call); see _checks/_raw_io.py
         from ._plugin_loader import load_plugins
 
         _plugins = load_plugins()
@@ -353,6 +356,11 @@ class SciTeXChecker(
 
             check_script_organization(self)
 
+        # STX-RIO001-003 + STX-PA002 — deferred raw-I/O emission. Runs before
+        # the is_script early-return: research scripts under `scripts/` are
+        # exactly the files is_script() excludes.
+        self._emit_raw_io()
+
         from ._severity_promotion import finalize_issues
 
         if not self._is_script:
@@ -490,7 +498,11 @@ def lint_source(
                 f"{type(exc).__name__}: {exc}"
             ) from exc
 
-    return checker.get_issues()
+    # File-level exemption pragmas (see `_exemptions.py`) apply to
+    # engine AND plugin findings; malformed pragmas surface as STX-EX001.
+    from ._exemptions import apply_file_exemptions
+
+    return apply_file_exemptions(checker.get_issues(), source, tree)
 
 
-from ._dispatch import lint_file  # noqa: E402,F401  re-export
+from ._dispatch import lint_file

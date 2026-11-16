@@ -18,7 +18,7 @@ from pathlib import Path
 # Same skip set as `_ipynb.py`. Notebook cells and README snippets are
 # *interactive examples*, not scripts, so structural rules are noise.
 _SNIPPET_SKIP_RULES = {
-    "STX-S001",  # Missing shebang
+    "STX-S001",  # Missing @stx.session/@stx.module on main()
     "STX-S002",  # Missing `if __name__ == '__main__'` guard
     "STX-S003",  # Missing module docstring
     "STX-S004",  # Missing EOF marker

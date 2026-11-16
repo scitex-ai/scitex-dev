@@ -25,14 +25,12 @@ from __future__ import annotations
 
 import json
 import sys
-
-
-from ._forbid_new_only import FORBIDDEN_NEW_ONLY  # noqa: E402
 from pathlib import Path
 
 import click
 
 from .._ecosystem.help_spec import CliHelp, Example, SpecCommand
+from ._forbid_new_only import FORBIDDEN_NEW_ONLY
 from .checker import lint_file
 from .config import load_config
 from .formatter import format_issue, format_summary, to_json
@@ -82,8 +80,15 @@ def _do_check(
         click.echo(f"No Python files found in {path}", err=True)
         return 0
 
+    from ._exemptions import file_exemptions
+
     all_results = {}
+    # File-level exemption pragmas (`_exemptions.py`) are AUDITABLE, not silent: every
+    # applied one is listed in the output (text block / JSON `_meta`),
+    # whether or not the file has remaining findings.
+    exemptions = []
     for f in files:
+        exemptions.extend((str(f), ex) for ex in file_exemptions(f))
         issues = lint_file(str(f), config=config)
         if new_only:
             # Cap PRE-EXISTING errors (present at the baseline ref) to
@@ -123,6 +128,7 @@ def _do_check(
             "skipped_category_count": len(skips),
             "skipped_categories": skips,
             "all_rules_ran": not skips,
+            "exemptions": [{"file": fp, **ex.to_dict()} for fp, ex in exemptions],
         }
         click.echo(json.dumps(combined, indent=2))
         has_errors = any(
@@ -141,6 +147,7 @@ def _do_check(
             click.echo(msg)
         for line in describe_skips(skips):
             click.echo(line)
+        _echo_exemptions(exemptions)
         return 0
 
     has_errors = False
@@ -153,7 +160,17 @@ def _do_check(
         click.echo()
     for line in describe_skips(skips):
         click.echo(line)
+    _echo_exemptions(exemptions)
     return 2 if has_errors else 1
+
+
+def _echo_exemptions(exemptions) -> None:
+    """List applied file-level exemptions (never affects the exit code)."""
+    if not exemptions:
+        return
+    click.echo(f"File-level exemptions (stx-allow-file): {len(exemptions)}")
+    for fp, ex in exemptions:
+        click.echo(f"  {fp}:{ex.line}  {', '.join(ex.rule_ids)}  reason: {ex.reason}")
 
 
 def register(main_group):

@@ -10,6 +10,15 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Linter: catch raw file I/O that bypasses `stx.io` in research scripts —
+  STX-RIO001 (`Path.write_text/write_bytes/open('w')`), STX-RIO002
+  (`Path.read_text/read_bytes/open()`), STX-RIO003 (`shutil.copy/move/...`).
+  STX-PA002 (`open()`) now also fires in helpers defined above the
+  `@stx.session` main. Add an auditable file-level opt-out,
+  `# stx-allow-file: <IDS> (reason: ...)`, whose reason is mandatory
+  (STX-EX001 rejects malformed pragmas) and whose applied exemptions are
+  listed by `validate-files` (text block and JSON `_meta.exemptions`).
+
 - Correct legacy HPC test-runner guidance for failed submissions, saved job IDs,
   unknown states, polling deadlines and environment variable names. Split local
   and HPC guides into linked skills within the existing leaf-size budgets.
