@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 # Scan the checkout under test, not whichever copy happens to be installed.
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 SCIENTIFIC = REPO_ROOT / "src" / "scitex_dev" / "_skills" / "scientific"
 
 # Files that make up the general scitexification teaching surface.
