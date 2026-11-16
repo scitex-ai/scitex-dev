@@ -15,8 +15,9 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from ...audit._config._skip_rules import SkipRule
+import click
 
+from ...audit._config._skip_rules import SkipRule
 
 INVENTORY_HEADER = "=== MASKED INVENTORY (audit.skip-rules) ==="
 
@@ -43,7 +44,7 @@ def is_violation_line(line: str) -> bool:
     (``ERRO: ``/``WARN: ``), so a leading alphabetic word plus colon is
     stripped before the bracket test.
     """
-    stripped = line.lstrip()
+    stripped = click.unstyle(line).lstrip()
     head = stripped.split(":", 1)
     payload = head[1].lstrip() if len(head) == 2 and head[0].isalpha() else stripped
     return payload.startswith("[")
@@ -56,7 +57,8 @@ def line_matches_rule(line: str, rule: str) -> bool:
     marker (severity letter, section suffix) is incidental. ``[PS-139 §2]``
     and ``[PS-139]`` both match ``PS-139``; ``[PS-1390]`` does not.
     """
-    return f"[{rule} " in line or f"[{rule}]" in line
+    plain = click.unstyle(line)
+    return f"[{rule} " in plain or f"[{rule}]" in plain
 
 
 def is_error_line(line: str) -> bool:
@@ -65,7 +67,8 @@ def is_error_line(line: str) -> bool:
     Auditors mark severity two ways: scitex-logging's `ERRO: ` prefix,
     and the legacy audit-summary `[E]` marker.
     """
-    return line.lstrip().startswith("ERRO:") or "[E] " in line
+    plain = click.unstyle(line)
+    return plain.lstrip().startswith("ERRO:") or "[E] " in plain
 
 
 @dataclass(frozen=True)
@@ -188,7 +191,10 @@ def classify_output(text: str, skip_rules) -> MaskReport:
     unreadable: list[str] = []
     inspected = 0
     for line in text.splitlines():
-        stripped = line.strip()
+        # Captured sub-auditor output may carry terminal color even when the
+        # outer Click renderer later removes it. Parse display text, retaining
+        # the original diagnostic for output and exact-line masked labelling.
+        stripped = click.unstyle(line).strip()
         if not stripped:
             continue
         inspected += 1
@@ -199,11 +205,11 @@ def classify_output(text: str, skip_rules) -> MaskReport:
         if not _RULE_ID_RE.search(stripped):
             # A diagnostic label is not a rule. Even a declaration naming
             # that label cannot turn an unreadable finding into a deferral.
-            unreadable.append(stripped)
+            unreadable.append(line.strip())
             continue
         hit = next((r.rule for r in rules if line_matches_rule(line, r.rule)), None)
         if hit is not None:
-            masked[hit].append(stripped)
+            masked[hit].append(line.strip())
         else:
             unmasked.append(line)
     return MaskReport(
