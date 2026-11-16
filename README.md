@@ -402,3 +402,14 @@ harness JSON payload on stdin. A missing provider or failing check refuses
 verification with exit code 2. Post-tool checks report after the operation;
 only pre-tool events can prevent that operation. Harness approval is separate
 from installation and is never silently granted by this installer.
+
+### Package navigation metadata
+
+`scitex-dev docs list-hierarchies --json` discovers validated installed
+`scitex_dev.hierarchy` catalogs without importing their providers. Python
+`scitex_dev.list_package_hierarchies()` and the Dev MCP tool
+`docs_list_hierarchies` expose the same navigation data. Allocations are
+independent of installed availability and host enablement; malformed or
+conflicting declarations fail explicitly. See the shipped
+[package hierarchy skill](src/scitex_dev/_skills/general/05_development/23_package-hierarchy.md)
+for the schema and owning behavioral tests.
