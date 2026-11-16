@@ -54,6 +54,10 @@ _LAZY_ATTRS: dict[str, str] = {
     "load_exposure_policy": "exposure",
     "CliProvider": "cli_providers",
     "list_cli_providers": "cli_providers",
+    "PackageHierarchy": "package_hierarchy",
+    "HierarchyNode": "package_hierarchy",
+    "validate_package_hierarchy": "package_hierarchy",
+    "list_package_hierarchies": "package_hierarchy",
     "DocProvider": "doc_providers",
     "list_doc_providers": "doc_providers",
     # cli_utils

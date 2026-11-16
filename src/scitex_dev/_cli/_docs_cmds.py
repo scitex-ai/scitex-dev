@@ -19,6 +19,30 @@ def register_docs_commands(main):
     main.add_command(docs_grp)
 
     @docs_grp.command(
+        "list-hierarchies", cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Read validated installed package navigation catalogs.",
+            description="Navigation declarations only; not live availability or host enablement.",
+            examples=(Example("{prog} docs list-hierarchies --json", "Inspect installed hierarchy metadata."),),
+        ),
+    )
+    @click.option("--json", "as_json", is_flag=True, help="Output structured catalogs.")
+    def docs_list_hierarchies(as_json):
+        from ..package_hierarchy import list_package_hierarchies
+
+        try:
+            catalogs = list_package_hierarchies()
+        except (ValueError, OSError, ImportError) as error:
+            raise click.ClickException(str(error)) from error
+        if as_json:
+            click.echo(json.dumps([catalog.as_dict() for catalog in catalogs], indent=2))
+        else:
+            for catalog in catalogs:
+                for node in catalog.nodes:
+                    click.echo(f"{node.index}  {node.label} ({node.id})")
+
+
+    @docs_grp.command(
         "validate",
         cls=SpecCommand,
         help_spec=CliHelp(

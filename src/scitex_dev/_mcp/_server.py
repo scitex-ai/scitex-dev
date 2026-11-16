@@ -49,6 +49,14 @@ async def dev_context_measure(
     )
 
 
+@mcp.tool()
+async def docs_list_hierarchies() -> list[dict[str, Any]]:
+    """Read validated package navigation catalogs; not live availability."""
+    from ..package_hierarchy import list_package_hierarchies
+
+    return [catalog.as_dict() for catalog in list_package_hierarchies()]
+
+
 # Register dev tools from dev_mcp handlers
 @mcp.tool()
 async def dev_ecosystem_list(packages: list[str] | None = None) -> str:

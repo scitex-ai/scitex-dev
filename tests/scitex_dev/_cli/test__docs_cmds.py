@@ -153,3 +153,13 @@ def test_validate_human_report_keeps_incomplete_scope_visible(tmp_path):
         "limitations:" in result.stdout,
         "No Python/py fenced blocks were checked" in result.stdout,
     ) == (2, True, True, True)
+
+
+def test_hierarchy_catalog_cli_matches_public_python_contract():
+    # Arrange
+    from scitex_dev import list_package_hierarchies
+    expected = [catalog.as_dict() for catalog in list_package_hierarchies()]
+    # Act
+    result = CliRunner().invoke(_docs_cli(), ["docs", "list-hierarchies", "--json"])
+    # Assert
+    assert (result.exit_code, json.loads(result.stdout)) == (0, expected)
