@@ -10,6 +10,12 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Classify colorized sub-auditor findings using their display text so ANSI
+  styling cannot hide error counts or supply a false rule identifier. Retain
+  original diagnostic bytes and existing explicit masking/unknown-line guards.
+- Preserve the resolver's normal unresolved-target result, while surfacing
+  unexpected resolution failures instead of treating them as no declarations.
+
 - Linter plugin SPI: `Rule.scope` (`""` or `"research-script"`). The engine
   applies the scope uniformly to engine call rules and plugin checkers once
   the module is fully visited, so leaf plugins share one false-positive gate
