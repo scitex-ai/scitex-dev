@@ -53,8 +53,8 @@ put generic discovery and enforcement in Dev, reusable GUI/Web contracts in
 SDK, and identity/project/deployment integration in Hub. A leaf must not depend
 on the hosted service merely to perform its local domain operation.
 
-The umbrella is the deterministic pin point for coordinated member versions.
-Leaves generally use compatible minimum floors; follow the
+The umbrella and leaves both declare compatible minimum floors; exact versions
+live in experiment/deployment lock files. Follow the
 [release and pin doctrine](../05_development/14_release-and-pin-doctrine.md)
 and [dependency guidance](02_dependency-and-version-pinning.md). Qualify the
 resolved profile rather than assuming declared compatibility is sufficient.

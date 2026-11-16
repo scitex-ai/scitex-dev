@@ -57,7 +57,7 @@ Supporting probes:
 ```bash
 scitex-dev ecosystem validate-sync                  # per-package develop-sha: local vs remote host(s)
 ~/.scitex/todo/check_releases.py                    # per-package pyproject-vs-PyPI (RELEASED/STALE/BEHIND/UNPUBLISHED)
-scitex-dev ecosystem audit-umbrella-pins            # umbrella `==` pins vs PyPI latest
+scitex-dev ecosystem audit-umbrella-pins            # umbrella floors OK; any `==` pin vs PyPI latest
 ```
 
 `check_releases.py` classifies each package:

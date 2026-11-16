@@ -1,16 +1,16 @@
 ---
 description: |
-  [TOPIC] Autonomous release and exact-pin doctrine
-  [DETAILS] Standing authorized release cadence with exact-head checks, leaf-owned publication stages and immutable tags. The umbrella exact-pins SciTeX members while leaves retain minimum floors; Dev enforces the pin contract.
+  [TOPIC] Autonomous release and pin doctrine
+  [DETAILS] Standing authorized release cadence with exact-head checks, leaf-owned publication stages and immutable tags. Library metadata (umbrella and leaves) declares minimum-compatible `>=` floors; exact versions live only in experiment/deployment lock files (scitex-python#393).
 tags: [scitex-general-development-release-pin-doctrine]
 ---
 
-# Release + Exact-Pin Doctrine
+# Release + Pin Doctrine
 
 Operator mandate, **2026-07-06**. Two standing rules that set the
 DEFAULT posture for the fleet: **publish aggressively, with no approval
-gate**, and **exact-pin the scitex members at the scitex-python
-umbrella** (the single deterministic pin-point). Both serve one goal —
+gate**, and **declare compatibility floors in library metadata while
+exact versions live in lock files** (§2, revised 2026-11-16). Both serve one goal —
 *velocity* across a fleet of packages developed in parallel across many
 hosts and agents. This is the authoritative,
 **constitution-referenceable** statement of the policy.
@@ -66,62 +66,59 @@ optimizes against a risk (a bad release) that fix-forward already
 handles cheaply — at the cost of the thing that actually matters:
 getting changes live everywhere, fast.
 
-## 2. Exact-pin at the umbrella — the single deterministic pin-point
+## 2. Floors in the umbrella, exact versions in lock files
 
-**The scitex-python umbrella exact-pins (`==`) every scitex member
-package. Leaf packages MAY keep `>=` floors for their scitex-to-scitex
-deps.** The umbrella is the one place the pin set is made deterministic;
-concentrating the pins there — rather than exact-pinning every leaf — is
-deliberate.
+**Superseded 2026-11-16** ([scitex-python#393](https://github.com/scitex-ai/scitex-python/pull/393)): the umbrella no
+longer exact-pins its members.
 
-Why this shape:
+- **Library metadata = minimum-compatible floors.** The umbrella
+  (`scitex-python`) and every leaf declare SciTeX members with `>=`
+  floors: the oldest version whose interface the code actually uses.
+- **Lock files = exact versions.** Reproducibility of a specific
+  experiment, deployment, SIF image or fleet profile comes from that
+  consumer's lock file (`uv.lock`, `requirements.lock`, the deployment
+  pin file), never from `pyproject.toml` dependency metadata.
 
-- scitex packages are actively-developed and *unstable* (APIs move
-  release-to-release), so the resolved version set must be
-  deterministic. But exact-pinning *every leaf's* scitex deps causes
-  resolution **conflicts** the moment two leaves pin divergent versions.
-- Instead, pin at ONE point: `scitex-python==X` exact-pins all members.
-  In any environment that installs the umbrella, pip's tightest-wins
-  resolution **forces** every member to the umbrella's pinned version —
-  so leaves stay loose (`>=`) and the resolved set is still
-  deterministic.
-- Determinism holds **wherever the umbrella is present** — the SIF
-  image, every fleet env. Caveat: a leaf installed *standalone* (no
-  umbrella) can resolve to latest; that is acceptable, because the
-  fleet / SIF always installs the umbrella.
-- Same principle for volatile **third-party** deps (`fastmcp`, …):
-  exact-pin them at the umbrella / deployment layer, not scattered
-  across leaves.
+Why the exact-pin rule (2026-07-06) was dropped:
+
+- An exact `==` pin in the umbrella is a *ceiling* as well as a floor.
+  Installing the umbrella next to a newer develop build of a member
+  **silently downgraded** that member to the pinned release.
+- It made develop components uninstallable with the umbrella: a develop
+  `scitex-session` that needed a newer peer than the umbrella's `==`
+  pin could not resolve at all.
+- Library metadata states compatibility; determinism is a property of a
+  concrete environment, which is exactly what a lock file records.
+- The same applies to volatile **third-party** deps (`fastmcp`, ...):
+  give a compatibility floor (plus a documented upper bound only when a
+  known break exists) in metadata, and the exact version in the
+  deployment lock file.
 
 ## 3. How to apply
 
-**Umbrella (`scitex-python`) — the pin-point: `==` every member:**
+**Umbrella and leaves — `>=` floors:**
 
 ```toml
-# scitex-python/pyproject.toml — exact-pin every scitex member
+# scitex-python/pyproject.toml (and any leaf) — compatibility floors
 dependencies = [
-    "scitex-io==0.4.7",
-    "scitex-stats==0.5.2",
-    "fastmcp==2.3.0",          # volatile 3rd-party — exact-pin here too
+    "scitex-io>=0.4.7",
+    "scitex-stats>=0.5.2",
+    "fastmcp>=2.3.0",
 ]
 ```
 
-**Leaf package — `>=` floors are fine** (the umbrella tightens them in
-any env that includes it):
+**Experiment / deployment — exact versions in the lock file:**
 
-```toml
-# a leaf pyproject.toml — minimum-pin scitex deps; umbrella constrains them
-dependencies = [
-    "scitex-io>=0.4.0",
-    "numpy>=1.21.0",
-]
+```bash
+uv lock                     # or: uv pip compile pyproject.toml -o requirements.lock
+uv sync --frozen            # install exactly what the lock records
 ```
 
-When you cut a new scitex member version, bump its `==` pin in the
-umbrella (part of the coordinated wave,
-[13_version-drift-management.md](13_version-drift-management.md) §3
-step 4). A leaf only raises its `>=` floor when it actually relies on a
-new API.
+When you cut a new member version, raise the umbrella's floor only if
+the umbrella (or its re-exports) now relies on the new interface, then
+refresh the lock files of the experiments/deployments that should adopt
+it ([13_version-drift-management.md](13_version-drift-management.md) §3).
+A leaf likewise raises its floor only when it uses a new API.
 
 **Authorized autonomous release flow.** Follow the user's current release
 scope and existing session authorization; do not infer publication permission
@@ -141,34 +138,21 @@ regression by qualifying a new version, never by moving a published tag.
 
 ## 4. Enforcement — scitex-dev is the version overseer
 
-The enforced check is: **scitex-python's dependency list uses `==` for
-every scitex member.** scitex-dev owns fleet version consistency
-([13_version-drift-management.md](13_version-drift-management.md)), so:
-
-- **CLI / audit rule.** `scitex-dev ecosystem audit-umbrella-pins
-  --strict` (PS-170) checks the umbrella's `==` member pins in the
-  release-pipeline pre-publish gate. The doctrine hardens it to
-  *require* `==` on every member — reversing the 2026-05-28 relaxation
-  that also accepted `>=` on umbrella peers.
-- **Pre-commit / CI check.** The audit runs on every push to
-  scitex-python, so a member that regresses to a `>=` floor is caught
-  before merge.
-- **Container hook-set.** scitex-agent-container folds "the umbrella dep
-  list is fully `==`-pinned" into the container's hook-set, so the
-  check runs at write time across every container, not just in CI.
+`scitex-dev ecosystem audit-umbrella-pins` (PS-170) accepts `>=` floors
+on umbrella members. It still checks any remaining explicit `==` pin
+against PyPI latest and reports drift (warn by default, `--strict` in a
+pre-publish gate), because a stale `==` is a real bug class. Do not add
+checks that *require* `==` on umbrella members, and do not reintroduce
+`==` member pins in the umbrella's `pyproject.toml`.
 
 ## 5. Relationship to existing pinning guidance
 
 This doctrine is **consistent** with
-[../01_ecosystem/02_dependency-and-version-pinning.md](../01_ecosystem/02_dependency-and-version-pinning.md)
-and adds one rule on top:
-
-- That skill's "leaves use `>=` minima, avoid `==`" rule stands
-  unchanged — leaf packages keep `>=` for both scitex and third-party
-  deps.
-- **New:** the umbrella is the exception and the pin-point — it
-  `==`-pins every member. This supersedes, for the umbrella's member
-  pins only, the 2026-05-28 PS-170 relaxation that accepted `>=` peers.
+[../01_ecosystem/02_dependency-and-version-pinning.md](../01_ecosystem/02_dependency-and-version-pinning.md):
+every package, umbrella included, declares compatible `>=` floors;
+exact versions live only in experiment/deployment lock files. The
+2026-07-06 "umbrella exact-pins every member" rule is retired
+([scitex-python#393](https://github.com/scitex-ai/scitex-python/pull/393)).
 
 Likewise, §1's aggressive-publish rule sets the **default posture** for
 scitex-internal packages, superseding a blanket "never auto-release
@@ -183,8 +167,7 @@ applies to *external* packages, where no fix-forward safety net exists.
 - [03_release-automation.md](03_release-automation.md) — the release
   commands (the autonomous flow's mechanics).
 - [../01_ecosystem/02_dependency-and-version-pinning.md](../01_ecosystem/02_dependency-and-version-pinning.md)
-  — dependency hygiene; §5 places this doctrine's umbrella-`==` rule
-  alongside the leaf `>=` convention.
+  — dependency hygiene; floors everywhere, exact versions in lock files.
 - **Constitution** — this skill is the authoritative,
-  constitution-referenceable statement of the release + exact-pin
+  constitution-referenceable statement of the release + pin
   doctrine.
