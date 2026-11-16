@@ -10,6 +10,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.63.0] - 2026-11-16
+
 - Linter plugin SPI: `Rule.scope` (`""` or `"research-script"`). The engine
   applies the scope uniformly to engine call rules and plugin checkers once
   the module is fully visited, so leaf plugins share one false-positive gate
