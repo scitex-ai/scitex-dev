@@ -59,7 +59,7 @@ from scitex_dev.store import (
 from scitex_dev.store._dialect import get_dialect
 from scitex_dev.store._target import Backend
 
-from .conftest import BASE_DSN  # noqa: E402 - the PRIMARY, not the loopback
+from .conftest import BASE_DSN, scoped_dsn  # noqa: E402 - the PRIMARY, not the loopback
 THREADS = 8
 NODE = socket.gethostname()
 
@@ -127,7 +127,7 @@ def pg_target() -> Iterator:
             f"no usable PostgreSQL at {BASE_DSN}: {str(exc).splitlines()[0]}"
         )
     saved = os.environ.get("SCITEX_STORE_DSN")
-    os.environ["SCITEX_STORE_DSN"] = f"{BASE_DSN}?options=-csearch_path%3D{name}"
+    os.environ["SCITEX_STORE_DSN"] = scoped_dsn(name)
     try:
         yield host_store(pkg="test_conc", name="conc_seq")
     finally:

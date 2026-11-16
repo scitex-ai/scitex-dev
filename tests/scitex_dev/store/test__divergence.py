@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-from .conftest import BASE_DSN
+from .conftest import BASE_DSN, scoped_dsn
 
 from scitex_dev.store import (
     NEW_RECORD,
@@ -28,7 +28,7 @@ from scitex_dev.store import (
 
 
 def _dsn(schema_name: str) -> str:
-    return f"{BASE_DSN}?options=-csearch_path%3D{schema_name}"
+    return scoped_dsn(schema_name)
 
 
 def _open(schema_name: str, card_schema) -> Store:

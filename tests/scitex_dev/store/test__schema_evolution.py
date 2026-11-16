@@ -21,7 +21,7 @@ from scitex_dev.store import (
     WriterPolicy,
 )
 
-from .conftest import BASE_DSN
+from .conftest import scoped_dsn
 
 
 def _field(
@@ -57,7 +57,7 @@ def _schema(fields: dict[str, FieldPolicy]) -> Schema:
 
 def _target(pg_schemas, node: str = "evolution") -> StoreTarget:
     namespace = pg_schemas(node)
-    dsn = f"{BASE_DSN}?options=-csearch_path%3D{namespace}"
+    dsn = scoped_dsn(namespace)
     return StoreTarget.postgres(dsn, pkg="evolution")
 
 

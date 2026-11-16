@@ -6,6 +6,17 @@ import sys
 
 from scitex_dev.store._testing_process import _run_bootstrap
 
+# The timeout controls need a child that has ALREADY written its progress
+# marker when the caller's deadline fires. The child writes the marker as its
+# first statement and then blocks for far longer than any deadline, so the
+# outcome is decided by one ordering only: interpreter start-up + one write
+# must finish before TIMEOUT_S. `-I -S` keeps start-up to stdlib only (no
+# site-packages, no .pth hooks), and TIMEOUT_S is two orders of magnitude
+# above that cost. The old 2 s deadline with a full-site interpreter lost
+# this race on a loaded shared runner (stdout_tail='' in the failure log).
+TIMEOUT_S = 10
+BLOCKED_CHILD = [sys.executable, "-I", "-S", "-c"]
+
 
 def _observe(command, *, timeout=120):
     """Return the real subprocess outcome so each test asserts one contract."""
@@ -64,21 +75,21 @@ def test_failure_does_not_retry_the_child(tmp_path):
 
 def test_timeout_preserves_the_caller_budget_and_captured_bytes():
     # Arrange
-    command = [sys.executable, "-c",
-               "import sys,time;sys.stdout.write('started');sys.stdout.flush();time.sleep(10)"]
+    command = [*BLOCKED_CHILD,
+               "import sys,time;sys.stdout.write('started');sys.stdout.flush();time.sleep(3600)"]
     # Act
-    result = _observe(command, timeout=2)
+    result = _observe(command, timeout=TIMEOUT_S)
     # Assert
     assert (type(result), result.timeout, result.stdout) == (
-        subprocess.TimeoutExpired, 2, b"started")
+        subprocess.TimeoutExpired, TIMEOUT_S, b"started")
 
 
 def test_timeout_logs_progress_before_preserving_the_failure(caplog):
     # Arrange
-    command = [sys.executable, "-c",
-               "import sys,time;sys.stdout.write('startup-stage');sys.stdout.flush();time.sleep(10)"]
+    command = [*BLOCKED_CHILD,
+               "import sys,time;sys.stdout.write('startup-stage');sys.stdout.flush();time.sleep(3600)"]
     # Act
-    _observe(command, timeout=2)
+    _observe(command, timeout=TIMEOUT_S)
     output = "\n".join(record.getMessage() for record in caplog.records
                        if record.name == _run_bootstrap.__module__
                        and record.levelno == logging.ERROR)

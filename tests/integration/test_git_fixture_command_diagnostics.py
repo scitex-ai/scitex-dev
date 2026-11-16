@@ -20,9 +20,15 @@ def _environment(tmp_path):
     }
 
 
-def _outcome(command, root, environment):
+# Hang guard for commands that are expected to finish: not a speed budget.
+HANG_GUARD_S = 60
+# Deliberate deadline of the timeout control; it must stay below `sleep 4`.
+TIMEOUT_CONTROL_S = 3
+
+
+def _outcome(command, root, environment, *, timeout=HANG_GUARD_S):
     try:
-        return run_fixture_command(command, root, environment, timeout=3)
+        return run_fixture_command(command, root, environment, timeout=timeout)
     except subprocess.SubprocessError as error:
         return error
 
@@ -37,7 +43,7 @@ def test_successful_git_command_preserves_result_and_source(tmp_path):
     before = dict(environment)
     # Act
     result = run_fixture_command(
-        ["git", "-C", str(root), "init", "-q"], root, environment, timeout=3
+        ["git", "-C", str(root), "init", "-q"], root, environment, timeout=HANG_GUARD_S
     )
     # Assert
     assert (
@@ -56,7 +62,7 @@ def test_git_timeout_retains_original_deadline_and_actual_trace(tmp_path, capsys
     root.mkdir()
     environment = _environment(tmp_path)
     run_fixture_command(
-        ["git", "-C", str(root), "init", "-q"], root, environment, timeout=3
+        ["git", "-C", str(root), "init", "-q"], root, environment, timeout=HANG_GUARD_S
     )
     command = [
         "git",
@@ -67,7 +73,7 @@ def test_git_timeout_retains_original_deadline_and_actual_trace(tmp_path, capsys
         "fixture-wait",
     ]
     # Act
-    outcome = _outcome(command, root, environment)
+    outcome = _outcome(command, root, environment, timeout=TIMEOUT_CONTROL_S)
     messages = [*getattr(outcome, "__notes__", []), capsys.readouterr().err]
     note = next(
         line
@@ -86,7 +92,8 @@ def test_git_timeout_retains_original_deadline_and_actual_trace(tmp_path, capsys
         '"event":"child_start"' in evidence["git_trace_tail"],
         len(evidence["git_trace_tail"].encode()) <= 8192,
         evidence["owned_child_observation"]["collector_stopped"],
-    ) == (subprocess.TimeoutExpired, command, 3, 3, command, True, True, True)
+    ) == (subprocess.TimeoutExpired, command, TIMEOUT_CONTROL_S, TIMEOUT_CONTROL_S,
+          command, True, True, True)
 
 
 def test_failed_git_command_keeps_original_exit_and_error(tmp_path):

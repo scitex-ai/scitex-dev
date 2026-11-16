@@ -44,12 +44,12 @@ class TestPrePushScriptSelfTest:
         path = Path(pre_push_sh_path())
         mode = path.stat().st_mode
         is_exec = bool(mode & stat.S_IXUSR)
-        # Act — run --self-test under a 5s budget.
+        # Act — run --self-test (60 s is a hang guard, not a speed budget).
         proc = subprocess.run(
             ["bash", str(path), "--self-test"],
             capture_output=True,
             text=True,
-            timeout=5,
+            timeout=60,
         )
         # Assert — script exists, executable, self-test exits 0 AND
         # mentions "PASS" (a sanity-check assertion ran).
@@ -81,7 +81,7 @@ class TestPrePushScriptSelfTest:
             ["bash", pre_push_sh_path()],
             capture_output=True,
             text=True,
-            timeout=5,
+            timeout=60,
             cwd=str(repo),
             env=env,
         )
