@@ -15,7 +15,7 @@ actor, and same-repository PR author independently. Forks and unknown
 membership remain hosted.
 
 The canonical caller pins production revision
-`8c646081e9f1352077d3d8674052cce7ec75a1b7`, qualified after the ordinary
+`cd4e545a20a1e35385ffe88f4a963ae3c500819b`, qualified after the ordinary
 organization source merge. It does not rely on a branch reference matching
 a runner-group SHA selection. Source and caller pinning alone do not permit
 a group policy switch: retained direct/custom jobs, required status names,
