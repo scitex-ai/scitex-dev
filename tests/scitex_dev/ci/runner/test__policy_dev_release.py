@@ -275,7 +275,7 @@ def test_real_policy_projection_accepts_only_source_qualified22ref_company_pool(
     group, api, runners = pool_source_case([release.DEV_SELECTION])
     qualified = contract.qualify_workflows([group], api)
     # Act
-    result = _policy.assess_pool(runners, [group], {6: [1, 2, 3, 4, 5]},
+    result = _policy.assess_pool(runners, [group], {6: list(range(1, len(_policy.COMPANY_RUNNERS) + 1))},
                                  expected_workflows=qualified["expected"])
     # Assert
     assert (qualified["unknown"], qualified["violations"], result["state"]) == ([], [], "conformant")
@@ -287,7 +287,7 @@ def test_real_pool_projection_never_accepts_other_leaf_title_or_repo():
 
     group, _api, runners = pool_source_case([release.DEV_SELECTION.replace("scitex-dev", "other")])
     # Act
-    result = _policy.assess_pool(runners, [group], {6: [1, 2, 3, 4, 5]},
+    result = _policy.assess_pool(runners, [group], {6: list(range(1, len(_policy.COMPANY_RUNNERS) + 1))},
                                  expected_workflows=group["selected_workflows"])
     # Assert
     assert result["state"] == "violation"

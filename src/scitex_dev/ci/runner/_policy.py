@@ -19,7 +19,16 @@ from ._policy_dev_release import DEV_SELECTION
 
 ORG = "scitex-ai"
 CPU_RUNNERS = ("scitex-ci-02", "scitex-ci-03", "scitex-ci-04")
-COMPANY_RUNNERS = (*CPU_RUNNERS, "scitex-docker-03", "scitex-ci-04-02")
+#: Same-host executors in the reviewed Organization group (id 6). Registered
+#: 2026-10-08 with the full org label set; their labels were later stripped by
+#: hand, leaving 2 runners to serve `scitex-org-cpu` while 15 sat idle. Operator
+#: 2026-11-16: keep them in the pool (org membership is the access control;
+#: only SciTeX Inc. members join the org). Appended, so existing order holds.
+POOL_EXTRA_RUNNERS = (
+    *(f"scitex-ci-02-0{i}" for i in range(2, 9)),
+    *(f"scitex-ci-04-0{i}" for i in range(3, 9)),
+)
+COMPANY_RUNNERS = (*CPU_RUNNERS, "scitex-docker-03", "scitex-ci-04-02", *POOL_EXTRA_RUNNERS)
 REVIEWED_GROUPS = {6: "Organization"}
 HOSTED_RUNS_ON = '["ubuntu-latest"]'
 
