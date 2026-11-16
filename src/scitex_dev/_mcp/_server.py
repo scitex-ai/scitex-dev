@@ -28,6 +28,12 @@ mcp = FastMCP(
 # Register docs tools (docs_list, docs_get, docs_build, docs_search)
 register_docs_tools(mcp)
 
+# The linter engine belongs to Dev. Register it on the owning server so
+# standalone Dev and the umbrella's dev_ mount expose the same capability.
+from ..linter._mcp.tools import register_all_tools as _register_linter_tools
+
+_register_linter_tools(mcp)
+
 
 @mcp.tool()
 async def dev_context_measure(
