@@ -64,6 +64,10 @@ _COMPUTE_POOL_DESTINATIONS = [
         frozenset({"self-hosted", "Linux", "X64", "scitex-ci", "scitex-org-cpu", "scitex-local-cpu"}),
     ),
     (
+        "scitex-compute-02",
+        frozenset({"self-hosted", "Linux", "X64", "scitex-compute-02", "scitex-org-cpu"}),
+    ),
+    (
         "scitex-compute-03",
         frozenset({"self-hosted", "Linux", "X64", "scitex-ci", "scitex-org-cpu", "scitex-local-cpu"}),
     ),
@@ -238,13 +242,14 @@ def test_packaged_floor_is_never_empty():
 
 def test_seed_label_sets_are_per_runner_not_a_flattened_union():
     # Arrange — a flattened union would green-light a combination no single
-    # runner offers, and such a job queues forever. Ten independently recorded
-    # label sets across five machines; a flatten would collapse them to five.
+    # runner offers, and such a job queues forever. Eleven independently recorded
+    # label sets across five machines (2026-11-16: + the compute-02 executors'
+    # set); a flatten would collapse them to five.
     pass
     # Act
     found = packaged_default_runner_destinations()
     # Assert
-    assert len(found) == 10
+    assert len(found) == 11
 
 
 def test_control_plane_label_travels_with_the_rest_of_its_runners_set():

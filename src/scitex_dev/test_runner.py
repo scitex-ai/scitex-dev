@@ -151,8 +151,8 @@ def _build_pytest_args(config: TestConfig, git_root: str) -> list[str]:
         test_dir = os.path.join(git_root, "tests", "scitex", config.module)
         if not os.path.isdir(test_dir):
             test_dir = os.path.join(git_root, "tests", config.module)
-        if not os.path.isdir(test_dir):
-            test_dir = os.path.join(git_root, "tests")
+        # Preserve an explicit request: pytest reports missing paths as errors.
+        # Falling back to tests/ here would run unrelated tests instead.
         args.append(test_dir)
     else:
         args.append(os.path.join(git_root, "tests"))
@@ -383,7 +383,7 @@ def poll_hpc_job(
     job_id : str, optional
         Job ID to poll. If None, reads from .last-hpc-job.
     hpc_host : str, optional
-        HPC host name. Defaults to HPC_HOST env var or "spartan".
+        HPC host name. Defaults to SCITEX_DEV_TEST_HOST env var or "spartan".
 
     Returns
     -------
@@ -436,7 +436,7 @@ def watch_hpc_job(
     hpc_host: str | None = None,
     interval: int = 15,
 ) -> dict[str, Any]:
-    """Poll HPC job until completion.
+    """Poll until a terminal, error or unknown state; no overall deadline.
 
     Parameters
     ----------

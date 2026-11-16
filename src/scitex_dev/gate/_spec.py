@@ -5,7 +5,7 @@
 
 A ``GateCheck`` is one submission-stage validation a package contributes.
 scitex-dev owns this contract + the aggregation + the CLI; each leaf owns
-its RULE and reads its OWN state given the capsule workdir (scitex-dev
+its RULE and reads its OWN state given the project workdir (scitex-dev
 stays package-agnostic — it never imports scitex-clew / scitex-dataset).
 
 Design (operator-directed, 2026-07-03; card cohort-A submission gate):
@@ -13,7 +13,7 @@ Design (operator-directed, 2026-07-03; card cohort-A submission gate):
   block a submit that lacks real provenance) or ``post-submission``
   (scoring-side; v1 leaves this seam open, scoring stays paper-side).
 - ``run(workdir, config) -> GateResult``: the check locates its own state
-  (clew → its store on the per-host Postgres; dataset → the bound capsule's
+  (clew → its store on the per-host Postgres; dataset → the bound
   submission file under ``workdir``) and returns pass/fail + findings. It must not need an
   API handle to the owning package from scitex-dev's side.
 - ``Finding.fix_hint`` is the actionable string the pre-submission hook
@@ -158,7 +158,7 @@ class GateCheck:
         One of :data:`STAGES`.
     run
         ``(workdir: Path, config: Mapping) -> GateResult``. Receives the
-        capsule workdir and the raw ``gate`` config section (so a check
+        project workdir and the raw ``gate`` config section (so a check
         can read its own sub-keys); locates its own state under workdir.
     requires
         Optional import name of a package the check needs to RUN (beyond

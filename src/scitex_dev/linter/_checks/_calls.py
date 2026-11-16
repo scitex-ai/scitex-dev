@@ -167,14 +167,10 @@ class CallChecksMixin:
                 line = self._get_source(node.lineno)
                 self._figrecipe_usages.append((node.lineno, node.col_offset, line))
 
-            # Check (module, func) against rule table
-            rule = _rule_tables.CALL_RULES.get((mod_name, func_name))
-            if rule is None and resolved != mod_name:
-                rule = _rule_tables.CALL_RULES.get((resolved, func_name))
-            if rule is None:
-                rule = _rule_tables.CALL_RULES.get((None, func_name))
-
-            candidates = {} if rule is None else {rule.id: rule}
+            # Check (module, func) against the plugin-owned call tables. The
+            # engine ships NO call->rule mappings of its own: IO/PA belong to
+            # scitex-io, ST to scitex-stats, P/FM to figrecipe.
+            candidates = {}
             for key in (
                 (mod_name, func_name),
                 (resolved, func_name),
@@ -190,14 +186,14 @@ class CallChecksMixin:
             # Special cases
             for rule in candidates.values():
                 # plt.show() -- only flag if mod resolves to matplotlib
-                if rule is rules.P004:
+                if rule.id == "STX-P004":
                     if mod_name not in ("plt", "pyplot") and resolved not in (
                         "matplotlib.pyplot",
                     ):
                         continue
 
                 # to_csv / savefig -- skip on non-data/figure objects
-                if rule in (rules.IO004, rules.IO007):
+                if rule.id in ("STX-IO004", "STX-IO007"):
                     if mod_name in ("stx", "scitex", "scitex_io", "os", "sys", "Path"):
                         continue
 
@@ -219,36 +215,19 @@ class CallChecksMixin:
             if candidates:
                 return
 
-            # Axes hints: ax.plot(), ax.scatter(), ax.bar()
-            if func_name in _rule_tables.AXES_HINTS and mod_name not in _AXES_SKIP:
+            # Axes hints (plugin-owned): ax.plot(), ax.scatter(), ax.bar()
+            hint = self._plugin_axes_hints.get(func_name)
+            if hint is not None and mod_name not in _AXES_SKIP:
                 # Heuristic: if variable name looks like axes
                 if mod_name and (
                     mod_name.startswith("ax") or mod_name in ("axes", "subplot")
                 ):
                     line = self._get_source(node.lineno)
-                    self._add(
-                        _rule_tables.AXES_HINTS[func_name],
-                        node.lineno,
-                        node.col_offset,
-                        line,
-                    )
+                    self._add(hint, node.lineno, node.col_offset, line)
                 return
 
-            # Path(...).mkdir() pattern
-            if func_name == "mkdir" and mod_name not in (
-                "os",
-                "stx",
-                "scitex",
-                "sys",
-            ):
-                # Heuristic: if it's called on something that looks like a Path
-                line = self._get_source(node.lineno)
-                if "Path" in line or "path" in line.lower():
-                    pa003 = getattr(rules, "PA-003", None)
-                    if pa003 is not None:
-                        self._add(pa003, node.lineno, node.col_offset, line)
-
-        # bare func() pattern -- e.g., print(), open()
+        # bare func() pattern -- e.g., print(). Bare open() is NOT an engine
+        # concern: STX-PA002 is owned and emitted by the scitex-io plugin.
         elif isinstance(func, ast.Name):
             if (
                 func.id == "print"
@@ -257,9 +236,6 @@ class CallChecksMixin:
             ):
                 line = self._get_source(node.lineno)
                 self._add(_rule_tables.PRINT_RULE, node.lineno, node.col_offset, line)
-            elif func.id == "open" and self._has_session_decorator:
-                line = self._get_source(node.lineno)
-                self._add(rules.PA002, node.lineno, node.col_offset, line)
             # NM003 — bare call to a mock symbol: Mock(), MagicMock(), patch(...)
             elif func.id in self._MOCK_SYMBOLS:
                 line = self._get_source(node.lineno)

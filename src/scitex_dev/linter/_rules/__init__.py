@@ -6,6 +6,7 @@ After the per-package rule migration, the engine ships only the
 - `EH001` — generic Python error-handling lint
 - `I001-I007` — import hygiene (engine cross-cuts every package)
 - `S001-S008` — structure / `@stx.session` (cross-cuts every package)
+- `EX001` — malformed file-level `stx-allow-file` exemption pragma
 
 Rules that talk about a specific package's API live in that package's
 `_linter_plugin.py`:
@@ -33,6 +34,7 @@ defaults if needed.
 from ._base import Rule
 from ._cross_pkg_imports import I008
 from ._error_handling import EH001
+from ._exemption import EX001
 from ._hpc_ssh import HPC001
 from ._import_hygiene import I001, I002, I003, I004, I005, I006, I007, I009
 from ._lookup import lookup
@@ -56,6 +58,7 @@ from ._test_quality import TQ001, TQ002, TQ003, TQ004, TQ005, TQ006, TQ007
 
 ALL_RULES = {
     EH001.id: EH001,
+    EX001.id: EX001,
     HPC001.id: HPC001,
     I001.id: I001,
     I002.id: I002,
@@ -100,6 +103,7 @@ __all__ = [
     "lookup",
     "reset_lookup_cache",
     "EH001",
+    "EX001",
     "HPC001",
     "I001",
     "I002",

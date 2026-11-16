@@ -295,6 +295,15 @@ def _load_pyproject(start_dir: Path) -> dict:
                                     config["required_injected"] = value[
                                         "required_injected"
                                     ]
+                            elif key.replace("-", "_") == "library_dirs":
+                                # A project-wide library marker belongs to this
+                                # config file, independent of the caller's cwd.
+                                config["library_dirs"] = [
+                                    str(current.resolve())
+                                    if item and Path(item) == Path(".")
+                                    else item
+                                    for item in value
+                                ]
                             else:
                                 # Convert kebab-case to snake_case
                                 config[key.replace("-", "_")] = value

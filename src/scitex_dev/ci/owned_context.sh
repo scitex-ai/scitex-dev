@@ -59,6 +59,26 @@ owned_cleanup_plan() {
     printf '%s' "$budget"
 }
 
+owned_report_group() {
+    local group="${1:-}" report_status=0
+    [[ "$group" =~ ^[1-9][0-9]{0,9}$ ]] || return 1
+    # Failure-only evidence: no command arguments, executable names or environment.
+    # Bound collection and output independently; never use evidence to admit cleanup.
+    /usr/bin/timeout --signal=TERM --kill-after=1s 1s \
+        /usr/bin/ps -eo pid=,ppid=,pgid=,sid=,stat=,etimes= |
+        awk -v group="$group" '$3 == group {
+            count++
+            if (count <= 32)
+                printf "owned group member: pid=%s ppid=%s pgid=%s sid=%s state=%s elapsed_seconds=%s\n", $1, $2, $3, $4, $5, $6
+        } END {
+            if (count > 32) print "owned group report: additional members omitted"
+        }' >&2 || report_status=$?
+    if [ "$report_status" -ne 0 ]; then
+        echo "owned group report: collection failed (status=$report_status)" >&2
+    fi
+    return "$report_status"
+}
+
 cleanup_owned_tmp() {
     local result=$? cleanup_result=0 current_id='' attempt=0
     trap - EXIT INT TERM
@@ -72,6 +92,7 @@ cleanup_owned_tmp() {
         done
         if kill -0 -- "-$OWNED_CHILD_GROUP" 2>/dev/null; then
             echo "::error::owned child group remains; temporary cleanup refused" >&2
+            owned_report_group "$OWNED_CHILD_GROUP" || true
             cleanup_result=1
         fi
     fi

@@ -23,14 +23,26 @@ See ``docs/adr/0003-ecosystem-boundary-ports-and-producers.md`` and
 ``_skills/general/01_ecosystem/16_boundary-ports-and-producers.md`` — this
 module is the "import the peer's public surface instead" fix pattern for
 the a2 boundary smell those documents describe.
+
+Rule scopes (``Rule.scope``) are part of this surface: a plugin rule
+declaring ``scope=SCOPE_RESEARCH_SCRIPT`` is filtered by the ENGINE — for
+call rules and plugin checkers alike — so it fires only in research scripts
+(``is_research_script``). Plugins declare coverage the engine may require
+for a project type via the payload key ``capabilities`` (e.g. scitex-io's
+``"raw-io"``; see ``REQUIRED_CAPABILITIES``).
 """
 
 from __future__ import annotations
 
 from ._fm_checker import FMChecker
 from ._issue import Issue
-from ._rules._base import Rule
 from ._provider_replacements import ProviderReplacement
+from ._research_scope import (
+    REQUIRED_CAPABILITIES,
+    is_research_script,
+    is_test_file,
+)
+from ._rules._base import SCOPE_ANY, SCOPE_RESEARCH_SCRIPT, SCOPES, Rule
 from ._source_helpers import _is_allowed_by_comment
 
 __all__ = [
@@ -39,4 +51,10 @@ __all__ = [
     "ProviderReplacement",
     "FMChecker",
     "_is_allowed_by_comment",
+    "SCOPE_ANY",
+    "SCOPE_RESEARCH_SCRIPT",
+    "SCOPES",
+    "REQUIRED_CAPABILITIES",
+    "is_research_script",
+    "is_test_file",
 ]

@@ -1,8 +1,7 @@
 """PS-CLEW-001 / PS-AGENT-001 — Clew add_claim / claims.json terminus checks.
 
-Implements the two rules introduced after the paper-scitex-clew
-post-mortem on 2026-06-01 (the agent declared SUCCESS while the
-chain of evidence was silently broken):
+Implements two rules from a 2026-06-01 post-mortem in which an agent
+declared SUCCESS while the chain of evidence was silently broken:
 
   PS-CLEW-001 — add_claim without self-verify.
     A .py file calls ``clew.add_claim(...)`` (also matched as
@@ -17,8 +16,8 @@ chain of evidence was silently broken):
     A ``scripts/agent/*.py`` file calls ``clew.add_claim(...)`` but
     NO module-level / function-level call writes a real file at
     ``data/results/claims.json``. The DAG terminus MUST be a real
-    file; the launcher's verifier scores by reading
-    ``data/results/claims.json``. Without it the run is unscored.
+    file; ``clew verify``, reviewers and any downstream verifier read
+    ``data/results/claims.json``. Without it there is nothing to verify.
 
 Both rules are AST-based and intentionally prefer false-NEGATIVES
 over false-positives — if ``add_claim`` is called indirectly via a
@@ -290,8 +289,8 @@ def _iter_agent_scripts(repo: Path) -> Iterable[Path]:
 
     A research project's agent stage scripts live under
     ``scripts/agent/`` by convention (per the
-    ``02_research-project_*`` skill family). For the cohort scaffolds
-    that live deep under ``scripts/cohorts/.../<capsule>/scripts/agent/``,
+    ``02_research-project_*`` skill family). For multi-dataset projects
+    whose sub-projects nest ``.../<sub-project>/scripts/agent/``,
     we also match the substring ``/scripts/agent/`` anywhere in the
     path.
     """
@@ -377,9 +376,8 @@ def check_ps_clew_001_add_claim_without_self_verify(
                     "`for c in registered: result = "
                     "clew.verify_claim(c.claim_id); assert "
                     "result['source_verified']`. See "
-                    "paper-scitex-clew commit 87a0f7b for the "
-                    "canonical pattern and the operator directive "
-                    "2026-06-01."
+                    "_skills/scientific/06_scitexification/"
+                    "04_repro-clew.md §`The validity gate`."
                 ),
             )
         )

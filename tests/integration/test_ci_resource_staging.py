@@ -12,7 +12,7 @@ from scitex_dev.ci._stage_resource import _stage_resource
 
 _RESOURCE = Path(__file__).resolve().parents[2] / "src/scitex_dev/ci/owned_context.sh"
 _SCRIPT = _RESOURCE.with_name("_stage_resource.py")
-_EXPECTED = "a795678455d409e076a1c93a4a810b50c89499fcb83ae4c90a8d31a19e90e5d1"
+_EXPECTED = "816fa8848d929e4bfe1a054cc45382ff109b1bb7ded2872071712926df7a74a8"
 
 
 def test_real_owned_resource_stages_through_isolated_cli(tmp_path):
@@ -131,3 +131,15 @@ def test_programmatic_staging_returns_receipt_for_actual_private_file(tmp_path):
         {"path": str(destination), "sha256": _EXPECTED, "bytes": _RESOURCE.stat().st_size},
         _EXPECTED, 0o600
     )
+
+
+def test_previous_resource_digest_refuses_changed_source(tmp_path):
+    # Arrange
+    root = tmp_path / "owned"
+    root.mkdir(mode=0o700)
+    destination = root / "resource"
+    previous = "a795678455d409e076a1c93a4a810b50c89499fcb83ae4c90a8d31a19e90e5d1"
+    # Act
+    refused = _refused(_RESOURCE, destination, previous)
+    # Assert
+    assert (refused, destination.exists()) == (True, False)

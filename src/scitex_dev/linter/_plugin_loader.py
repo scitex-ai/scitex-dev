@@ -6,6 +6,8 @@ import sys
 
 import scitex_logging as slogging
 
+from ._rules._base import SCOPES
+
 _logger = slogging.getLogger(__name__)
 _cache = None
 _GROUP = "scitex_dev.linter.plugins"
@@ -122,6 +124,15 @@ def _validate_payload(plugin, name):
             raise LinterPluginError(
                 f"{_GROUP} provider {name!r}: {key} must be a list or tuple"
             )
+    if "capabilities" in plugin and (
+        not isinstance(plugin["capabilities"], (list, tuple))
+        or not all(
+            isinstance(cap, str) and cap.strip() for cap in plugin["capabilities"]
+        )
+    ):
+        raise LinterPluginError(
+            f"{_GROUP} provider {name!r}: capabilities must be a list of names"
+        )
     for key in ("call_rules", "axes_hints"):
         if key in plugin and not isinstance(plugin[key], Mapping):
             raise LinterPluginError(
@@ -138,6 +149,7 @@ def _validate_payload(plugin, name):
             or not isinstance(getattr(rule, "message", None), str)
             or not isinstance(getattr(rule, "suggestion", None), str)
             or not isinstance(getattr(rule, "requires", None), str)
+            or getattr(rule, "scope", "") not in SCOPES
         ):
             raise LinterPluginError(
                 f"{_GROUP} provider {name!r}: invalid Rule {rule!r}"
@@ -203,6 +215,8 @@ def load_plugins(*, entry_points_iter=None):
         "checkers": [],
         "call_rule_groups": {},
         "provider_replacements": (),
+        # capability name -> declaring provider; see _research_scope.py
+        "capabilities": {},
     }
     owners = {"rules": {}, "call_rules": {}, "axes_hints": {}, "checkers": {}}
     provider_owners = {}
@@ -305,6 +319,8 @@ def load_plugins(*, entry_points_iter=None):
                 )
             owners["checkers"][identity] = name
             merged["checkers"].append(checker)
+        for cap in plugin.get("capabilities", ()):
+            merged["capabilities"].setdefault(cap, name)
         plugin_payloads.append(plugin)
     if not logging_present:
         raise LinterPluginError(

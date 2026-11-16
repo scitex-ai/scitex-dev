@@ -19,6 +19,15 @@ from scitex_dev._hooks import HOOK_DIR
 HOOKS = Path(HOOK_DIR)
 SHIM = HOOKS / "_git_local_env.sh"
 WRAPPER = HOOKS / "run_testmon.sh"
+# Hang guards, not speed budgets. Every subprocess here is a few local Git or
+# Python invocations that finish in milliseconds on an idle box, but a shared
+# CI runner under load has stalled a bare `git init` for over 3 s. These
+# deadlines exist only to turn a genuine hang into a failure; no assertion in
+# this module is about speed. The outer child deadline exceeds the sum of the
+# six inner Git deadlines so the inner command's diagnostic note (Trace2 tail
+# and owned-child observation) is what reports a real hang.
+GIT_HANG_GUARD_S = 60
+CHILD_HANG_GUARD_S = 6 * GIT_HANG_GUARD_S + 60
 FIXTURE_CHILD = f"""from pathlib import Path
 import os
 import sys
@@ -29,7 +38,7 @@ from tests.integration._git_fixture_command import run_fixture_command
 target = Path(sys.argv[1])
 def git(*args):
     run_fixture_command(['git', '-C', str(target), *args], target,
-                        os.environ.copy(), timeout=3)
+                        os.environ.copy(), timeout={GIT_HANG_GUARD_S})
 git('init', '-q')
 git('config', 'user.name', 'Fixture Tester')
 git('config', 'user.email', 'fixture@example.test')
@@ -60,7 +69,7 @@ def _git(repo, env, *args):
         env=env,
         capture_output=True,
         text=True,
-        timeout=5,
+        timeout=GIT_HANG_GUARD_S,
         check=True,
     ).stdout.strip()
 
@@ -107,7 +116,7 @@ def _fixture_run(repositories, *, isolated):
         env=inherited,
         capture_output=True,
         text=True,
-        timeout=20,
+        timeout=CHILD_HANG_GUARD_S,
         check=False,
     )
 
@@ -211,7 +220,7 @@ def test_no_hook_environment_keeps_normal_foreign_fixture(repositories):
         env=env,
         capture_output=True,
         text=True,
-        timeout=20,
+        timeout=CHILD_HANG_GUARD_S,
         check=False,
     )
     observed = (
@@ -241,7 +250,7 @@ def test_child_keeps_nonlocal_selected_environment(repositories, tmp_path):
         env=inherited,
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=CHILD_HANG_GUARD_S,
         check=False,
     )
     observed = (result.returncode, report.read_text())
@@ -267,7 +276,7 @@ def test_child_removes_only_canonical_local_names(repositories, tmp_path):
         env=inherited,
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=CHILD_HANG_GUARD_S,
         check=False,
     )
     observed = (result.returncode, report.read_text())
@@ -284,7 +293,7 @@ def test_child_exit_code_is_preserved(tmp_path):
         env=env,
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=CHILD_HANG_GUARD_S,
         check=False,
     )
     # Assert
@@ -311,7 +320,7 @@ def test_missing_git_refuses_before_child(tmp_path):
         env=env,
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=CHILD_HANG_GUARD_S,
         check=False,
     )
     observed = (result.returncode, marker.exists())
@@ -328,7 +337,7 @@ def test_missing_child_command_refuses(tmp_path):
         env=env,
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=CHILD_HANG_GUARD_S,
         check=False,
     )
     # Assert

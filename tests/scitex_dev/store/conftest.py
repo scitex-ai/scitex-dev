@@ -66,6 +66,20 @@ atexit.register(_STACK.close)
 BASE_DSN = _STACK.enter_context(writable_dsn())
 
 
+def scoped_dsn(schema_name: str) -> str:
+    """``BASE_DSN`` with ``search_path`` pinned to ``schema_name``.
+
+    The throwaway cluster's DSN already carries a query
+    (``postgresql://postgres@/postgres?host=<socket>``), so a second ``?``
+    made libpq read ``host=<socket>?options=...`` as one value and every
+    store fixture errored with "extra key/value separator" whenever no
+    ``SCITEX_STORE_DSN`` was configured. Same joiner rule as
+    ``scitex_dev.store.testing.ephemeral_schema``.
+    """
+    joiner = "&" if "?" in BASE_DSN else "?"
+    return f"{BASE_DSN}{joiner}options=-csearch_path%3D{schema_name}"
+
+
 @pytest.fixture
 def card_schema() -> Schema:
     """A minimal card-like schema: identity, a status, and a hide flag."""
@@ -148,7 +162,7 @@ def make_store(pg_schemas, card_schema):
 
     def _make(node: str, *, policy: WriterPolicy = WriterPolicy.MULTI_WRITER) -> Store:
         schema_name = pg_schemas(node)
-        dsn = f"{BASE_DSN}?options=-csearch_path%3D{schema_name}"
+        dsn = scoped_dsn(schema_name)
         return Store(
             StoreTarget.postgres(dsn, pkg="cards"),
             card_schema,
@@ -281,9 +295,7 @@ def open_store(pg_schemas):
     def _make(schema: Schema, node: str, *, key: "str | None" = None) -> Store:
         name = pg_schemas(key or f"{node}_{uuid.uuid4().hex[:6]}")
         return Store(
-            StoreTarget.postgres(
-                f"{BASE_DSN}?options=-csearch_path%3D{name}", pkg="catalog"
-            ),
+            StoreTarget.postgres(scoped_dsn(name), pkg="catalog"),
             schema,
             node=node,
             writer_policy=WriterPolicy.MULTI_WRITER,

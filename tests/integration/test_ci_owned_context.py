@@ -112,8 +112,13 @@ def test_unreviewed_capacity_refused(tmp_path, entries, allocated):
 
 
 def test_real_large_class_cleanup(tmp_path):
-    # Arrange
-    body = 'driver_body() { for ((i=0;i<10001;i++)); do mkdir "$OWNED_TMPDIR/$i"; done; }; run_owned_body'
+    # Arrange - 10,001 real directories (+ the root = 10,002 surveyed entries)
+    # is the smallest tree past the 10,000-entry small-class boundary, so it
+    # cannot shrink. Create them with ONE mkdir over a brace expansion: the
+    # old per-directory loop forked 10,001 processes and alone overran the
+    # 75 s hang guard on a loaded runner, while the cleanup under test was
+    # never the slow part.
+    body = 'driver_body() { cd "$OWNED_TMPDIR" && mkdir -- {0..10000}; }; run_owned_body'
     # Act
     result = execute(tmp_path, body, timeout=75)
     # Assert
@@ -124,7 +129,7 @@ def test_resource_refuses_direct_execution(tmp_path):
     # Arrange
     command = ["bash", str(RESOURCE)]
     # Act
-    result = subprocess.run(command, capture_output=True, text=True, timeout=5)
+    result = subprocess.run(command, capture_output=True, text=True, timeout=60)
     # Assert
     assert (result.returncode, "source this CI resource" in result.stderr) == (1, True)
 

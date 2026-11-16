@@ -75,8 +75,9 @@ cross-package imports, and explicitly skips guarded/lazy/
 
 ## A separate overlay: packaging pins are not import edges
 
-The umbrella (`scitex-python`)'s `==` pins on every peer package are a
-**release-train determinism mechanism**, not a runtime connection. Do not
+The umbrella (`scitex-python`)'s `>=` floors on its peer packages (and any
+lock file's exact versions) are a **packaging mechanism**, not a runtime
+connection. Do not
 conflate a version pin in `pyproject.toml` with an import edge when
 reasoning about the boundary graph.
 

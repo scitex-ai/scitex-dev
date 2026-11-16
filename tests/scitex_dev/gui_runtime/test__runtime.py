@@ -96,7 +96,7 @@ def test_pid_alive_returns_false_for_a_reaped_child_process():
     # Arrange
     # Only the kernel PID is under test; no application/site hooks are needed.
     child = subprocess.Popen([sys.executable, "-I", "-S", "-c", "pass"])
-    child.wait(timeout=5)
+    child.wait(timeout=60)
     # Act
     alive = pid_alive(child.pid)
     # Assert
@@ -250,7 +250,7 @@ def test_status_reports_running_with_url_for_a_live_pid(state_file):
 def test_status_self_heals_stale_state_for_a_dead_pid(state_file):
     # Arrange
     child = subprocess.Popen([sys.executable, "-I", "-S", "-c", "pass"])
-    child.wait(timeout=5)
+    child.wait(timeout=60)
     runtime = GuiRuntime(state_file)
     runtime.write_state(child.pid, 5050, "127.0.0.1")
     # Act

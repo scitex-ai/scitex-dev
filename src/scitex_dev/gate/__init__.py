@@ -3,12 +3,12 @@
 # File: src/scitex_dev/gate/__init__.py
 """Submission-gate plugin federation for scitex-dev.
 
-A capsule/submission GATE that aggregates per-package validation checks
+A submission GATE that aggregates per-package validation checks
 as PLUGINS: leaves register a ``GateCheck`` provider under the
 ``scitex_dev.gate.checks`` entry-point group; scitex-dev owns the
 contract, the aggregation, and the ``scitex-dev gate`` CLI, and stays
 package-agnostic (each check locates + reads its own state given the
-capsule workdir). Behaviour is configured by which packages are installed
+project workdir). Behaviour is configured by which packages are installed
 plus a per-check ``enforce`` knob in ``.scitex/dev/config.yaml`` — the
 pre-submission hook depends ONLY on scitex-dev.
 

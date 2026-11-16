@@ -33,3 +33,34 @@ def _isolate_linter_env():
         for key in [k for k in os.environ if k.startswith(_LINTER_ENV_PREFIXES)]:
             del os.environ[key]
         os.environ.update(saved)
+
+
+@pytest.fixture
+def observe_lint():
+    """Observe real engine rule requests and returned issues without replacing either.
+
+    A request can be filtered by availability, comments or configuration.
+    Algorithm tests can inspect requests while separate assertions check the
+    actual emitted issues. The previous profiler is restored after each call.
+    """
+    import sys
+    from scitex_dev.linter.checker import SciTeXChecker, lint_source
+
+    def run(source, *, filepath="module.py", config=None):
+        requests = []
+        previous = sys.getprofile()
+
+        def record(frame, event, arg):
+            if event == "call" and frame.f_code is SciTeXChecker._add.__code__:
+                rule = frame.f_locals.get("rule")
+                if rule is not None:
+                    requests.append(rule)
+
+        sys.setprofile(record)
+        try:
+            issues = lint_source(source, filepath=filepath, config=config)
+        finally:
+            sys.setprofile(previous)
+        return requests, issues
+
+    return run

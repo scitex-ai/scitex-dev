@@ -58,10 +58,7 @@ One-line descriptions per leaf are in [07_sub-skill-catalog.md](07_sub-skill-cat
 
 ### 4. Clew adoption — translating any project into a Clew-verifiable form
 - [04_clew_01_dag-as-map-and-evidence.md](04_clew_01_dag-as-map-and-evidence.md) — read first
-- [04_clew_02_translation-playbook.md](04_clew_02_translation-playbook.md)
-- [04_clew_03_translation-template.md](04_clew_03_translation-template.md)
-- [04_clew_04_translation-notebook-delta.md](04_clew_04_translation-notebook-delta.md)
-- [04_clew_05_notebook-execution-and-scoring.md](04_clew_05_notebook-execution-and-scoring.md) — execution, extraction, validity, scoring
+- [04_clew_03_translation-template.md](04_clew_03_translation-template.md) — concrete clew-tracked project skeleton
 
 ### 5. Private skills for consumer projects (research repos, paper repos, internal apps)
 - [05_private-skills_01_consumer-project.md](05_private-skills_01_consumer-project.md)

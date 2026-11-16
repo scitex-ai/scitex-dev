@@ -355,13 +355,22 @@ def test_session_print_has_one_source_finding():
     ] == ["PS-220"]
 
 
-def test_real_io_owner_reports_once_without_opt_in():
+def test_real_io_owner_is_requested_once_and_honors_availability(observe_lint):
     # Arrange
     source = 'fig.savefig("out.png", dpi=300)\n'
     # Act
-    ordinary = lint_source(source, filepath="src/demo/core.py", config=LinterConfig())
+    from scitex_dev.linter._packages import detect
+
+    requests, emitted = observe_lint(
+        source, filepath="src/demo/core.py", config=LinterConfig()
+    )
+    required = {rule.id: rule.requires for rule in requests}
+    requested = [rule.id for rule in requests]
+    codes = [issue.rule.id for issue in emitted]
+    expected = int(not required["STX-IO007"] or
+                   detect().get(required["STX-IO007"], False))
     # Assert
-    assert [issue.rule.id for issue in ordinary].count("STX-IO007") == 1
+    assert (requested.count("STX-IO007"), codes.count("STX-IO007")) == (1, expected)
 
 
 def test_real_io_owner_reports_no_figure_rule_without_opt_in():
@@ -373,13 +382,20 @@ def test_real_io_owner_reports_no_figure_rule_without_opt_in():
     assert "STX-FM006" not in [issue.rule.id for issue in ordinary]
 
 
-def test_opted_in_figure_owner_matches_io_owner_count():
+def test_opted_in_owners_are_requested_once_and_honor_availability(observe_lint):
     # Arrange
     source = 'fig.savefig("out.png", dpi=300)\n'
     # Act
-    opted = lint_source(
+    from scitex_dev.linter._packages import detect
+
+    requests, emitted = observe_lint(
         source, filepath="src/demo/core.py", config=LinterConfig(enable=["FM"])
     )
-    codes = [issue.rule.id for issue in opted]
+    required = {rule.id: rule.requires for rule in requests}
+    requested = [rule.id for rule in requests]
+    codes = [issue.rule.id for issue in emitted]
+    expected = tuple(int(not required[key] or detect().get(required[key], False))
+                     for key in ["STX-IO007", "STX-FM006"])
     # Assert
-    assert codes.count("STX-IO007") == codes.count("STX-FM006") == 1
+    assert (requested.count("STX-IO007"), requested.count("STX-FM006"),
+            codes.count("STX-IO007"), codes.count("STX-FM006")) == (1, 1, *expected)

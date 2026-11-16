@@ -300,6 +300,17 @@ ECOSYSTEM_PART_2 = {
         "import_name": "scitex_storage",
         "category": "library",
     },
+    # Added 2026-11-16 on the operator's ruling: the business and personal
+    # affairs library (catalogs, actuals, scenarios, reports), renamed from
+    # scitex-business. Registered so every ecosystem audit, CI template
+    # roll-out and version check enumerates it like its siblings.
+    "scitex-affairs": {
+        "local_path": "~/proj/scitex-affairs",
+        "pypi_name": "scitex-affairs",
+        "github_repo": "scitex-ai/scitex-affairs",
+        "import_name": "scitex_affairs",
+        "category": "library",
+    },
 }
 
 

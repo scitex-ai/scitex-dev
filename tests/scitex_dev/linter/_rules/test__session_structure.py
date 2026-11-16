@@ -12,6 +12,8 @@ while S002/S007/S008 are generic structure/naming checks with no gate.
 
 import pytest
 
+from scitex_dev.linter._packages import detect
+
 from scitex_dev.linter._rules import ALL_RULES
 from scitex_dev.linter._rules import _session_structure as ss
 
@@ -97,19 +99,15 @@ def test_s001_is_error_severity():
 # keyword-only (behind `*`) or positional-only (after `/`).
 
 
-def _lint(source: str) -> list:
-    """Lint a snippet with the default config; return Issues."""
-    from scitex_dev.linter.checker import lint_source
+def _s006_snapshot(source, observe_lint):
     from scitex_dev.linter.config import LinterConfig
 
-    return lint_source(source, filepath="<test>", config=LinterConfig())
+    requests, issues = observe_lint(source, filepath="<test>", config=LinterConfig())
+    return ([rule for rule in requests if rule.id == "STX-S006"],
+            [issue for issue in issues if issue.rule.id == "STX-S006"])
 
 
-def _s006_issues(issues) -> list:
-    return [i for i in issues if i.rule.id == "STX-S006"]
-
-
-def test_s006_neurovista_pattern_does_not_raise_npe():
+def test_s006_neurovista_pattern_does_not_raise_npe(observe_lint):
     """#60 — annotated args + INJECTED defaults must not NPE on .id."""
     # Arrange
     source = (
@@ -128,12 +126,12 @@ def test_s006_neurovista_pattern_does_not_raise_npe():
         "    return 0\n"
     )
     # Act
-    issues = _lint(source)
+    requests, emitted = _s006_snapshot(source, observe_lint)
     # Assert
-    assert _s006_issues(issues) == [], "all 5 INJECTED declared — S006 must not fire"
+    assert (requests, emitted) == ([], [])
 
 
-def test_s006_detects_keyword_only_injected_params():
+def test_s006_detects_keyword_only_injected_params(observe_lint):
     """S006 must see INJECTED params declared behind a `*` separator."""
     # Arrange
     source = (
@@ -151,12 +149,12 @@ def test_s006_detects_keyword_only_injected_params():
         "    return 0\n"
     )
     # Act
-    issues = _s006_issues(_lint(source))
+    requests, emitted = _s006_snapshot(source, observe_lint)
     # Assert
-    assert issues == [], "kwonly INJECTED params must count toward declared set"
+    assert (requests, emitted) == ([], [])
 
 
-def test_s006_detects_positional_only_injected_params():
+def test_s006_detects_positional_only_injected_params(observe_lint):
     """S006 must see INJECTED params declared before a `/` separator."""
     # Arrange
     source = (
@@ -174,13 +172,13 @@ def test_s006_detects_positional_only_injected_params():
         "    return 0\n"
     )
     # Act
-    issues = _s006_issues(_lint(source))
+    requests, emitted = _s006_snapshot(source, observe_lint)
     # Assert
-    assert issues == [], "posonly INJECTED params must count toward declared set"
+    assert (requests, emitted) == ([], [])
 
 
-def test_s006_still_fires_on_actually_missing_injected_params():
-    """Sanity guard — the fix must not silence S006 when params ARE missing."""
+def test_s006_requests_missing_params_and_honors_availability(observe_lint):
+    """Missing parameters must still produce a real S006 request."""
     # Arrange
     source = (
         "import scitex as stx\n"
@@ -191,16 +189,14 @@ def test_s006_still_fires_on_actually_missing_injected_params():
     )
     expected_missing = ("COLORS", "rngg", "logger")
     # Act
-    issues = _s006_issues(_lint(source))
-    msg = issues[0].rule.message if issues else ""
+    requests, emitted = _s006_snapshot(source, observe_lint)
+    message = requests[0].message if requests else ""
     # Assert
-    assert len(issues) == 1 and all(p in msg for p in expected_missing), (
-        f"expected exactly 1 S006 listing {expected_missing} as missing; "
-        f"got {len(issues)} issue(s), message={msg!r}"
-    )
+    assert (len(requests), all(name in message for name in expected_missing),
+            len(emitted)) == (1, True, int(detect()["scitex"]))
 
 
-def test_s006_handles_bare_function_without_any_args():
+def test_s006_bare_function_requests_all_missing_params(observe_lint):
     """`def main():` with @stx.session — no NPE, S006 lists all 5 missing."""
     # Arrange
     source = (
@@ -212,10 +208,8 @@ def test_s006_handles_bare_function_without_any_args():
     )
     expected_missing = ("CONFIG", "plt", "COLORS", "rngg", "logger")
     # Act
-    issues = _s006_issues(_lint(source))
-    msg = issues[0].rule.message if issues else ""
+    requests, emitted = _s006_snapshot(source, observe_lint)
+    message = requests[0].message if requests else ""
     # Assert
-    assert len(issues) == 1 and all(p in msg for p in expected_missing), (
-        f"expected exactly 1 S006 listing all 5 INJECTED params as missing; "
-        f"got {len(issues)} issue(s), message={msg!r}"
-    )
+    assert (len(requests), all(name in message for name in expected_missing),
+            len(emitted)) == (1, True, int(detect()["scitex"]))

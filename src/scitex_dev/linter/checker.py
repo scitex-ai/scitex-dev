@@ -8,7 +8,6 @@ import ast
 from dataclasses import replace
 
 from . import rules
-from ._issue import Issue
 from ._checks import (
     CallChecksMixin,
     ErrorHandlingMixin,
@@ -16,6 +15,7 @@ from ._checks import (
     TestQualityMixin,
     own_scitex_package,
 )
+from ._issue import Issue
 from ._rules import lookup as _lk
 from ._source_helpers import _is_allowed_by_comment, is_script
 from .rules import Rule
@@ -80,6 +80,7 @@ class SciTeXChecker(
             for key, group in groups.items()
         }
         self._plugin_checkers = _plugins["checkers"]
+        self._plugin_axes_hints = _plugins.get("axes_hints", {})
 
     # -- Assignment visitors --
 
@@ -342,8 +343,30 @@ class SciTeXChecker(
 
     # -- Finalization --
 
+    def is_research_script(self) -> bool:
+        """The ``research-script`` scope verdict (valid after the visit)."""
+        from ._research_scope import is_research_script
+
+        return is_research_script(
+            self.filepath,
+            self.config,
+            has_entry_decorator=(
+                self._has_session_decorator or self._has_module_decorator
+            ),
+        )
+
     def get_issues(self) -> list:
         """Return all issues, including post-visit structural checks."""
+        # Rule scopes (plugin SPI): drop `scope="research-script"` findings
+        # — from engine call rules AND plugin checkers, both already in
+        # self.issues — unless this module is a research script. Decided
+        # here, once the whole module is seen, because the @stx.session
+        # main usually sits below the helpers that do the I/O.
+        from ._research_scope import apply_scopes
+
+        self.issues = apply_scopes(
+            self.issues, research_script=self.is_research_script()
+        )
         # STX-S009 / STX-S010 — research script-organization (path/filename
         # rules). They target files UNDER a configured script dir, which
         # is_script() deliberately excludes, so they run BEFORE the is_script
@@ -390,7 +413,7 @@ class SciTeXChecker(
     def _add(self, rule: Rule | None, line: int, col: int, source_line: str) -> None:
         if rule is None:
             return
-        if rule.requires and rule.requires not in self._available:
+        if rule.requires and not self._available.get(rule.requires, False):
             # Pillar-0 fail-loud (#TBD): tally the silent-skip so the
             # health module can emit an L2 stderr summary the first
             # time the count goes non-zero. Without this the
@@ -490,7 +513,11 @@ def lint_source(
                 f"{type(exc).__name__}: {exc}"
             ) from exc
 
-    return checker.get_issues()
+    # File-level exemption pragmas (see `_exemptions.py`) apply to
+    # engine AND plugin findings; malformed pragmas surface as STX-EX001.
+    from ._exemptions import apply_file_exemptions
+
+    return apply_file_exemptions(checker.get_issues(), source, tree)
 
 
-from ._dispatch import lint_file  # noqa: E402,F401  re-export
+from ._dispatch import lint_file

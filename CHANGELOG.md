@@ -10,6 +10,71 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.63.0] - 2026-11-16
+
+- Linter plugin SPI: `Rule.scope` (`""` or `"research-script"`). The engine
+  applies the scope uniformly to engine call rules and plugin checkers once
+  the module is fully visited, so leaf plugins share one false-positive gate
+  (`spi.SCOPE_RESEARCH_SCRIPT`, `spi.is_research_script`). Plugins declare
+  coverage via a new payload key `capabilities`; `lint_file` (CLI
+  `validate-files`, edit hook, MCP, sweep) raises `LinterPluginError` when a
+  `project-type: research` project has no provider of `raw-io` (scitex-io
+  >= 0.5.0) instead of reporting a clean run.
+- Linter: the engine no longer emits leaf-owned rules. Removed the hard-coded
+  STX-PA002 `open()` check (now scitex-io's, research-script scoped) and the
+  duplicated IO/ST/P/PA call->rule and axes-hint tables in `_rule_tables.py`
+  (plugins' tables were already the superset). This also deletes the
+  hyphenated `STX-PA-003`/`STX-PA-004` ids that never resolved and the dead
+  `Path.mkdir` heuristic behind them. Axes hints now come from the plugins'
+  `axes_hints`. Requires scitex-io >= 0.5.0 for research projects.
+- Linter: auditable file-level opt-out `# stx-allow-file: <IDS> (reason: ...)`;
+  the reason is mandatory (STX-EX001 rejects malformed pragmas) and applied
+  exemptions are listed by `validate-files` (text block and JSON
+  `_meta.exemptions`).
+
+- Correct legacy HPC test-runner guidance for failed submissions, saved job IDs,
+  unknown states, polling deadlines and environment variable names. Split local
+  and HPC guides into linked skills within the existing leaf-size budgets.
+
+- Keep explicit local test-module selection when the path is missing, so pytest
+  reports an error instead of silently running the entire project test suite.
+  Preserve valid path precedence, options and test-failure exit codes.
+
+- Explicitly load one selected capability factory after regular-file and import-
+  metadata checks, then parse its strict plain-data contract. Discovery remains
+  inert; no audit enablement or behavioral acceptance is added.
+
+- Verify regular capability-provider parent package files against the declaring
+  distribution's RECORD without importing them. Target-only checks keep their
+  existing scope; namespace/unrecorded/other-owner parents remain unqualified.
+
+- Report bounded process-group IDs and states when owned CI cleanup is refused,
+  without exposing command arguments or changing cancellation/deletion guards.
+
+- Parse a versioned, owner-bound plain-data Python/MCP capability declaration.
+  Leaves can return dictionaries without importing private Dev models;
+  malformed fields and self-certification flags are refused, while semantic
+  inventory findings and behavioral qualification remain separate.
+
+- Resolve capability-provider Python files against their current installed
+  declaration and RECORD digest/size without importing code. Refuse missing
+  or ambiguous records, changed declarations and redirected module paths;
+  actual import origin and callable behavior remain separate checks.
+
+- Read internal capability-provider declarations through the shared installed
+  metadata reader. Select providers by canonical distribution owner and exact
+  name; refuse duplicate claims and malformed factory targets without loading
+  entry points or changing interface enablement.
+
+- Add an internal Python/MCP capability-inventory inspector for leaf-owned
+  declarations and observed callables. Report missing or unclassified bindings,
+  unexplained Python-only scope and asynchronous native API bindings.
+  Inventory consistency does not establish behavior or change existing audits.
+
+- Honor detected Boolean availability when applying conditional linter rules.
+  Unavailable optional packages no longer trigger their recommendations;
+  unknown-package handling and skipped-rule diagnostics remain in place.
+
 ## [0.62.30] - 2026-11-13
 
 - Share owned CI-job lifecycle helpers for bounded cleanup and cancellation.

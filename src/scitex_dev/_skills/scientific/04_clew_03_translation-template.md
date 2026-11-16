@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] Per-project translation template for Clew adoption
-  [DETAILS] Concrete project skeleton + step-by-step procedure for translating a `(project, dataset, research-questions)` tuple into a SciTeX project that produces a Clew-verifiable claims.json. Pairs with the playbook (`04_clew_02_translation-playbook.md`) — the playbook is the *what to do*, this is the *what to write*. Six steps: identify inputs, pre-flight checklist, scaffold, implement+iterate, validity gate, DONE. Includes the agent-vs-verifier directory split, the clean-DAG Makefile pattern, and the per-stage retry budget.
+  [DETAILS] Concrete project skeleton + step-by-step procedure for translating a `(project, dataset, research-questions)` tuple into a SciTeX project that produces a Clew-verifiable claims.json. Pairs with the scitexification playbook (`06_scitexification/`) — the playbook is the *what to do*, this is the *what to write*. Six steps: identify inputs, pre-flight checklist, scaffold, implement+iterate, validity gate, DONE. Includes the agent-vs-verifier directory split, the clean-DAG Makefile pattern, and the per-stage retry budget.
 tags: [scitex-scientific-clew-translation-template]
 ---
 
@@ -21,7 +21,7 @@ hallucinate.** A claim with no provenance chain fails the validity gate.
 | Slot | Meaning |
 |---|---|
 | `$ARGS[0]` | Pointer to the research questions (file path, JSON entry, doc) |
-| `$ARGS[1]` | Pointer to the source dataset (capsule dir, raw data, ...) |
+| `$ARGS[1]` | Pointer to the source material (code + data dir, paper supplement, archive, ...) |
 | `$ARGS[2]` | Working dir (e.g. `/tmp/<project>-<id>`) |
 
 ## Step 0 — Inputs
@@ -29,20 +29,17 @@ hallucinate.** A claim with no provenance chain fails the validity gate.
 Identify, from `$ARGS[0]` + `$ARGS[1]`:
 
 - **Questions**: verbatim strings the answer file must use as keys.
-- **Scoring rule**: how an answer is judged correct (exact / interval /
-  equality / LLM-judge).
+- **Acceptance criterion** (optional): how a reviewer will judge an
+  answer (exact value, tolerance interval, qualitative match), if the
+  goals state one.
 - **Evidence source**: where the answers can be derived from (logs,
   results dir, raw data).
-- **Oracle** (if separate): ground-truth answers, **never** exposed to
-  the agent — not as a path, not as an env var, not as a container
-  bind mount. The agent's project produces `claims.json`; a separate
-  third-party verifier process consumes `claims.json` + the oracle and
-  emits `score.json`. Even passing the oracle's location to the agent
-  is a leak.
-
-If agents will run this pipeline, mask answer values from any
-agent-readable files; keep answers oracle-side only and out of the
-agent's environment entirely.
+- **Reference answers** (only if they exist, e.g. a replication check
+  against published numbers): keep them **out of** the project that
+  derives the claims — not as a path, env var, or mount. The project
+  produces `claims.json`; a separate verifier compares it against the
+  references afterwards. A project that has seen the expected numbers
+  can no longer show it derived them.
 
 ## Step 1 — Pre-flight (SciTeX rules)
 
@@ -58,16 +55,13 @@ agent's environment entirely.
     npm i -g @mermaid-js/mermaid-cli
     npx puppeteer browsers install chrome
   Stage 05_render_dag.py auto-discovers chrome under ~/.cache/puppeteer/.
-□ Scoring against degenerate prediction interval (sd=0; all reference reruns
-  identical → PI half-width = 0): use `math.isclose(rel_tol=1e-9, abs_tol=1e-12)`
-  as fallback so single-ULP float roundoff in JSON parse doesn't cause false FAIL.
 □ stx.io.load(".txt") returns list[str] of lines, NOT a single string.
   Iterate as-is or `"\n".join(lines)` if you need flat text.
 □ Tips of the DAG (root inputs and final outputs) MUST be FILES, not scripts.
   Final stage ends at `claims.json` (saved via stx.io.save), not at the script node.
 □ Agent vs Verifier: scripts in scripts/agent/ are @stx.session-decorated and
-  register Clew runs. Scripts in scripts/verify/ are PLAIN PYTHON (no decorator)
-  so they DO NOT pollute the agent's DAG with oracle-using or visualization runs.
+  register Clew runs. Anything that reads reference answers runs OUTSIDE this
+  project (see below) so it never pollutes the DAG that derives the claims.
 □ Source files with non-descriptive names (literal "output", "stdout"): COPY
   (not symlink) into a descriptive name in data/ before stage 1. Clew resolves
   symlinks to target basename, so a symlink "eval_output.txt" → real "output"
@@ -81,15 +75,15 @@ mkdir -p $WORKDIR/{scripts,config,data/results,docs,tests/scripts}
 git -C $WORKDIR init -q -b develop
 # symlink inputs read-only:
 ln -sfn <dataset>  $WORKDIR/data/source
-# DO NOT symlink the oracle into the agent's workspace.
+# DO NOT link reference answers (if any) into this workspace.
 ```
 
 ### Agent-only work; verifier is third-party
 
-**Critical**: the agent's project contains ONLY the agent's work
-(`scripts/agent/`). Scoring, rendering, and figure composition that
-require the oracle are run by a separate third-party verifier
-(different sac yaml, different identity, oracle access of its own).
+**Critical**: the project contains ONLY the work that derives the claims
+(`scripts/agent/`). Any comparison against reference answers is run by a
+separate verifier (a different process / identity with its own access to
+the references).
 
 ```
 scripts/
@@ -118,10 +112,10 @@ clean: clean-clew
 	rm -rf $(ROOT)/data/results/*
 ```
 
-**No `verify` target inside the agent's project.** The third-party
-verifier runs separately, e.g. as a sibling sac agent that consumes the
-agent project's `claims.json` plus the oracle and emits `score.json`
-into its own (oracle-aware) workdir.
+**No reference-answer `verify` target inside this project.** A verifier
+that compares against references runs separately and reads this
+project's `claims.json` from outside. (Self-checks that need no
+reference — `clew verify`, the validity gate below — do belong here.)
 
 ## Step 3 — Implement + iterate
 
@@ -132,10 +126,10 @@ retry. **Max 3 iterations per stage.**
 ## Step 4 — Validity gate
 
 ```
-□ Stage 3 reports n_passed == n_questions
-□ Stage 4 registered N claims (= number of questions)
-□ For each claim: clew.chain(<claim_value>) reaches an input file
-  (the source dataset or the masked-questions file)
+□ Every question / goal has an entry (value-grounded or null + reason)
+□ The final stage registered N claims (= number of questions / goals)
+□ For each value-grounded claim: clew.chain(<claim_value>) reaches an
+  input file under data/source/ (the evidence, not the questions file)
 ```
 
 If any check fails, fix the `source_file` argument in
@@ -153,8 +147,8 @@ Write a one-line summary:
 {
   "id": "...",
   "n_questions": N,
-  "n_passed": M,
   "n_claims": N,
+  "n_null_with_reason": K,
   "n_back_propagated": N,
   "wall_clock_s": ...,
   "iterations": ...,
@@ -165,6 +159,5 @@ Write a one-line summary:
 ## Related
 
 - [04_clew_01_dag-as-map-and-evidence.md](04_clew_01_dag-as-map-and-evidence.md) — conceptual framing
-- [04_clew_02_translation-playbook.md](04_clew_02_translation-playbook.md) — universal agent prompt that drives this template
-- [04_clew_04_translation-notebook-delta.md](04_clew_04_translation-notebook-delta.md) — notebook-cohort delta
+- [06_scitexification/SKILL.md](06_scitexification/SKILL.md) — the scitexification playbook that drives this template
 - [02_research-project_07_config-and-parameters.md](02_research-project_07_config-and-parameters.md) — `@stx.session` reference

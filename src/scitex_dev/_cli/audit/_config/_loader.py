@@ -228,8 +228,8 @@ class ProjectConfig:
         # without ADRs.
         if code == "PS-173":
             return True
-        # PS-PATH-* / PS-CLEW-* / PS-AGENT-* — paper-scitex-clew MVP
-        # lint rules (PR #97, operator directive 2026-06-01). They
+        # PS-PATH-* / PS-CLEW-* / PS-AGENT-* — research-project clew
+        # lint rules (PR #97). They
         # target research-project artifacts (`config/PATH.yaml`,
         # `scripts/agent/*.py`, `clew.add_claim` call sites) but the
         # SciTeX hybrid pattern lets these coexist with `pip` projects
