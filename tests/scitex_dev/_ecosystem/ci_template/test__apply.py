@@ -28,10 +28,10 @@ from scitex_dev._ecosystem.ci_template import (
 
 #: The four org-level reusable workflows the caller must delegate to.
 ORG_REUSABLE_USES = (
-    "scitex-ai/.github/.github/workflows/pytest-matrix.yml@8c646081e9f1352077d3d8674052cce7ec75a1b7",
-    "scitex-ai/.github/.github/workflows/import-smoke.yml@8c646081e9f1352077d3d8674052cce7ec75a1b7",
-    "scitex-ai/.github/.github/workflows/quality-audit.yml@8c646081e9f1352077d3d8674052cce7ec75a1b7",
-    "scitex-ai/.github/.github/workflows/rtd-sphinx-build.yml@8c646081e9f1352077d3d8674052cce7ec75a1b7",
+    "scitex-ai/.github/.github/workflows/pytest-matrix.yml@cd4e545a20a1e35385ffe88f4a963ae3c500819b",
+    "scitex-ai/.github/.github/workflows/import-smoke.yml@cd4e545a20a1e35385ffe88f4a963ae3c500819b",
+    "scitex-ai/.github/.github/workflows/quality-audit.yml@cd4e545a20a1e35385ffe88f4a963ae3c500819b",
+    "scitex-ai/.github/.github/workflows/rtd-sphinx-build.yml@cd4e545a20a1e35385ffe88f4a963ae3c500819b",
 )
 
 #: Unknown membership/absent preference defaults to GitHub-hosted hardware.
