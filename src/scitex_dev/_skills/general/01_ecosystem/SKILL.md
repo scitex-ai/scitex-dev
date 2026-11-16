@@ -14,7 +14,7 @@ touching any `scitex-*` package. Read before the per-package tiers
 ## Sections
 
 1. [01_upstream-and-downstream.md](01_upstream-and-downstream.md) — Facade/Dev/leaf/SDK/Hub ownership, dependency direction and test scope
-2. [02_dependency-and-version-pinning.md](02_dependency-and-version-pinning.md) — Runtime providers, compatible leaf floors, exact umbrella pins and profile verification
+2. [02_dependency-and-version-pinning.md](02_dependency-and-version-pinning.md) — Runtime providers, compatible `>=` floors (umbrella included), exact versions in lock files and profile verification
    - [26_the-only-extra-is-all.md](26_the-only-extra-is-all.md) — **the only permitted extra is `all`** (operator ruling 2026-08-31); tell people `pip install "scitex[all]"`; leaves as `scitex-<x>[all]`; `dev`/`docs` in PEP 735 `[dependency-groups]`; three measured facts; the migration cost
    - [18_version-pinning-rules.md](18_version-pinning-rules.md) — full version-pinning rules (bounds, consumer minima bumps, coordinated waves, ecosystem layering)
    - [19_dev-extras-completeness.md](19_dev-extras-completeness.md) — `dev` **group** completeness (fastmcp lesson, importorskip boundary, `PS-210` inverts under the new shape)
