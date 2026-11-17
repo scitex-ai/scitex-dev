@@ -29,9 +29,11 @@ Severity W during adoption.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
+from html import unescape
 from pathlib import Path
 from typing import Any
-from urllib.parse import unquote_plus
+from urllib.parse import parse_qsl, urlsplit
 
 # The standardized short vocabulary.
 ALLOWED_LABELS = frozenset(
@@ -53,10 +55,6 @@ _SHIELDS_URL_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Capture `label=...` within a query string. Stops at `&`, end-of-URL, or
-# quote. URL-decoded before comparison.
-_LABEL_RE = re.compile(r"[?&]label=([^&\"'<>\s)]+)", re.IGNORECASE)
-
 # Shields routes whose default (auto-generated) label is non-standard and
 # must be overridden via `?label=...`. These are the routes we use most.
 # An unset label on these routes is itself a deviation.
@@ -66,6 +64,23 @@ _REQUIRES_EXPLICIT_LABEL = (
     re.compile(r"/pypi/pyversions/", re.IGNORECASE),
     re.compile(r"/codecov/c/github/", re.IGNORECASE),
 )
+
+
+def _badge_urls_and_labels(text: str) -> Iterator[tuple[str, str | None]]:
+    """Read the first nonempty label from real URL query parameters.
+
+    HTML is decoded once, before query fields are split and percent-decoded.
+    Encoded separators and fragment/value decoys cannot create extra fields.
+    Shared by the label and row-layout auditors; unrelated links are excluded.
+    """
+    for match in _SHIELDS_URL_RE.finditer(text):
+        url = unescape(match.group(0))
+        parameters = parse_qsl(urlsplit(url).query, keep_blank_values=True)
+        label = next(
+            (value for name, value in parameters if name.lower() == "label" and value),
+            None,
+        )
+        yield url, label
 
 
 def _suggest(actual: str) -> str:
@@ -115,11 +130,8 @@ def check_ps166_readme_badge_labels(
 
     seen: set[tuple[str, str]] = set()  # de-dup (badge_url, reason)
 
-    for url_match in _SHIELDS_URL_RE.finditer(text):
-        url = url_match.group(0)
-        label_match = _LABEL_RE.search(url)
-
-        if label_match is None:
+    for url, raw in _badge_urls_and_labels(text):
+        if raw is None:
             # Only flag missing labels on routes whose auto-generated label
             # is non-standard. Static badges (e.g. /badge/foo-bar-blue) are
             # exempt.
@@ -143,7 +155,6 @@ def check_ps166_readme_badge_labels(
                     )
             continue
 
-        raw = unquote_plus(label_match.group(1))
         if raw in ALLOWED_LABELS:
             continue
 
