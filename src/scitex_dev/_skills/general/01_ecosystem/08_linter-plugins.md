@@ -63,6 +63,16 @@ The name (`figure` here) is arbitrary but should be unique across the ecosystem.
 
 `scitex-dev linter list-rules-all` should now show the new rule.
 
+## Conflicting installation metadata
+
+Duplicate provider declarations still abort linter and project-auditor discovery;
+the engine does not silently choose a wheel over an editable record. Errors name
+both declarations and their dist-info/egg-info locations when importlib metadata
+provides them. Injected entry points and other metadata implementations may report
+`metadata: <unavailable>`. Inspect the named records and the interpreter's package
+installation before repairing a stale environment; do not delete a record solely
+because it appears in this error.
+
 ## Rule conventions
 
 - **`id`** — `STX-<CAT><NNN>` where `<CAT>` is the namespace (`P` plot, `IO` i/o, `S` structure, `FM` figure-mm, `I` import, `PA` path, `ST` stats, `EH` error-handling). Allocate ids in the namespace owned by the package whose API the rule enforces; avoid colliding with engine-shipped ids.
