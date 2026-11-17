@@ -14,6 +14,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+import pytest
+
 from scitex_dev._cli.audit._project._check_readme_badge_layout import (
     check_ps167_readme_badge_layout,
 )
@@ -77,3 +79,56 @@ class TestPS167BadgeLayout:
         check_ps167_readme_badge_layout(tmp_path, _StubViolation, out)
         # Assert
         assert out == []
+
+
+def _rows(first, second):
+    return (
+        '<!-- scitex-badges:start --><p align="center">'
+        + first + '</p><p align="center">' + second
+        + '</p><!-- scitex-badges:end -->'
+    )
+
+
+@pytest.mark.parametrize("separator", ["&amp;", "&#38;", "&#x26;"])
+@pytest.mark.parametrize("wrong_row", ["first", "second"])
+def test_html_escaped_wrong_row_labels_remain_findings(tmp_path, separator, wrong_row):
+    # Arrange
+    base = "https://img.shields.io/github/actions/workflow/status/o/r/tests.yml?branch=develop"
+    first_label = "tests" if wrong_row == "first" else "pypi"
+    second_label = "pypi" if wrong_row == "second" else "tests"
+    _write_readme(tmp_path, _rows(
+        f'<img src="{base}{separator}label={first_label}">',
+        f'<img src="{base}{separator}label={second_label}">',
+    ))
+    findings = []
+    # Act
+    check_ps167_readme_badge_layout(tmp_path, _StubViolation, findings)
+    # Assert
+    assert [v.rule for v in findings] == ["PS-167"]
+
+
+@pytest.mark.parametrize("separator", ["&", "&amp;"])
+def test_percent_encoded_canonical_row_labels_are_consistent(tmp_path, separator):
+    # Arrange
+    base = "https://img.shields.io/github/actions/workflow/status/o/r/tests.yml?branch=develop"
+    _write_readme(tmp_path, _rows(
+        f'<img src="{base}{separator}label=%70ypi">',
+        f'<img src="{base}{separator}label=%74ests">',
+    ))
+    findings = []
+    # Act
+    check_ps167_readme_badge_layout(tmp_path, _StubViolation, findings)
+    # Assert
+    assert findings == []
+
+
+def test_non_badge_link_cannot_mask_wrong_row_badge(tmp_path):
+    # Arrange
+    badge = '<img src="https://img.shields.io/pypi/v/demo?label=pypi">'
+    decoy = '<a href="https://example.invalid/?label=tests">unrelated link</a>'
+    _write_readme(tmp_path, _rows(badge, badge + decoy))
+    findings = []
+    # Act
+    check_ps167_readme_badge_layout(tmp_path, _StubViolation, findings)
+    # Assert
+    assert [v.rule for v in findings] == ["PS-167"]

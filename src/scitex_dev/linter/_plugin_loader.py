@@ -1,10 +1,12 @@
 """Discover validated linter providers without dropping declared coverage."""
 
-from collections.abc import Mapping
 import os
 import sys
+from collections.abc import Mapping
 
 import scitex_logging as slogging
+
+from scitex_dev._core._entry_point_origin import _entry_point_origin
 
 from ._rules._base import SCOPES
 
@@ -231,10 +233,11 @@ def load_plugins(*, entry_points_iter=None):
         name = f"{ep.name} ({value})"
         if value is not None and value in provider_owners:
             raise LinterPluginError(
-                f"{_GROUP}: duplicate provider {name!r}; already declared by {provider_owners[value]!r}"
+                f"{_GROUP}: duplicate provider {name!r} [{_entry_point_origin(ep)}]; "
+                f"already declared by {provider_owners[value]!r}"
             )
         if value is not None:
-            provider_owners[value] = name
+            provider_owners[value] = f"{name} [{_entry_point_origin(ep)}]"
         try:
             factory = ep.load()
             if not callable(factory):
