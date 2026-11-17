@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] The Only Permitted Extra Is `all`
-  [DETAILS] Operator ruling 2026-08-31 — `[project.optional-dependencies]` may declare exactly ONE extra, `all`. Per-feature extras (`[io]`, `[db]`, `[plt]`, …) are wrong by design: a user cannot be expected to remember which extra maps to which feature, so the guidance collapses to one line — tell people `pip install "scitex[all]"` and stop. `[project] dependencies` stays minimal; `all` lists leaves as `scitex-<x>[all]` (extras propagate through a dependency spec — measured); `dev` and `docs` move to PEP 735 `[dependency-groups]`, which do NOT reach consumers' published metadata (measured). Underscore-prefixed "private" extras are INVALID, so a private extra cannot exist (measured). Records the migration cost: CI `-e ".[dev]"` / `-e ".[docs]"` installs break and need `--group` (uv, or pip >= 25.1), and scitex-dev's own `PS-210` auditor inverts into a false-positive storm. Supersedes the per-feature-extra prescriptions in 02 / 03 / 05 / 18 / 19 / 20.
+  [DETAILS] Operator ruling 2026-08-31 — `[project.optional-dependencies]` may declare exactly ONE extra, `all`. Per-feature extras (`[io]`, `[db]`, `[plt]`, …) are wrong by design: a user cannot be expected to remember which extra maps to which feature, so the guidance collapses to one line — tell people `pip install "scitex[all]"` and stop. `[project] dependencies` stays minimal; `all` lists leaves as `scitex-<x>[all]` (extras propagate through a dependency spec — measured); `dev` and `docs` move to PEP 735 `[dependency-groups]`, which do NOT reach consumers' published metadata (measured). Underscore-prefixed "private" extras are INVALID, so a private extra cannot exist (measured). Records the migration cost: CI `-e ".[dev]"` / `-e ".[docs]"` installs break and need `--group` (uv, or pip >= 25.1), and older `PS-210` auditors invert into false positives; current source supports the dev group. Supersedes the per-feature-extra prescriptions in 02 / 03 / 05 / 18 / 19 / 20.
 tags: [scitex-general-ecosystem-the-only-extra-is-all]
 ---
 
@@ -145,18 +145,15 @@ handling all four.
 | 1 | `uv pip install --system -e ".[all,dev]"` — `scitex-python`'s pytest matrix, `pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml` line 54, with `".[dev]"` as its line-55 fallback | `uv pip install --system -e . --group dev` |
 | 2 | `pip install -e ".[docs]"` — `rtd-sphinx-build-on-ubuntu-latest.yml` line 29 | `pip install -e . --group docs` |
 | 3 | `--group` needs a resolver that speaks PEP 735 | `uv`, or **pip >= 25.1**. An older pip in a CI image is a hard blocker, not a warning. |
-| 4 | `PS-210` (`audit-project`'s `[dev]`-completeness check) **inverts** | See below — fix the check before migrating a package it audits. |
+| 4 | `PS-210` (`audit-project`'s `[dev]`-completeness check) **older readers invert** | Current source resolves the dev group; verify the installed checker before migration. |
 
-**PS-210 inverts; it does not merely go quiet.** Read from source
-(`_cli/audit/_project/_check_dev_extras_complete.py`): `_extras_index`
-builds its `dev` set from `project.optional-dependencies["dev"]` and its
-"other extras" set from every remaining extra. After migration
-`optional-dependencies` holds only `all`, so the `dev` set is **empty**
-while the other-extras set is **every leaf** — and the rule fires for each
-`all` dep that any test imports unguarded. The natural expectation is that a
-check reading a table that no longer exists falls silent; this one becomes a
-false-positive storm instead. Silence and inversion look nothing alike, and
-only one of them is what happens here.
+**PS-210 migration support is source-bound.** The current checker reads the
+contributor dev group and its includes; see
+[19_dev-extras-completeness.md](19_dev-extras-completeness.md) for marker,
+legacy compatibility, validation and limit semantics. An older installed
+checker that reads only the removed dev extra still produces false positives.
+Do not infer installed adoption from a source checkout or waive genuine missing
+requirements. This correction does not migrate the other tools below.
 
 **Ecosystem tooling assumes the old shape too**, and is unmigrated as of
 this leaf: `_ecosystem/_umbrella.py` (documents "per-module extras"),

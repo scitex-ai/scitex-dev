@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] Ecosystem `dev` Group Completeness
-  [DETAILS] The fastmcp lesson (2026-05-02), re-seated 2026-08-31 onto the PEP 735 `dev` dependency-GROUP after the only-permitted-extra-is-`all` ruling — `dev` MUST install every dependency this package's own test suite imports unconditionally, or the tests must gate with `pytest.importorskip`; the boundary is whose feature is being tested (own `src/` → include and test unconditionally; optional sibling `scitex-*` → leave out and importorskip; DECLARED sibling → import unconditionally and let a broken install go red; 3rd-party integration → pragmatic match); the symmetric pyproject pattern where an optional dep in `all` and its tests force the same dep into the `dev` group; detection via `audit-project`'s `PS-210`, which INVERTS under the new shape until it is migrated. Companion to `02_dependency-and-version-pinning.md` and `26_the-only-extra-is-all.md`. Use when a fresh `pip install -e . --group dev` hits `ModuleNotFoundError` at test collection.
+  [DETAILS] The fastmcp lesson (2026-05-02), re-seated 2026-08-31 onto the PEP 735 `dev` dependency-GROUP after the only-permitted-extra-is-`all` ruling — `dev` MUST install every dependency this package's own test suite imports unconditionally, or the tests must gate with `pytest.importorskip`; the boundary is whose feature is being tested (own `src/` → include and test unconditionally; optional sibling `scitex-*` → leave out and importorskip; DECLARED sibling → import unconditionally and let a broken install go red; 3rd-party integration → pragmatic match); the symmetric pyproject pattern where an optional dep in `all` and its tests force the same dep into the `dev` group; detection via `audit-project`'s `PS-210`, whose current source resolves contributor groups while retaining legacy-extra compatibility. Companion to `02_dependency-and-version-pinning.md` and `26_the-only-extra-is-all.md`. Use when a fresh `pip install -e . --group dev` hits `ModuleNotFoundError` at test collection.
 tags: [scitex-general-ecosystem-dev-extras-completeness]
 ---
 
@@ -91,16 +91,26 @@ An older pip in a CI image cannot install a dependency group at all. That is
 a hard blocker for the migration, not a warning
 ([26 §5](26_the-only-extra-is-all.md)).
 
-**Detection — and `PS-210` currently INVERTS.** `audit-project`'s `PS-210`
-check was written against the extras shape: `_extras_index`
-(`_cli/audit/_project/_check_dev_extras_complete.py`) builds its `dev` set
-from `project.optional-dependencies["dev"]` and its "other extras" set from
-every remaining extra, then flags any other-extra dep that `tests/` imports
-unguarded and `dev` lacks.
+**Detection — source-bound group support.** The current `PS-210` checker
+reads `[dependency-groups].dev` when declared, including normalized names and
+nested `include-group` entries. It validates reachable entries and rejects
+missing includes, cycles, normalized-name collisions, malformed requirements
+and expansions beyond32 levels/4096 entries. Unrelated group contents are not
+expanded. This is static declaration analysis; it never imports the audited
+package or installs dependencies.
 
-After a package migrates, `optional-dependencies` holds only `all`: the
-`dev` set is **empty** and the other-extras set is **every leaf**, so the
-rule fires on essentially everything. It does not fall silent — it becomes a
-false-positive storm, which is the opposite failure and looks nothing like
-the one you would predict. Migrate the check to read
-`[dependency-groups].dev` before migrating a package it audits.
+Group requirement markers are evaluated for the current environment. A dependency
+group does not activate an extra called `dev`; a stale legacy dev extra cannot
+cover a missing dependency in an explicitly declared dev group. Without that
+group, the checker retains legacy dev-extra compatibility. Missing contributor
+requirements still produce `PS-210`; its existing severity, ambient-dependency
+set and import/importorskip heuristics are unchanged. It does not resolve
+versions, install a complete environment or prove every platform works.
+
+Older installed checkers that read only `optional-dependencies.dev` can invert
+into false positives after migration. Check installed behavior before trusting
+that result; do not restore duplicate legacy extras or waive genuine missing
+dependencies to appease the older reader. Owning source:
+`_cli/audit/_project/_check_dev_extras_complete.py` and `_dev_group.py`.
+Behavioral controls: `tests/scitex_dev/_cli/audit/_project/test__check_dev_extras_complete.py`
+and `test__dev_group.py`. Broader dependency-policy migrations remain separate.
