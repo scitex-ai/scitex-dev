@@ -128,7 +128,7 @@ _SEVERITY_OVERRIDES: dict[str, str] = {
     "PS-206": "E",  # placeholder-only test (no `def test_*` / `class Test*` at all)
     "PS-206b": "W",  # has `def test_*` but body has no assertion (import-smoke only)
     "PS-207": "E",  # empty test directory
-    "PS-210": "E",  # [dev] extras incomplete
+    "PS-210": "E",  # Contributor dev requirements incomplete
     "PS-211": "W",  # tests/smoke/ layer missing — W during ecosystem adoption
     "PS-212": "W",  # tests/e2e/ layer missing  — W during ecosystem adoption
     "PS-301": "E",  # top-level htmlcov/
