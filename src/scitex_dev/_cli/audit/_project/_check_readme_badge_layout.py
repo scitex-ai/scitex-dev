@@ -51,6 +51,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from ._check_readme_badge_labels import _badge_urls_and_labels
+
 # Markers — case-insensitive, tolerant of surrounding whitespace.
 _START_MARKER_RE = re.compile(r"<!--\s*scitex-badges:start\s*-->", re.IGNORECASE)
 _END_MARKER_RE = re.compile(r"<!--\s*scitex-badges:end\s*-->", re.IGNORECASE)
@@ -66,9 +68,6 @@ _SHIELDS_IMG_RE = re.compile(
 
 # Any <img src="..."> regardless of host (to count "deviating" badges).
 _ANY_IMG_RE = re.compile(r"<img[^>]+src=\"(https?://[^\"]+)\"", re.IGNORECASE)
-
-# label=<value>
-_LABEL_RE = re.compile(r"[?&]label=([^&\"'<>\s)]+)", re.IGNORECASE)
 
 _METADATA_LABELS = frozenset({"pypi", "python", "docs"})
 _CI_LABELS = frozenset({"tests", "install-check", "quality", "cov"})
@@ -196,7 +195,7 @@ def check_ps167_readme_badge_layout(
     rows = re.split(r"</p\s*>", block, flags=re.IGNORECASE)
     # First row labels.
     if len(rows) >= 1:
-        labels1 = {m.group(1).lower() for m in _LABEL_RE.finditer(rows[0])}
+        labels1 = {label.lower() for _, label in _badge_urls_and_labels(rows[0]) if label}
         if labels1 and labels1.isdisjoint(_METADATA_LABELS):
             _emit(
                 out,
@@ -212,7 +211,7 @@ def check_ps167_readme_badge_layout(
             )
     # Second row labels.
     if len(rows) >= 2:
-        labels2 = {m.group(1).lower() for m in _LABEL_RE.finditer(rows[1])}
+        labels2 = {label.lower() for _, label in _badge_urls_and_labels(rows[1]) if label}
         if labels2 and labels2.isdisjoint(_CI_LABELS):
             _emit(
                 out,

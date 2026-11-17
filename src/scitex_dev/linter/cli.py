@@ -290,7 +290,11 @@ def main(argv: list = None) -> int:
     raw = _rewrite_argv(raw)
 
     try:
-        main_group.main(args=raw, prog_name="scitex-dev linter", standalone_mode=False)
+        # Mount as in the canonical CLI so help specs see the program root,
+        # while usage keeps the linter command path. No umbrella import needed.
+        root = click.Group(name="scitex-dev")
+        root.add_command(main_group, "linter")
+        root.main(args=["linter", *raw], prog_name="scitex-dev", standalone_mode=False)
         return 0
     except SystemExit as e:
         code = e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
