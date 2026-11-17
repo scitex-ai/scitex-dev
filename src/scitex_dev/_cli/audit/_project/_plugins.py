@@ -22,6 +22,8 @@ from functools import lru_cache
 from importlib import import_module, metadata
 from typing import Any
 
+from scitex_dev._core._entry_point_origin import _entry_point_origin
+
 _GROUP = "scitex_dev.audit.project"
 _BUILTIN_VALUE = "scitex_dev._runtime_gitignore_plugin:get_plugin"
 _LOGGING_VALUE = "scitex_logging._audit_plugin:get_plugin"
@@ -82,10 +84,10 @@ def _discover(points) -> _PluginBundle:
         name = f"{point.name} ({point.value})"
         if point.value in provider_owners:
             raise ProjectPluginError(
-                f"{_GROUP}: duplicate provider {name!r}; "
+                f"{_GROUP}: duplicate provider {name!r} [{_entry_point_origin(point)}]; "
                 f"already declared by {provider_owners[point.value]!r}"
             )
-        provider_owners[point.value] = name
+        provider_owners[point.value] = f"{name} [{_entry_point_origin(point)}]"
         try:
             provider = point.load()
         except Exception as exc:
