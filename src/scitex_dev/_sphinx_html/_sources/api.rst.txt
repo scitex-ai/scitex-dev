@@ -1,10 +1,9 @@
 API Reference
 =============
 
-Top-level modules that survived the 2026-05 restructure. Removed
-``scitex_dev.{skills,fix,ci,deploy,versions,docs,search,_discovery,_manifest,_builder}``
-were absorbed into ``_cli/``, ``_creds/``, ``_ecosystem/``, etc. — see
-the CLI surface and per-subcommand entry points for the live API.
+This reference is generated from the current modules below. Use installed CLI
+help and the owning documentation providers to discover command interfaces and
+their runtime requirements.
 
 CLI entry point
 ---------------

@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CLI Mixin &mdash; scitex-dev  documentation</title>
+  <title>CLI documentation adapters &mdash; scitex-dev  documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
@@ -50,10 +50,11 @@
 <li class="toctree-l1"><a class="reference internal" href="api.html">API Reference</a></li>
 <li class="toctree-l1"><a class="reference internal" href="unified-search.html">Unified Search</a></li>
 <li class="toctree-l1"><a class="reference internal" href="documentation-verification.html">Scoped documentation verification</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="#">CLI Mixin</a><ul>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">CLI documentation adapters</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#usage">Usage</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#integration-argparse">Integration (argparse)</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#integration-click">Integration (Click)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#verification-and-scope">Verification and scope</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#api">API</a></li>
 </ul>
 </li>
@@ -73,7 +74,7 @@
           <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
       <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
-      <li class="breadcrumb-item active">CLI Mixin</li>
+      <li class="breadcrumb-item active">CLI documentation adapters</li>
       <li class="wy-breadcrumbs-aside">
             <a href="_sources/cli.rst.txt" rel="nofollow"> View page source</a>
       </li>
@@ -83,50 +84,90 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <section id="cli-mixin">
-<h1>CLI Mixin<a class="headerlink" href="#cli-mixin" title="Link to this heading"></a></h1>
-<p>Each SciTeX package can add a standardized <code class="docutils literal notranslate"><span class="pre">docs</span></code> subcommand with
-minimal boilerplate using <code class="docutils literal notranslate"><span class="pre">scitex-dev</span></code>’s CLI mixin.</p>
+  <section id="cli-documentation-adapters">
+<h1>CLI documentation adapters<a class="headerlink" href="#cli-documentation-adapters" title="Link to this heading"></a></h1>
+<p>A leaf package can add documentation commands through the shared argparse or
+Click adapter. Both adapters dispatch to the same package documentation reader.
+They register <code class="docutils literal notranslate"><span class="pre">docs</span> <span class="pre">list</span></code> and <code class="docutils literal notranslate"><span class="pre">docs</span> <span class="pre">get</span></code>; they do not add Dev’s global search,
+validation or provider-catalog commands to the leaf.</p>
 <section id="usage">
 <h2>Usage<a class="headerlink" href="#usage" title="Link to this heading"></a></h2>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># List available doc pages</span>
-scitex-writer<span class="w"> </span>docs<span class="w"> </span>--list
+<p>These commands run against Dev’s own registered documentation. Replace
+<code class="docutils literal notranslate"><span class="pre">scitex-dev</span></code> with a leaf’s executable when that leaf mounts the adapter.
+Use the page names returned by <code class="docutils literal notranslate"><span class="pre">list</span></code> rather than assuming every package
+ships the same pages.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># List available documentation pages</span>
+scitex-dev<span class="w"> </span>docs<span class="w"> </span>list
 
-<span class="c1"># Get structured JSON (LLM-friendly)</span>
-scitex-writer<span class="w"> </span>docs<span class="w"> </span>--json
+<span class="c1"># Get the page index as structured JSON</span>
+scitex-dev<span class="w"> </span>docs<span class="w"> </span>list<span class="w"> </span>--json
 
-<span class="c1"># Quick-start summary (&lt; 20 lines)</span>
-scitex-writer<span class="w"> </span>docs<span class="w"> </span>--tldr
+<span class="c1"># Show the same page index through get</span>
+scitex-dev<span class="w"> </span>docs<span class="w"> </span>get<span class="w"> </span>--json
 
-<span class="c1"># Specific page</span>
-scitex-writer<span class="w"> </span>docs<span class="w"> </span>--page<span class="w"> </span>api
+<span class="c1"># Read a listed HTML page</span>
+scitex-dev<span class="w"> </span>docs<span class="w"> </span>get<span class="w"> </span>cli
 
-<span class="c1"># Specific format</span>
-scitex-writer<span class="w"> </span>docs<span class="w"> </span>--format<span class="w"> </span>json
+<span class="c1"># Select the HTML format explicitly</span>
+scitex-dev<span class="w"> </span>docs<span class="w"> </span>get<span class="w"> </span>cli<span class="w"> </span>--format<span class="w"> </span>html
 </pre></div>
 </div>
+<p><code class="docutils literal notranslate"><span class="pre">--json</span></code> on a page listing describes the index, not the content of every page.
+Page-specific JSON requires the provider’s JSON build assets. The current
+reader can fall back to package introspection when a requested JSON page is
+unavailable; do not treat that fallback as the requested page’s content.
+The removed flat flags <code class="docutils literal notranslate"><span class="pre">docs</span> <span class="pre">--list</span></code>, <code class="docutils literal notranslate"><span class="pre">docs</span> <span class="pre">--page</span></code> and <code class="docutils literal notranslate"><span class="pre">docs</span> <span class="pre">--tldr</span></code>
+are not the adapter interface.</p>
 </section>
 <section id="integration-argparse">
 <h2>Integration (argparse)<a class="headerlink" href="#integration-argparse" title="Link to this heading"></a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">scitex_dev.cli</span><span class="w"> </span><span class="kn">import</span> <span class="n">register_docs_subcommand</span>
-
-<span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">()</span>
-<span class="n">subparsers</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">add_subparsers</span><span class="p">()</span>
-<span class="n">register_docs_subcommand</span><span class="p">(</span><span class="n">subparsers</span><span class="p">,</span> <span class="n">package</span><span class="o">=</span><span class="s2">"scitex-writer"</span><span class="p">)</span>
+<p>Replace <code class="docutils literal notranslate"><span class="pre">your-package</span></code> with the installed distribution name whose
+<code class="docutils literal notranslate"><span class="pre">scitex_dev.docs</span></code> declaration points to its Python package. The executable
+name and documentation-provider name can differ.</p>
+<div class="highlight-toml notranslate"><div class="highlight"><pre><span></span><span class="k">[project.entry-points.</span><span class="s2">"scitex_dev.docs"</span><span class="k">]</span>
+<span class="n">your-package</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"your_package"</span>
 </pre></div>
 </div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">argparse</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">scitex_dev.cli</span><span class="w"> </span><span class="kn">import</span> <span class="n">register_docs_subcommand</span>
+
+<span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span><span class="n">prog</span><span class="o">=</span><span class="s2">"my-tool"</span><span class="p">)</span>
+<span class="n">subparsers</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">add_subparsers</span><span class="p">(</span><span class="n">dest</span><span class="o">=</span><span class="s2">"command"</span><span class="p">)</span>
+<span class="n">register_docs_subcommand</span><span class="p">(</span><span class="n">subparsers</span><span class="p">,</span> <span class="n">package</span><span class="o">=</span><span class="s2">"your-package"</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The caller parses arguments and invokes the selected subcommand’s <code class="docutils literal notranslate"><span class="pre">func</span></code>
+callback. Registering the parser alone does not execute a documentation read.</p>
 </section>
 <section id="integration-click">
 <h2>Integration (Click)<a class="headerlink" href="#integration-click" title="Link to this heading"></a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">scitex_dev.cli</span><span class="w"> </span><span class="kn">import</span> <span class="n">docs_click_group</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">click</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">scitex_dev.cli</span><span class="w"> </span><span class="kn">import</span> <span class="n">docs_click_group</span>
 
 <span class="nd">@click</span><span class="o">.</span><span class="n">group</span><span class="p">()</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">cli</span><span class="p">():</span>
     <span class="k">pass</span>
 
-<span class="n">cli</span><span class="o">.</span><span class="n">add_command</span><span class="p">(</span><span class="n">docs_click_group</span><span class="p">(</span><span class="n">package</span><span class="o">=</span><span class="s2">"scitex-writer"</span><span class="p">))</span>
+<span class="n">cli</span><span class="o">.</span><span class="n">add_command</span><span class="p">(</span><span class="n">docs_click_group</span><span class="p">(</span><span class="n">package</span><span class="o">=</span><span class="s2">"your-package"</span><span class="p">))</span>
 </pre></div>
 </div>
+<p>A direct custom mount can use <code class="docutils literal notranslate"><span class="pre">docs_click_group(package=&quot;your-package&quot;,</span>
+<span class="pre">name=&quot;manual&quot;)</span></code>; its examples use <code class="docutils literal notranslate"><span class="pre">manual</span></code>. The adapter still exposes only
+<code class="docutils literal notranslate"><span class="pre">list</span></code> and <code class="docutils literal notranslate"><span class="pre">get</span></code>. Dev separately registers <code class="docutils literal notranslate"><span class="pre">scitex-dev</span> <span class="pre">docs</span> <span class="pre">search</span></code>,
+<code class="docutils literal notranslate"><span class="pre">docs</span> <span class="pre">validate</span></code> and <code class="docutils literal notranslate"><span class="pre">docs</span> <span class="pre">list-providers</span></code> in its own dispatcher.</p>
+</section>
+<section id="verification-and-scope">
+<h2>Verification and scope<a class="headerlink" href="#verification-and-scope" title="Link to this heading"></a></h2>
+<p>The owning adapters are <code class="docutils literal notranslate"><span class="pre">_core/dispatch/_docs_argparse.py</span></code> and
+<code class="docutils literal notranslate"><span class="pre">_core/dispatch/_docs_click.py</span></code>. Their real parser, dispatch and
+advertised-example controls live under
+<code class="docutils literal notranslate"><span class="pre">tests/scitex_dev/_core/dispatch/</span></code>; Dev-only commands have controls in
+<code class="docutils literal notranslate"><span class="pre">tests/scitex_dev/_cli/test__docs_cmds.py</span></code>. Generated HTML and installed
+package resources need separate content and source-binding checks.
+Provider discovery or a successful local command does not establish a live
+hosted route.</p>
 </section>
 <section id="api">
 <h2>API<a class="headerlink" href="#api" title="Link to this heading"></a></h2>
