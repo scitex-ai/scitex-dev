@@ -10,12 +10,14 @@ mixin here; ``SciTeXChecker`` composes them. Shared helpers (``_add``,
 from ._calls import CallChecksMixin
 from ._eh import ErrorHandlingMixin
 from ._imports import ImportChecksMixin, own_scitex_package
+from ._literals import LiteralChecksMixin
 from ._test_quality import TestQualityMixin
 
 __all__ = [
     "CallChecksMixin",
     "ErrorHandlingMixin",
     "ImportChecksMixin",
+    "LiteralChecksMixin",
     "TestQualityMixin",
     "own_scitex_package",
 ]

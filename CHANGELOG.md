@@ -10,6 +10,24 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Linter STX-S008 now flags hard-coded analysis parameters anywhere in a
+  script, not only module-scope `UPPER = <number>`: number-valued bindings
+  in `main()`/helpers/class bodies (including lists/dicts of numbers),
+  keyword arguments (`welch(x, fs=512)`), signature defaults (the
+  `@stx.session` main included), float thresholds in comparisons
+  (`p < 0.01`), and seeds in any form (`seed=0`, `np.random.seed(7)`,
+  `default_rng(42)`). Harmless literals stay unflagged: 0/1/-1/2,
+  positional args, arithmetic, integer comparisons, numerical tolerances,
+  `axis=`/`ddof=`/`indent=`/`timeout=`-style keywords, plotting-call and
+  layout-unit (`*_mm`) keywords, private/version/index names, enum
+  members, test files. One finding per line, message names the value.
+  It now also runs on research scripts (files under `scripts/` of a
+  `project-type: research` project, and any `@stx.session` file), which
+  `is_script()` used to exclude. Severity: `info`, promoted to `warning`
+  under `project-type: research` (not error: two research repos carry
+  562 pre-existing findings in 179 of 417 scripts). The STX-S003
+  suggestion no longer teaches a numeric signature default.
+
 - Linter plugin SPI: `Rule.scope` (`""` or `"research-script"`). The engine
   applies the scope uniformly to engine call rules and plugin checkers once
   the module is fully visited, so leaf plugins share one false-positive gate
