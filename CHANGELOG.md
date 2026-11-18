@@ -10,6 +10,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.64.0] - 2026-11-19
+
 - Linter STX-S008 now flags hard-coded analysis parameters anywhere in a
   script, not only module-scope `UPPER = <number>`: number-valued bindings
   in `main()`/helpers/class bodies (including lists/dicts of numbers),
@@ -27,6 +29,24 @@ versions follow [Semantic Versioning](https://semver.org/).
   under `project-type: research` (not error: two research repos carry
   562 pre-existing findings in 179 of 417 scripts). The STX-S003
   suggestion no longer teaches a numeric signature default.
+- Hierarchy: discover owned provider metadata without loading code (#1063).
+- Docs: fail explicitly on missing named pages, require regular files, confine
+  named pages/indexes and manifest writes to the selected docs root, infer JSON
+  format from page assets, index nested JSON pages without HTML builds, keep
+  package CLI output visible (#1050-#1059).
+- Audit: classify coloured findings without losing severity, accept both
+  warning spellings, exclude relative modules from cross-package gates,
+  recognize contributor dependency groups (PS-210), decode README badge labels
+  consistently (#1039-#1041, #1047, #1054).
+- Doctor reports missing editable source directories (#1061); hooks discover
+  file-owned ESLint flat configs (#1062); rename reports protected-only matches
+  without rewriting (#1046); standalone linter help mounts under its canonical
+  root (#1043); provider-discovery errors identify conflicting metadata (#1042).
+- CI: numeric executable identity in timeout evidence, bounded child
+  scheduling/IO counters (#1045, #1049, #1060); CI template pinned to cd4e545a
+  (#1037).
+
+## [0.63.0] - 2026-11-16
 
 - Linter plugin SPI: `Rule.scope` (`""` or `"research-script"`). The engine
   applies the scope uniformly to engine call rules and plugin checkers once
