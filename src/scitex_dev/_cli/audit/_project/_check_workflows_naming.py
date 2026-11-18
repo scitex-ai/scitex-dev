@@ -21,6 +21,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from ...._ecosystem.ci_template._canonical import canonical_caller_job_ids
+from ...._ecosystem.ci_template._workflows import CANONICAL_WORKFLOW
+
 # Filenames that the CLA Assistant action pins. Never flagged.
 _EXEMPT_FILENAMES = frozenset({"cla.yml", "cla.yaml"})
 
@@ -165,12 +168,15 @@ def check_ps164_workflow_naming(repo: Path, violation_cls: type, out: list) -> N
     if not wf_dir.is_dir():
         return
 
+    canonical = bool(canonical_caller_job_ids(repo))
     for path in sorted(wf_dir.iterdir()):
         if not path.is_file():
             continue
         if path.suffix not in {".yml", ".yaml"}:
             continue
         if path.name in _EXEMPT_FILENAMES:
+            continue
+        if path.name == CANONICAL_WORKFLOW and canonical:
             continue
 
         rel = str(path.relative_to(repo))
