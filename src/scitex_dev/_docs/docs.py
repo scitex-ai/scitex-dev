@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from .._core.discovery import discover_packages, get_package_root, get_sphinx_source
+from .._core.manifest import _page_file
 
 logger = slogging.getLogger(__name__)
 
@@ -340,14 +341,6 @@ def _get_one(
     from .._core.introspect import introspect_package
 
     return introspect_package(module_name)
-
-
-def _page_file(docs_dir: Path, name: str) -> Path | None:
-    """Return a regular page only when its target stays in the docs directory."""
-    candidate = docs_dir / name
-    if candidate.is_file() and candidate.resolve().is_relative_to(docs_dir.resolve()):
-        return candidate
-    return None
 
 
 def _resolve_from_built(
