@@ -33,8 +33,10 @@ ships the same pages.
 
 ``--json`` on a page listing describes the index, not the content of every page.
 Page-specific JSON requires the provider's JSON build assets. The current
-reader can fall back to package introspection when a requested JSON page is
-unavailable; do not treat that fallback as the requested page's content.
+reader tries bundled documentation and then a local Sphinx build. If the
+named page is unavailable in both, the adapters report an error and exit 2;
+the Python API raises ``FileNotFoundError``. Package introspection remains
+available for requests without a page name.
 The removed flat flags ``docs --list``, ``docs --page`` and ``docs --tldr``
 are not the adapter interface.
 

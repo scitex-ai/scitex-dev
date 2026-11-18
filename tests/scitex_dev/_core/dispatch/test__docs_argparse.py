@@ -193,3 +193,23 @@ def test_structured_documentation_keeps_json_stdout(
     )
     # Assert
     assert result.returncode == 0 and json.loads(result.stdout)["pages"], result.stderr
+
+
+@pytest.mark.parametrize("adapter", ["argparse", "click"])
+@pytest.mark.parametrize("arguments", [
+    ["docs", "get", "missing-owned-page"],
+    ["docs", "get", "missing-owned-page", "--format", "html"],
+    ["docs", "get", "missing-owned-page", "--format", "json"],
+])
+def test_missing_named_page_is_a_cli_error(tmp_path, docs_site, adapter, arguments):
+    # Arrange
+    # Act
+    result = subprocess.run(
+        [sys.executable, "-c", PROGRAM, adapter, json.dumps(arguments)],
+        cwd=tmp_path, env=_docs_environment(docs_site, "warning"),
+        capture_output=True, text=True, timeout=20, check=False,
+    )
+    # Assert
+    assert (result.returncode, result.stdout, "missing-owned-page" in result.stderr) == (
+        2, "", True
+    ), result.stderr

@@ -162,7 +162,7 @@ def _run_docs_command(args: argparse.Namespace, package: str) -> None:
 
     try:
         result = get_docs(package=package, format=fetch_fmt, page=args.page)
-    except LookupError as e:
+    except (LookupError, FileNotFoundError) as e:
         log.error(str(e))
         sys.exit(2)
 

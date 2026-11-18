@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 """Tests for the main docs module."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -235,3 +236,56 @@ class TestBuildDocs:
         # Assert
         with pytest.raises(LookupError, match="not found"):
             build_docs(package="nonexistent", _discover_fn=_empty_discover)
+
+
+def _prepare_page_fixture(tmp_path, format, location, present):
+    package = tmp_path / "package"
+    source = tmp_path / "docs"
+    html = package / "_sphinx_html" if location == "bundle" else source / "_build/html"
+    if location != "absent":
+        html.mkdir(parents=True)
+        (html / "index.html").write_text("Unrelated index")
+    if present:
+        target = html if format != "json" or location == "bundle" else source / "_build/json"
+        target.mkdir(parents=True, exist_ok=True)
+        (target / ("owned.fjson" if format == "json" else "owned.html")).write_text(
+            json.dumps({"body": "Requested body"}) if format == "json" else "Requested body"
+        )
+    return package, source
+
+
+@pytest.mark.parametrize("format", [None, "html", "json"])
+@pytest.mark.parametrize("location,present", [
+    ("bundle", True), ("build", True), ("bundle", False),
+    ("build", False), ("absent", False),
+])
+def test_named_page_preserves_scope_across_resolution_chain(tmp_path, format, location, present):
+    # Arrange
+    package, source = _prepare_page_fixture(tmp_path, format, location, present)
+    expected = ("page", "Requested body") if present else ("missing", True)
+    # Act
+    try:
+        result = get_docs(
+            package="owned-docs", page="owned", format=format,
+            _discover_fn=lambda: {"owned-docs": "json"},
+            _root_fn=lambda name: package,
+            _sphinx_fn=lambda name: source,
+        )
+        actual = ("page", result.get("body") if isinstance(result, dict) else result.read_text())
+    except FileNotFoundError as error:
+        actual = ("missing", "owned" in str(error) and "owned-docs" in str(error))
+    # Assert
+    assert actual == expected
+
+
+def test_multiple_package_page_request_propagates_missing_page(tmp_path):
+    # Arrange
+    # Act
+    # Assert
+    with pytest.raises(FileNotFoundError, match="owned.*owned-docs"):
+        get_docs(
+            packages=["owned-docs"], page="owned", format="json",
+            _discover_fn=lambda: {"owned-docs": "json"},
+            _root_fn=lambda name: tmp_path,
+            _sphinx_fn=lambda name: None,
+        )

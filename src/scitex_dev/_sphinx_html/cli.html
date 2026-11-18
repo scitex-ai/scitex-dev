@@ -114,8 +114,10 @@ scitex-dev<span class="w"> </span>docs<span class="w"> </span>get<span class="w"
 </div>
 <p><code class="docutils literal notranslate"><span class="pre">--json</span></code> on a page listing describes the index, not the content of every page.
 Page-specific JSON requires the provider’s JSON build assets. The current
-reader can fall back to package introspection when a requested JSON page is
-unavailable; do not treat that fallback as the requested page’s content.
+reader tries bundled documentation and then a local Sphinx build. If the
+named page is unavailable in both, the adapters report an error and exit 2;
+the Python API raises <code class="docutils literal notranslate"><span class="pre">FileNotFoundError</span></code>. Package introspection remains
+available for requests without a page name.
 The removed flat flags <code class="docutils literal notranslate"><span class="pre">docs</span> <span class="pre">--list</span></code>, <code class="docutils literal notranslate"><span class="pre">docs</span> <span class="pre">--page</span></code> and <code class="docutils literal notranslate"><span class="pre">docs</span> <span class="pre">--tldr</span></code>
 are not the adapter interface.</p>
 </section>
