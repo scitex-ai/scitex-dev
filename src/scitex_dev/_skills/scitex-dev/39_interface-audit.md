@@ -47,6 +47,16 @@ scitex-dev ecosystem audit-project scitex-dev --path . --json
 Record the checkout commit, imported/installed versions and rule-provider
 metadata separately. Python source auditing must inspect the resolved checkout,
 not substitute a different installed copy. Missing source is not auditable.
+
+The ecosystem commands `audit-all`, `audit-cli`, `audit-mcp-tools`,
+`audit-project`, `audit-django`, `audit-local-state` and `audit-registry-layout`
+accept both `--severity warn` and `--severity warning` for the same warning
+floor. Parsing maps either spelling to each auditor's existing internal value;
+defaults, findings, filters and exit policies are unchanged. Other severity
+vocabularies, such as hook actions, are separate contracts. Source-backed
+parser and real project-audit parity controls live in
+`tests/scitex_dev/_cli/test__severity.py`.
+
 An absent MCP server, empty tool list or placeholder handler is missing coverage
 or implementation, even if a discovery command exits zero. A symbol count does
 not prove that those symbols are intended public capabilities or callable.

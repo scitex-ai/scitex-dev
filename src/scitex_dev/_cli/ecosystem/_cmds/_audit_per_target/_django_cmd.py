@@ -10,6 +10,7 @@ cleanly.
 import click
 
 from ....._ecosystem.help_spec import CliHelp, Example, SpecCommand
+from ...._severity import SeverityChoice
 
 
 def register(ecosystem):
@@ -75,7 +76,7 @@ def register(ecosystem):
     )
     @click.option(
         "--severity",
-        type=click.Choice(["error", "warning", "info"]),
+        type=SeverityChoice(),
         default="error",
         show_default=True,
         help=(
