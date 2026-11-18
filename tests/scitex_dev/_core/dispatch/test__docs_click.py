@@ -11,6 +11,8 @@ the first tests for it.
 
 from __future__ import annotations
 
+import shlex
+
 import pytest
 
 pytest.importorskip("click")
@@ -64,3 +66,23 @@ def test_bare_docs_group_prints_help_instead_of_erroring():
     result = runner.invoke(_make_root(), ["docs"])
     # Assert
     assert result.exit_code == 0 and "Usage" in result.output
+
+
+@pytest.mark.parametrize("name", ["docs", "manual"])
+def test_every_factory_example_targets_a_registered_command(name):
+    """An advertised example must resolve in the adapter's actual group."""
+    group = docs_click_group(package="scitex-fake-pkg", name=name)
+    root = click.Group("owned")
+    root.add_command(group)
+    runner = CliRunner()
+    for command in [group, *group.commands.values()]:
+        for example in command._help_spec.examples:
+            arguments = shlex.split(example.cmd.replace("{prog}", "owned"))[1:]
+            result = runner.invoke(root, [*arguments, "--help"])
+            assert result.exit_code == 0, (example.cmd, result.output)
+
+
+def test_package_factory_does_not_advertise_global_search():
+    group = docs_click_group(package="scitex-fake-pkg")
+    result = CliRunner().invoke(group, ["--help"])
+    assert result.exit_code == 0 and "search" not in result.output.lower()
