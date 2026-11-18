@@ -213,3 +213,26 @@ def test_missing_named_page_is_a_cli_error(tmp_path, docs_site, adapter, argumen
     assert (result.returncode, result.stdout, "missing-owned-page" in result.stderr) == (
         2, "", True
     ), result.stderr
+
+
+@pytest.mark.parametrize("adapter", ["argparse", "click"])
+@pytest.mark.parametrize("arguments", [
+    ["docs", "get", "directory-owned-page"],
+    ["docs", "get", "directory-owned-page", "--format", "html"],
+    ["docs", "get", "directory-owned-page", "--format", "json"],
+])
+def test_page_directory_is_reported_as_missing(tmp_path, docs_site, adapter, arguments):
+    # Arrange
+    html = docs_site / "owned_doc_output" / "_sphinx_html"
+    for suffix in [".html", ".fjson", ".json"]:
+        (html / ("directory-owned-page" + suffix)).mkdir()
+    # Act
+    result = subprocess.run(
+        [sys.executable, "-c", PROGRAM, adapter, json.dumps(arguments)],
+        cwd=tmp_path, env=_docs_environment(docs_site, "warning"),
+        capture_output=True, text=True, timeout=20, check=False,
+    )
+    # Assert
+    assert (result.returncode, result.stdout, "not found" in result.stderr) == (
+        2, "", True
+    ), result.stderr
