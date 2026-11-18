@@ -3,7 +3,7 @@
 These rules describe the ``@stx.session`` script structure: the
 decorator, the ``__main__`` guard, argparse avoidance, the int exit
 code, the ``import scitex as stx`` line, the INJECTED parameters, the
-UPPER_CASE config naming, and module-scope magic numbers.
+UPPER_CASE config naming, and hard-coded analysis parameters.
 
 Absorbed into the engine in-house (umbrella-thinning Phase A) from the
 umbrella's ``scitex._linter_plugin``. Every id, severity, category,
@@ -70,10 +70,12 @@ S003 = Rule(
     category="structure",
     message="argparse detected — @stx.session auto-generates CLI from function signature",
     suggestion=(
-        "Remove `import argparse` and define parameters as function arguments:\n"
+        "Remove `import argparse` and define CLI inputs as function arguments:\n"
         "  @stx.session\n"
-        "  def main(data_path: str, threshold: float = 0.5):\n"
-        "      # Auto-generates: --data-path, --threshold"
+        "  def main(data_path: str, subject: str = \"sub-01\"):\n"
+        "      # Auto-generates: --data-path, --subject\n"
+        "Numeric analysis parameters belong in config/*.yaml (CONFIG), not in\n"
+        "signature defaults — see STX-S008."
     ),
     requires="scitex",
 )
@@ -132,15 +134,26 @@ S008 = Rule(
     id="STX-S008",
     severity="info",
     category="structure",
-    message="Magic number in module scope — consider centralizing in config/",
+    message=(
+        "Hard-coded analysis parameter (magic number) — move it to "
+        "config/*.yaml and read it from CONFIG"
+    ),
     suggestion=(
-        "Move hard-coded values to config/*.yaml and load with load_configs():\n"
-        "  # config/MODEL.yaml\n"
-        "  HIDDEN_DIM: 256\n"
-        "  DROPOUT: 0.3\n"
+        "Every parameter that shapes a result (threshold, window size, seed,\n"
+        "alpha, n_bootstrap, frequency band, ...) belongs in config/*.yaml,\n"
+        "loaded by @stx.session and read from the injected CONFIG:\n"
+        "  # config/ANALYSIS.yaml\n"
+        "  WINDOW_SIZE: 256\n"
+        "  ALPHA: 0.05\n"
+        "  SEED: 42\n"
         "\n"
         "  # script.py\n"
-        "  CONFIG = load_configs()\n"
-        "  CONFIG.MODEL.HIDDEN_DIM    # 256"
+        "  @stx.session\n"
+        "  def main(CONFIG=stx.session.INJECTED, ...):\n"
+        "      window = CONFIG.ANALYSIS.WINDOW_SIZE\n"
+        "Not flagged: 0/1/-1/2, positional args (shapes, indices), arithmetic,\n"
+        "integer comparisons, axis=/ddof=/indent=/timeout=-style keywords, and\n"
+        "plotting-call keywords (figrecipe's STX-P007..P009 cover those).\n"
+        "Keep a deliberate constant with `# stx-allow: STX-S008` on its line."
     ),
 )
