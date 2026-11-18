@@ -8,11 +8,16 @@ rationales are all emitted).
 
 from __future__ import annotations
 
+import click
+import pytest
+
 from scitex_dev._cli.audit._config._skip_rules import SkipRule
 from scitex_dev._cli.ecosystem._cmds._audit_masking import (
+    MASKED_PREFIX,
     classify_output,
     is_error_line,
     is_violation_line,
+    label_masked_lines,
     line_matches_rule,
     render_inventory,
     render_summary,
@@ -428,3 +433,45 @@ def test_summary_reports_warnings_separately_from_errors():
     line = render_summary("scitex-dev", **args)
     # Assert
     assert "1 unmasked error(s) (+7 warning/info finding(s))" in line
+
+
+@pytest.mark.parametrize("line,errors,findings,unreadable,inspected", [
+    (click.style(_CANONICAL, fg="red"), 1, 1, 0, 1),
+    (click.style(_LEGACY, fg="red"), 1, 1, 0, 1),
+    (click.style("WARN:   [§12] owned: warning", fg="yellow"), 0, 1, 0, 1),
+    (click.style(_UNREADABLE, fg="red"), 0, 0, 1, 1),
+    (click.style(_FRAMING, fg="cyan"), 0, 0, 0, 1),
+    (click.style("", fg="red"), 0, 0, 0, 0),
+    (click.style("  \t", fg="red"), 0, 0, 0, 0),
+])
+def test_display_colour_does_not_hide_finding_semantics(line, errors, findings, unreadable, inspected):
+    # Arrange
+    # Act
+    report = classify_output(line, [])
+    # Assert
+    assert (report.unmasked_error_count, report.unmasked_count, len(report.unreadable), report.inspected,
+            report.unmasked) == (errors, findings, unreadable, inspected, [line] if findings else [])
+
+
+@pytest.mark.parametrize("line,expected", [
+    (click.style(_CANONICAL, fg="red"), (1, 0, 0, True)),
+    ("ERRO:   [" + click.style("PS-139", fg="red") + "] owned: error", (1, 0, 0, True)),
+    (click.style("ERRO:   [PS-1390] owned: other rule", fg="red"), (0, 1, 0, False)),
+    (click.style(_CANONICAL + "\n" + _UNREADABLE, fg="red"), (1, 0, 1, False)),
+])
+def test_display_colour_preserves_exact_masking_and_unknown_refusal(line, expected):
+    # Arrange
+    # Act
+    report = classify_output(line, [_DEFERRED])
+    # Assert
+    assert (report.masked_count, report.unmasked_error_count, len(report.unreadable), report.fully_masked) == expected
+
+
+def test_coloured_masked_finding_keeps_its_visible_label():
+    # Arrange
+    line = click.style(_CANONICAL, fg="red")
+    report = classify_output(line, [_DEFERRED])
+    # Act
+    result = label_masked_lines(line, report)
+    # Assert
+    assert result.startswith(MASKED_PREFIX)
