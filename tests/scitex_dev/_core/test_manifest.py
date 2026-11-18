@@ -319,3 +319,77 @@ def test_public_overview_regenerates_from_safe_assets_after_external_manifest(tm
     )
     # Assert
     assert result["pages"] == [{"name": "owned", "title": "Owned", "path": "owned.html"}]
+
+
+def _write_error(docs, payload):
+    """Observe write refusal alongside file preservation in owned fixtures."""
+    try:
+        write_manifest(docs, payload)
+    except ValueError as error:
+        return error
+    return None
+
+
+def _linked_manifest(tmp_path, existing):
+    """Create an existing or dangling target outside the selected docs root."""
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    outside = tmp_path / "outside.json"
+    if existing:
+        outside.write_bytes(b"Outside sentinel, preserve exactly.\n")
+    (docs / "manifest.json").symlink_to(outside)
+    return docs, outside
+
+
+@pytest.mark.parametrize("existing", [True, False])
+def test_manifest_write_refuses_external_link_without_changing_target(tmp_path, existing):
+    # Arrange
+    docs, outside = _linked_manifest(tmp_path, existing)
+    expected_bytes = b"Outside sentinel, preserve exactly.\n" if existing else None
+    # Act
+    error = _write_error(docs, {"package": "owned"})
+    # Assert
+    assert (
+        isinstance(error, ValueError), outside.exists(),
+        outside.read_bytes() if outside.exists() else None,
+        (docs / "manifest.json").is_symlink(),
+    ) == (True, existing, expected_bytes, True)
+
+
+def _internal_manifest_link(tmp_path, existing):
+    """Keep internal links valid for both existing and not-yet-created files."""
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    target = docs / "metadata.json"
+    if existing:
+        target.write_bytes(b"Old metadata\n")
+    (docs / "manifest.json").symlink_to(target)
+    return docs, target
+
+
+@pytest.mark.parametrize("existing", [True, False])
+def test_manifest_write_preserves_internal_link_behavior(tmp_path, existing):
+    # Arrange
+    docs, target = _internal_manifest_link(tmp_path, existing)
+    payload = {"package": "owned", "pages": []}
+    # Act
+    result = write_manifest(docs, payload)
+    # Assert
+    assert (result, json.loads(target.read_text()), result.is_symlink()) == (
+        docs / "manifest.json", payload, True
+    )
+
+
+def test_manifest_write_accepts_explicit_symlinked_docs_root(tmp_path):
+    # Arrange
+    real = tmp_path / "real-docs"
+    real.mkdir()
+    alias = tmp_path / "docs-alias"
+    alias.symlink_to(real, target_is_directory=True)
+    payload = {"package": "owned"}
+    # Act
+    path = write_manifest(alias, payload)
+    # Assert
+    assert (path, json.loads((real / "manifest.json").read_text())) == (
+        alias / "manifest.json", payload
+    )

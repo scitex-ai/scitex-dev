@@ -26,11 +26,18 @@ from typing import Any, Optional
 logger = slogging.getLogger(__name__)
 
 
+def _scoped_path(docs_dir: Path, name: str) -> Path | None:
+    """Return a path only when its target stays in the docs directory."""
+    candidate = docs_dir / name
+    if candidate.resolve().is_relative_to(docs_dir.resolve()):
+        return candidate
+    return None
+
+
 def _page_file(docs_dir: Path, name: str) -> Path | None:
     """Return a regular page only when its target stays in the docs directory."""
-    candidate = docs_dir / name
-    if candidate.is_file() and candidate.resolve().is_relative_to(docs_dir.resolve()):
-        return candidate
+    if (docs_dir / name).is_file():
+        return _scoped_path(docs_dir, name)
     return None
 
 
@@ -63,9 +70,14 @@ def write_manifest(docs_dir: Path, manifest: dict[str, Any]) -> Path:
 
     Returns:
         Path to the written manifest file.
+
+    Raises:
+        ValueError: If manifest.json resolves outside the docs directory.
     """
     docs_dir.mkdir(parents=True, exist_ok=True)
-    manifest_path = docs_dir / "manifest.json"
+    manifest_path = _scoped_path(docs_dir, "manifest.json")
+    if manifest_path is None:
+        raise ValueError("Manifest target must remain within the docs directory")
     with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2, ensure_ascii=False)
     return manifest_path
