@@ -195,6 +195,10 @@ def _collect_cross_package_imports(src_root: Path, own_import: str) -> set[str]:
             continue
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
+                # Relative imports resolve inside the audited package; their
+                # module basename may resemble an external SciTeX peer.
+                if node.level:
+                    continue
                 mod = node.module or ""
                 if (
                     mod == "scitex"
