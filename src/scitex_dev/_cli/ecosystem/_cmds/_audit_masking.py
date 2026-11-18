@@ -15,6 +15,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from click import unstyle
+
 from ...audit._config._skip_rules import SkipRule
 
 
@@ -43,7 +45,8 @@ def is_violation_line(line: str) -> bool:
     (``ERRO: ``/``WARN: ``), so a leading alphabetic word plus colon is
     stripped before the bracket test.
     """
-    stripped = line.lstrip()
+    # Styling is presentation; preserve original lines in the report.
+    stripped = unstyle(line).lstrip()
     head = stripped.split(":", 1)
     payload = head[1].lstrip() if len(head) == 2 and head[0].isalpha() else stripped
     return payload.startswith("[")
@@ -56,6 +59,7 @@ def line_matches_rule(line: str, rule: str) -> bool:
     marker (severity letter, section suffix) is incidental. ``[PS-139 §2]``
     and ``[PS-139]`` both match ``PS-139``; ``[PS-1390]`` does not.
     """
+    line = unstyle(line)
     return f"[{rule} " in line or f"[{rule}]" in line
 
 
@@ -65,6 +69,7 @@ def is_error_line(line: str) -> bool:
     Auditors mark severity two ways: scitex-logging's `ERRO: ` prefix,
     and the legacy audit-summary `[E]` marker.
     """
+    line = unstyle(line)
     return line.lstrip().startswith("ERRO:") or "[E] " in line
 
 
@@ -189,14 +194,15 @@ def classify_output(text: str, skip_rules) -> MaskReport:
     inspected = 0
     for line in text.splitlines():
         stripped = line.strip()
-        if not stripped:
+        plain = unstyle(stripped).strip()
+        if not plain:
             continue
         inspected += 1
         if not is_violation_line(line):
             # Framing: banners, headlines, per-audit progress. Counted in
             # `inspected` and nowhere else.
             continue
-        if not _RULE_ID_RE.search(stripped):
+        if not _RULE_ID_RE.search(plain):
             # A diagnostic label is not a rule. Even a declaration naming
             # that label cannot turn an unreadable finding into a deferral.
             unreadable.append(stripped)
