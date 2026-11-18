@@ -71,18 +71,26 @@ def test_bare_docs_group_prints_help_instead_of_erroring():
 @pytest.mark.parametrize("name", ["docs", "manual"])
 def test_every_factory_example_targets_a_registered_command(name):
     """An advertised example must resolve in the adapter's actual group."""
+    # Arrange
     group = docs_click_group(package="scitex-fake-pkg", name=name)
     root = click.Group("owned")
     root.add_command(group)
     runner = CliRunner()
+    # Act
+    results = []
     for command in [group, *group.commands.values()]:
         for example in command._help_spec.examples:
             arguments = shlex.split(example.cmd.replace("{prog}", "owned"))[1:]
             result = runner.invoke(root, [*arguments, "--help"])
-            assert result.exit_code == 0, (example.cmd, result.output)
+            results.append((example.cmd, result.exit_code, result.output))
+    # Assert
+    assert results and all(code == 0 for _, code, _ in results), results
 
 
 def test_package_factory_does_not_advertise_global_search():
+    # Arrange
     group = docs_click_group(package="scitex-fake-pkg")
+    # Act
     result = CliRunner().invoke(group, ["--help"])
+    # Assert
     assert result.exit_code == 0 and "search" not in result.output.lower()

@@ -155,8 +155,11 @@ def test_validate_human_report_keeps_incomplete_scope_visible(tmp_path):
     ) == (2, True, True, True)
 
 
-def test_dev_keeps_its_separately_registered_global_search():
+@pytest.mark.parametrize("required_option", ["--scope", "--max-results"])
+def test_dev_keeps_its_separately_registered_global_search(required_option):
+    # Arrange
     command = _docs_cli()
+    # Act
     result = CliRunner().invoke(command, ["docs", "search", "--help"])
-    assert result.exit_code == 0
-    assert "--scope" in result.output and "--max-results" in result.output
+    # Assert
+    assert result.exit_code == 0 and required_option in result.output
