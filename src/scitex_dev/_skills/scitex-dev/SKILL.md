@@ -76,6 +76,7 @@ interfaces:
 
 - [42_context-discovery.md](42_context-discovery.md) — Upstream selective MCP discovery and metadata-only context accounting
 - [43_hpc-test-runner.md](43_hpc-test-runner.md) — Legacy Slurm sync, submission, polling and results
+- [44 Hierarchy](44_hierarchy.md)
 
 ## Quick Reference
 

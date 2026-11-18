@@ -56,6 +56,8 @@ _LAZY_ATTRS: dict[str, str] = {
     "list_cli_providers": "cli_providers",
     "DocProvider": "doc_providers",
     "list_doc_providers": "doc_providers",
+    "HierarchyProvider": "hierarchy_providers",
+    "list_hierarchy_providers": "hierarchy_providers",
     # cli_utils
     "add_dry_run_argument": "_cli",
     "add_json_argument": "_cli",
@@ -246,6 +248,8 @@ __all__ = [
     "load_exposure_policy",
     "CliProvider",
     "list_cli_providers",
+    "HierarchyProvider",
+    "list_hierarchy_providers",
     # Version
     "__version__",
     # Docs
