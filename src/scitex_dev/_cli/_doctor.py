@@ -266,7 +266,8 @@ def register_doctor_command(main_group):
             summary="Diagnose the health of the full SciTeX ecosystem.",
             description=(
                 "Checks Python version, active venv, installed scitex-* "
-                "package versions against PyPI, relevant environment "
+                "package versions against PyPI, editable source directories, "
+                "relevant environment "
                 "variables, the MCP server, and agent-container screen "
                 "sessions. Exits 1 if any check fails.",
             ),
@@ -279,6 +280,8 @@ def register_doctor_command(main_group):
     @click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
     def doctor_cmd(as_json: bool) -> None:
         from importlib.metadata import version as pkg_version
+
+        from ._doctor_editables import check_editable_installs
 
         try:
             ver = pkg_version("scitex-dev")
@@ -312,6 +315,11 @@ def register_doctor_command(main_group):
             click.secho("SciTeX Packages", bold=True)
 
         for r in check_scitex_packages():
+            results.append(r)
+            if not as_json:
+                _echo_result(r)
+
+        for r in check_editable_installs():
             results.append(r)
             if not as_json:
                 _echo_result(r)
