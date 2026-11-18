@@ -36,7 +36,7 @@
 | 1 | **Ecosystem packages drift apart** -- versions, READMEs, Sphinx setups and interface conventions need consistent checks | **`scitex-dev ecosystem audit-*`** -- shared dispatchers run package, CLI, MCP, Python API, skills and Django checks; `audit-summary` combines cross-package findings |
 | 2 | **Skills scattered across ~70 source repos** -- AI agents can't discover them; humans can't review them | **`scitex dev skills list / get / install`** -- discover installed leaf skills and install them into `~/.scitex/dev/skills/` or an explicit `--directory` for your agent |
 | 3 | **Source, installed packages and servers show different versions** | **`scitex dev ecosystem list --versions --json`** and **`validate-versions`** report version observations and mismatches. Each leaf owns its qualified release and deployment; inventory and sync commands do not establish release acceptance. See the [Dev release procedure](src/scitex_dev/_skills/scitex-dev/18_full-update.md). |
-| 4 | **Bulk renames across 70 repos break cross-references** -- import paths, doc references, symlinks — `sed -i` corrupts something every time | **`scitex-dev rename-symbols`** -- atomic rename with cross-reference updates, regex support, dry-run preview, git-safety guards |
+| 4 | **Bulk renames across 70 repos break cross-references** -- import paths, doc references, symlinks — `sed -i` corrupts something every time | **`scitex-dev rename-symbols`** -- preview and apply content, symlink and path replacements with regex support and Git safety checks. Operations are sequential; review protected matches and conflicts in the result. See [bulk rename behavior and limits](src/scitex_dev/_skills/scitex-dev/15_rename.md). |
 | 5 | **Lint rules drift from the API they enforce** -- a renamed function in figrecipe leaves the rule pointing at a nonexistent symbol, and the bug only shows up months later | **`scitex-dev linter`** (engine, formerly `scitex-linter`) -- aggregates per-package rule plugins via the `scitex_dev.linter.plugins` entry point. Rules ship in the package whose API they enforce, so rename + rule + test land in one PR. Doc-block linting for `.py` / `.ipynb` / `.md` / `.rst`. `scitex-dev linter sweep` walks every package's README + docs in one shot |
 
 ## Installation
@@ -260,6 +260,19 @@ scitex-dev rename-symbols old_name new_name --dry-run
 scitex-dev --help
 scitex-dev --help-recursive
 ```
+
+Bulk rename previews are read-only; live changes require a safe Git working
+directory and check uncommitted changes, collisions and permissions. The current
+implementation applies several steps rather than one transaction: a later
+failure does not roll back earlier writes. Review the result's `error`,
+`collisions` and `permission_errors`, plus protected content counts. Literal
+mode can retain matching lines such as `prog_name="alpha"`; regex mode does
+not provide the same line protections. Follow the [rename skill](src/scitex_dev/_skills/scitex-dev/15_rename.md)
+for scope and recovery. The owning [orchestrator](src/scitex_dev/rename/core.py)
+and [I/O helpers](src/scitex_dev/rename/io.py) define application order and writes;
+[rename behavior tests](tests/scitex_dev/rename/test_core.py),
+[protected-content tests](tests/scitex_dev/rename/test_steps.py) and
+[CLI tests](tests/scitex_dev/_cli/test__rename.py) cover the corresponding controls.
 
 Project references are `owner/name` or `all`. Resolution checks an explicit
 Python argument first, then `SCITEX_PROJECT`, then the persisted selection
