@@ -29,6 +29,11 @@ its canonical distribution, one owner must not declare duplicates, and the
 target must be `module:attribute`. Do not hide a conflicting declaration with a
 package filter; the catalog validates the full selected search first.
 
+Repeated filesystem metadata origins are one installation, including aliases
+of the same directory. Separate metadata directories and duplicate entries
+remain conflicting claims. This does not repair stale editable metadata or
+prove the provider's code exists.
+
 A catalog is not a hierarchy tree. SDK owns record/tree validation; the umbrella
 owns root/layers and each leaf owns its stable allocation. Tree loading and
 admission, complete package enrollment, Docs ordering and global-search wiring
