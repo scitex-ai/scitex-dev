@@ -31,7 +31,12 @@ What is deliberately NOT flagged (harmless literals):
   ``decimals=``, ``indent=``, ``timeout=``, ``n_jobs=``, ...);
 - every keyword of a plotting call (``ax.plot(..., alpha=0.3)``) —
   presentation is figrecipe's domain (STX-P007..P009 / STX-FM001);
-- private (``_X``) and dunder names, version names, index names;
+- private (``_X``) and dunder names, version names, index names, and names
+  or keywords carrying a layout / display / identity / tolerance /
+  infrastructure token (``n_cols``, ``max_colwidth``, ``n_hash_chars``,
+  ``abs_tol``, ``n_workers``, ``timeout_s``);
+- async code and classes driving it (UI / browser automation), and the
+  test of a conditional choosing between strings (``"p<.001" if p < .001``);
 - strings, booleans, ``None``; test files.
 
 A deliberate constant is suppressed per line with ``# stx-allow: STX-S008``.
@@ -45,8 +50,10 @@ from ._magic_numbers_vocab import (
     _ENUM_BASES,
     _EXEMPT_CALLEES,
     _EXEMPT_KEYWORDS,
+    _EXEMPT_TOKENS,
     _LAYOUT_UNIT_SUFFIXES,
     _PLOT_METHODS,
+    _PLOT_PARAMS,
     _PLOT_MODULES,
     _PLOT_RECEIVER,
     _SEED_CALLEES,
@@ -54,6 +61,7 @@ from ._magic_numbers_vocab import (
     _SKIP_NAMES,
     _STYLE_KEYWORDS,
     _TRIVIAL_NUMBERS,
+    _UNIT_CONVERSION,
 )
 from ._rules import lookup as _lk
 from ._rules._base import Rule
@@ -125,18 +133,59 @@ def _is_int_literal(node: ast.AST) -> bool:
 
 def _exempt_keyword(name: str) -> bool:
     low = name.lower()
-    return low in _EXEMPT_KEYWORDS or low.endswith(_LAYOUT_UNIT_SUFFIXES)
+    if low in _EXEMPT_KEYWORDS or low in _STYLE_KEYWORDS:
+        return True
+    if low.endswith(_LAYOUT_UNIT_SUFFIXES):
+        return True
+    return any(tok in _EXEMPT_TOKENS for tok in low.split("_"))
 
 
 def _skip_name(name: str) -> bool:
     low = name.lower()
     return (
         name.startswith("_")
+        or len(name) == 1  # scratch locals (w, h, k, ...)
+        or _UNIT_CONVERSION.match(low) is not None
         or low in _SKIP_NAMES
         or _exempt_keyword(name)
         or "version" in low
         or low.endswith(("idx", "index", "_rc", "_code", "_status"))
     )
+
+
+def _is_text(node: ast.AST) -> bool:
+    return isinstance(node, ast.JoinedStr) or (
+        isinstance(node, ast.Constant) and isinstance(node.value, str)
+    )
+
+
+def _is_text_expr(node) -> bool:
+    if isinstance(node, ast.IfExp):
+        return _is_text_expr(node.body) and _is_text_expr(node.orelse)
+    return _is_text(node)
+
+
+def _returns_only_text(func) -> bool:
+    """A formatter: every ``return`` of *func* (not nested defs) yields text."""
+    returns = []
+    stack = list(func.body)
+    while stack:
+        node = stack.pop()
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            continue
+        if isinstance(node, ast.Return):
+            returns.append(node.value)
+        stack.extend(ast.iter_child_nodes(node))
+    return bool(returns) and all(v is not None and _is_text_expr(v) for v in returns)
+
+
+def _option_name(call: ast.Call) -> str:
+    """``add_argument("--older-than-days", ...)`` -> ``older_than_days``."""
+    for arg in call.args:
+        if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+            if arg.value.startswith("--") or not arg.value.startswith("-"):
+                return arg.value.lstrip("-").replace("-", "_")
+    return ""
 
 
 def _callee_chain(func: ast.AST) -> list:
@@ -198,9 +247,19 @@ class _Finder(ast.NodeVisitor):
         self.source = source
         self.found: list = []
         self._enum_depth = 0
+        # >0 inside regions whose literals are never analysis parameters:
+        # async code (UI / browser / network automation), classes that drive
+        # it, and the test of a display-string conditional.
+        self._quiet = 0
 
     def _hit(self, node: ast.AST, label: str) -> None:
-        self.found.append((node, label))
+        if not self._quiet:
+            self.found.append((node, label))
+
+    def _visit_quietly(self, node: ast.AST) -> None:
+        self._quiet += 1
+        self.visit(node)
+        self._quiet -= 1
 
     # -- bindings --
 
@@ -239,8 +298,11 @@ class _Finder(ast.NodeVisitor):
             or (isinstance(b, ast.Attribute) and b.attr in _ENUM_BASES)
             for b in node.bases
         )
+        drives_async = any(isinstance(b, ast.AsyncFunctionDef) for b in node.body)
         self._enum_depth += is_enum
+        self._quiet += drives_async
         self.generic_visit(node)
+        self._quiet -= drives_async
         self._enum_depth -= is_enum
 
     # -- signatures --
@@ -258,10 +320,23 @@ class _Finder(ast.NodeVisitor):
                 self._hit(default, f"{name}={_segment(default, self.source)}")
 
     def visit_FunctionDef(self, node) -> None:
-        self._check_defaults(node.args)
+        # A helper taking an axes / figure is a plotting helper: its defaults
+        # (``def box(ax, x, y, fontsize=8)``) are presentation.
+        params = {a.arg for a in node.args.args + node.args.kwonlyargs}
+        # A formatter (``def fmt(v, nd=3): return f"{v:.{nd}f}"``) is display.
+        if not params & _PLOT_PARAMS and not _returns_only_text(node):
+            self._check_defaults(node.args)
         self.generic_visit(node)
 
-    visit_AsyncFunctionDef = visit_FunctionDef
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        # Numerical analysis is not written as coroutines; async bodies are
+        # UI / browser / network orchestration (``await page.wait(0.5)``).
+        self._visit_quietly_children(node)
+
+    def _visit_quietly_children(self, node: ast.AST) -> None:
+        self._quiet += 1
+        self.generic_visit(node)
+        self._quiet -= 1
 
     def visit_Lambda(self, node: ast.Lambda) -> None:
         self._check_defaults(node.args)
@@ -276,9 +351,19 @@ class _Finder(ast.NodeVisitor):
             for arg in node.args:
                 if _is_int_literal(arg):
                     self._hit(arg, f"{callee}({_segment(arg, self.source)})")
-        plotting = _is_plotting_call(chain) or any(
-            kw.arg in _STYLE_KEYWORDS for kw in node.keywords
+        plotting = (
+            _is_plotting_call(chain)
+            or any(kw.arg in _STYLE_KEYWORDS for kw in node.keywords)
+            # a helper handed an axes / figure draws: ``_draw_scalebar(ax, x=60)``
+            or any(
+                isinstance(a, ast.Name) and _PLOT_RECEIVER.match(a.id)
+                for a in node.args
+            )
         )
+        # An argparse option is judged by its own name (``--timeout``).
+        option = _option_name(node) if callee == "add_argument" else ""
+        if option and _exempt_keyword(option):
+            plotting = True
         for kw in node.keywords:
             if kw.arg is None:
                 continue
@@ -294,6 +379,16 @@ class _Finder(ast.NodeVisitor):
         self.generic_visit(node)
 
     # -- thresholds --
+
+    def visit_IfExp(self, node: ast.IfExp) -> None:
+        # ``"p<0.001" if p < 0.001 else f"p={p:.3f}"`` / ``"white" if v > 0.45
+        # else "black"``: a comparison choosing between strings is display.
+        if _is_text(node.body) and _is_text(node.orelse):
+            self._visit_quietly(node.test)
+            self.visit(node.body)
+            self.visit(node.orelse)
+            return
+        self.generic_visit(node)
 
     def visit_Compare(self, node: ast.Compare) -> None:
         for operand in [node.left, *node.comparators]:

@@ -40,6 +40,7 @@ def _s008_lines(src: str, filepath: str = "analysis.py", config=None) -> list:
 
 _FLAGGED = {
     "local_assignment_in_main": "window_size = 256",
+    "per_class_count_is_not_a_unit": "N_PER_CLASS = 10",
     "annotated_local": "alpha_level: float = 0.05",
     "negative_literal": "lag_ms = -150",
     "list_of_frequencies": "freqs = [4, 8, 13, 30]",
@@ -153,6 +154,23 @@ _HARMLESS = {
     "private_and_version_names": "_CACHE = 512\nVERSION_INFO = (0, 1, 3)",
     "strings_and_bools": 'name = "sub-01"\nflag = True',
     "allow_comment": "window = 256  # stx-allow: STX-S008",
+    "display_width_keyword": "print(CONFIG.DF.to_string(max_colwidth=50))",
+    "layout_names": "n_cols = 3\ntick_step = 4\ngap = 5.0",
+    "hash_length_name": "n_hash_chars = 16",
+    "tolerance_names": "ok = np.isclose(1.0, 1.1, rel_tol=1e-9, abs_tol=1e-9)",
+    "worker_and_timeout": "n_workers = 4\nDEFAULT_TIMEOUT_S = 60.0",
+    "display_string_conditional": 'txt = "p<0.001" if CONFIG.P < 0.001 else f"p={CONFIG.P:.3f}"',
+    "string_prefix_length": "ID_PREFIX = 5",
+    "unit_conversion_constant": "SEC_PER_DAY = 86_400",
+    "single_letter_scratch": "w = 0.35",
+    "label_nudge": "val_dx = 3",
+    "helper_given_axes": "ax = CONFIG.AX\ndraw_scalebar(ax, x_sec=60.0)",
+    "argparse_infrastructure_option": (
+        "import argparse\n"
+        "p = argparse.ArgumentParser()\n"
+        "p.add_argument('--timeout', type=int, default=14400)"
+    ),
+    "annotation_with_axes_keyword": "adjust_text(CONFIG.T, ax=CONFIG.AX, expand=(1.5, 1.8))",
 }
 
 
@@ -252,3 +270,58 @@ def test_session_script_outside_research_keeps_s008_info():
     issues = lint_source(src, filepath="analysis.py", config=LinterConfig())
     # Assert
     assert {i.rule.severity for i in issues if i.rule.id == "STX-S008"} == {"info"}
+
+
+def test_async_ui_automation_is_not_flagged():
+    # Arrange
+    src = _HEADER + (
+        "class Demo:\n"
+        "    duration_target = 8\n"
+        "\n"
+        "    async def run(self, page):\n"
+        "        await self.move_to(page, duration=0.6)\n"
+    )
+    # Act
+    lines = _s008_lines(src)
+    # Assert
+    assert lines == []
+
+
+def test_plotting_helper_defaults_are_not_flagged():
+    # Arrange
+    src = _HEADER + "def box(ax, x, y, text, fontsize=8, pad=2.5):\n    return ax\n"
+    # Act
+    lines = _s008_lines(src)
+    # Assert
+    assert lines == []
+
+
+def test_comparison_choosing_a_number_is_still_flagged():
+    # Arrange
+    src = _session_script("y = 1 if CONFIG.P < 0.05 else 0")
+    # Act
+    lines = _s008_lines(src)
+    # Assert
+    assert lines == [_HEADER.count("\n") + 5]
+
+
+def test_formatter_defaults_are_not_flagged():
+    # Arrange
+    src = _HEADER + 'def fmt(v, nd=3):\n    return "--" if v is None else f"{v:.{nd}f}"\n'
+    # Act
+    lines = _s008_lines(src)
+    # Assert
+    assert lines == []
+
+
+def test_argparse_analysis_option_default_is_flagged():
+    # Arrange
+    src = _HEADER + (
+        "import argparse\n"
+        "p = argparse.ArgumentParser()\n"
+        "p.add_argument('--n-perm', type=int, default=2000)\n"
+    )
+    # Act
+    lines = _s008_lines(src)
+    # Assert
+    assert lines == [8]
