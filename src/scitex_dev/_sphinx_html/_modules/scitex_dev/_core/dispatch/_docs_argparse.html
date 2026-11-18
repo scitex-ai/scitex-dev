@@ -48,7 +48,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../api.html">API Reference</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../unified-search.html">Unified Search</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../documentation-verification.html">Scoped documentation verification</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../../cli.html">CLI Mixin</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../cli.html">CLI documentation adapters</a></li>
 </ul>
 
         </div>
@@ -83,7 +83,8 @@
 <span class="sd">``_run_docs_command`` / ``_print_page_list`` / ``_get_tldr`` are shared</span>
 <span class="sd">with ``_docs_click.py`` (the Click flavor) -- both front-ends dispatch</span>
 <span class="sd">into the SAME execution path so behavior never drifts between the two</span>
-<span class="sd">CLI frameworks a downstream package might choose.</span>
+<span class="sd">CLI frameworks a downstream package might choose. CLI responses use the plain</span>
+<span class="sd">output channel so logging thresholds cannot suppress documentation content.</span>
 <span class="sd">"""</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
@@ -96,9 +97,6 @@
 <span class="kn">import</span><span class="w"> </span><span class="nn">scitex_logging</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">slogging</span>
 
 <span class="n">log</span> <span class="o">=</span> <span class="n">slogging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
-
-<span class="n">console</span> <span class="o">=</span> <span class="n">slogging</span><span class="o">.</span><span class="n">getConsole</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">.console"</span><span class="p">)</span>
-
 
 <div class="viewcode-block" id="register_docs_subcommand">
 <a class="viewcode-back" href="../../../../cli.html#scitex_dev.cli.register_docs_subcommand">[docs]</a>
@@ -179,11 +177,11 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">_default_handler</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
         <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s2">"help_recursive"</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
             <span class="n">parser</span><span class="o">.</span><span class="n">print_help</span><span class="p">()</span>
-            <span class="n">console</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">""</span><span class="p">)</span>
+            <span class="n">slogging</span><span class="o">.</span><span class="n">getPlainConsole</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="s2">""</span><span class="p">)</span>
             <span class="k">for</span> <span class="n">sub_name</span><span class="p">,</span> <span class="n">sub_p</span> <span class="ow">in</span> <span class="p">[(</span><span class="s2">"list"</span><span class="p">,</span> <span class="n">list_p</span><span class="p">),</span> <span class="p">(</span><span class="s2">"get"</span><span class="p">,</span> <span class="n">get_p</span><span class="p">)]:</span>
-                <span class="n">console</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">"--- </span><span class="si">{</span><span class="n">sub_name</span><span class="si">}</span><span class="s2"> ---"</span><span class="p">)</span>
+                <span class="n">slogging</span><span class="o">.</span><span class="n">getPlainConsole</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="sa">f</span><span class="s2">"--- </span><span class="si">{</span><span class="n">sub_name</span><span class="si">}</span><span class="s2"> ---"</span><span class="p">)</span>
                 <span class="n">sub_p</span><span class="o">.</span><span class="n">print_help</span><span class="p">()</span>
-                <span class="n">console</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">""</span><span class="p">)</span>
+                <span class="n">slogging</span><span class="o">.</span><span class="n">getPlainConsole</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="s2">""</span><span class="p">)</span>
             <span class="k">return</span>
         <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">docs_command</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">parser</span><span class="o">.</span><span class="n">print_help</span><span class="p">()</span>
@@ -229,7 +227,7 @@
                 <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span><span class="s2">"package"</span><span class="p">:</span> <span class="n">package</span><span class="p">,</span> <span class="s2">"tldr"</span><span class="p">:</span> <span class="n">tldr</span><span class="p">}),</span> <span class="n">flush</span><span class="o">=</span><span class="kc">False</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">console</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="n">tldr</span><span class="p">)</span>
+            <span class="n">slogging</span><span class="o">.</span><span class="n">getPlainConsole</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="n">tldr</span><span class="p">)</span>
         <span class="k">return</span>
 
     <span class="c1"># Determine format. Note: page listings always use the rich manifest</span>
@@ -265,9 +263,9 @@
         <span class="p">)</span>
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">Path</span><span class="p">)</span> <span class="ow">and</span> <span class="n">result</span><span class="o">.</span><span class="n">is_file</span><span class="p">():</span>
         <span class="c1"># --page returns a file path — print its content</span>
-        <span class="n">console</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">read_text</span><span class="p">(</span><span class="n">encoding</span><span class="o">=</span><span class="s2">"utf-8"</span><span class="p">))</span>
+        <span class="n">slogging</span><span class="o">.</span><span class="n">getPlainConsole</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">read_text</span><span class="p">(</span><span class="n">encoding</span><span class="o">=</span><span class="s2">"utf-8"</span><span class="p">))</span>
     <span class="k">else</span><span class="p">:</span>
-        <span class="n">console</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+        <span class="n">slogging</span><span class="o">.</span><span class="n">getPlainConsole</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_print_page_list</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">as_json</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -281,14 +279,14 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">pages</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="ow">and</span> <span class="n">pages</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">pages</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="nb">dict</span><span class="p">):</span>
                 <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">pages</span><span class="p">:</span>
-                    <span class="n">console</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">"  </span><span class="si">{</span><span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'name'</span><span class="p">,</span><span class="w"> </span><span class="s1">'?'</span><span class="p">)</span><span class="si">:</span><span class="s2">20s</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'title'</span><span class="p">,</span><span class="w"> </span><span class="s1">''</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+                    <span class="n">slogging</span><span class="o">.</span><span class="n">getPlainConsole</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="sa">f</span><span class="s2">"  </span><span class="si">{</span><span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'name'</span><span class="p">,</span><span class="w"> </span><span class="s1">'?'</span><span class="p">)</span><span class="si">:</span><span class="s2">20s</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'title'</span><span class="p">,</span><span class="w"> </span><span class="s1">''</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
             <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">pages</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
                 <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">pages</span><span class="p">:</span>
-                    <span class="n">console</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">"  </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+                    <span class="n">slogging</span><span class="o">.</span><span class="n">getPlainConsole</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="sa">f</span><span class="s2">"  </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="n">console</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"  (no pages found)"</span><span class="p">)</span>
+                <span class="n">slogging</span><span class="o">.</span><span class="n">getPlainConsole</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="s2">"  (no pages found)"</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
-        <span class="n">console</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+        <span class="n">slogging</span><span class="o">.</span><span class="n">getPlainConsole</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_get_tldr</span><span class="p">(</span><span class="n">package</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>

@@ -153,3 +153,13 @@ def test_validate_human_report_keeps_incomplete_scope_visible(tmp_path):
         "limitations:" in result.stdout,
         "No Python/py fenced blocks were checked" in result.stdout,
     ) == (2, True, True, True)
+
+
+@pytest.mark.parametrize("required_option", ["--scope", "--max-results"])
+def test_dev_keeps_its_separately_registered_global_search(required_option):
+    # Arrange
+    command = _docs_cli()
+    # Act
+    result = CliRunner().invoke(command, ["docs", "search", "--help"])
+    # Assert
+    assert result.exit_code == 0 and required_option in result.output

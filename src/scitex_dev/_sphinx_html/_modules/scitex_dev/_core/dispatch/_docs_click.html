@@ -48,7 +48,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../api.html">API Reference</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../unified-search.html">Unified Search</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../documentation-verification.html">Scoped documentation verification</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../../cli.html">CLI Mixin</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../cli.html">CLI documentation adapters</a></li>
 </ul>
 
         </div>
@@ -113,15 +113,11 @@
         <span class="n">invoke_without_command</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
         <span class="bp">cls</span><span class="o">=</span><span class="n">SpecGroup</span><span class="p">,</span>
         <span class="n">help_spec</span><span class="o">=</span><span class="n">CliHelp</span><span class="p">(</span>
-            <span class="n">summary</span><span class="o">=</span><span class="s2">"View package documentation (list / get / search)."</span><span class="p">,</span>
+            <span class="n">summary</span><span class="o">=</span><span class="s2">"View package documentation (list / get)."</span><span class="p">,</span>
             <span class="n">examples</span><span class="o">=</span><span class="p">(</span>
-                <span class="n">Example</span><span class="p">(</span><span class="s2">"</span><span class="si">{prog}</span><span class="s2"> docs list"</span><span class="p">,</span> <span class="s2">"List doc pages."</span><span class="p">),</span>
-                <span class="n">Example</span><span class="p">(</span><span class="s2">"</span><span class="si">{prog}</span><span class="s2"> docs get"</span><span class="p">,</span> <span class="s2">"Show available pages."</span><span class="p">),</span>
-                <span class="n">Example</span><span class="p">(</span><span class="s2">"</span><span class="si">{prog}</span><span class="s2"> docs get api"</span><span class="p">,</span> <span class="s2">"Show a specific page."</span><span class="p">),</span>
-                <span class="n">Example</span><span class="p">(</span>
-                    <span class="s2">"</span><span class="si">{prog}</span><span class="s2"> docs search QUERY"</span><span class="p">,</span>
-                    <span class="s2">"Search across docs/APIs/CLI/MCP."</span><span class="p">,</span>
-                <span class="p">),</span>
+                <span class="n">Example</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="se">{{</span><span class="s2">prog</span><span class="se">}}</span><span class="s2"> </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> list"</span><span class="p">,</span> <span class="s2">"List doc pages."</span><span class="p">),</span>
+                <span class="n">Example</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="se">{{</span><span class="s2">prog</span><span class="se">}}</span><span class="s2"> </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> get"</span><span class="p">,</span> <span class="s2">"Show available pages."</span><span class="p">),</span>
+                <span class="n">Example</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="se">{{</span><span class="s2">prog</span><span class="se">}}</span><span class="s2"> </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> get api"</span><span class="p">,</span> <span class="s2">"Show a specific page."</span><span class="p">),</span>
             <span class="p">),</span>
         <span class="p">),</span>
     <span class="p">)</span>
@@ -136,8 +132,8 @@
         <span class="n">help_spec</span><span class="o">=</span><span class="n">CliHelp</span><span class="p">(</span>
             <span class="n">summary</span><span class="o">=</span><span class="s2">"List available documentation pages."</span><span class="p">,</span>
             <span class="n">examples</span><span class="o">=</span><span class="p">(</span>
-                <span class="n">Example</span><span class="p">(</span><span class="s2">"</span><span class="si">{prog}</span><span class="s2"> docs list"</span><span class="p">,</span> <span class="s2">"Human-readable list."</span><span class="p">),</span>
-                <span class="n">Example</span><span class="p">(</span><span class="s2">"</span><span class="si">{prog}</span><span class="s2"> docs list --json"</span><span class="p">,</span> <span class="s2">"Structured JSON."</span><span class="p">),</span>
+                <span class="n">Example</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="se">{{</span><span class="s2">prog</span><span class="se">}}</span><span class="s2"> </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> list"</span><span class="p">,</span> <span class="s2">"Human-readable list."</span><span class="p">),</span>
+                <span class="n">Example</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="se">{{</span><span class="s2">prog</span><span class="se">}}</span><span class="s2"> </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> list --json"</span><span class="p">,</span> <span class="s2">"Structured JSON."</span><span class="p">),</span>
             <span class="p">),</span>
         <span class="p">),</span>
     <span class="p">)</span>
@@ -158,9 +154,9 @@
         <span class="n">help_spec</span><span class="o">=</span><span class="n">CliHelp</span><span class="p">(</span>
             <span class="n">summary</span><span class="o">=</span><span class="s2">"Show documentation. Without PAGE_NAME, shows package overview."</span><span class="p">,</span>
             <span class="n">examples</span><span class="o">=</span><span class="p">(</span>
-                <span class="n">Example</span><span class="p">(</span><span class="s2">"</span><span class="si">{prog}</span><span class="s2"> docs get"</span><span class="p">,</span> <span class="s2">"Show the package overview."</span><span class="p">),</span>
-                <span class="n">Example</span><span class="p">(</span><span class="s2">"</span><span class="si">{prog}</span><span class="s2"> docs get api"</span><span class="p">,</span> <span class="s2">"Show a specific page."</span><span class="p">),</span>
-                <span class="n">Example</span><span class="p">(</span><span class="s2">"</span><span class="si">{prog}</span><span class="s2"> docs get api --format json"</span><span class="p">,</span> <span class="s2">"Page as JSON."</span><span class="p">),</span>
+                <span class="n">Example</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="se">{{</span><span class="s2">prog</span><span class="se">}}</span><span class="s2"> </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> get"</span><span class="p">,</span> <span class="s2">"Show the package overview."</span><span class="p">),</span>
+                <span class="n">Example</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="se">{{</span><span class="s2">prog</span><span class="se">}}</span><span class="s2"> </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> get api"</span><span class="p">,</span> <span class="s2">"Show a specific page."</span><span class="p">),</span>
+                <span class="n">Example</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="se">{{</span><span class="s2">prog</span><span class="se">}}</span><span class="s2"> </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> get api --format json"</span><span class="p">,</span> <span class="s2">"Page as JSON."</span><span class="p">),</span>
             <span class="p">),</span>
         <span class="p">),</span>
     <span class="p">)</span>

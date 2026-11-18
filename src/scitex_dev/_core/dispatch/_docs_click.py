@@ -33,15 +33,11 @@ def docs_click_group(package: str, name: str = "docs"):  # noqa: D401
         invoke_without_command=True,
         cls=SpecGroup,
         help_spec=CliHelp(
-            summary="View package documentation (list / get / search).",
+            summary="View package documentation (list / get).",
             examples=(
-                Example("{prog} docs list", "List doc pages."),
-                Example("{prog} docs get", "Show available pages."),
-                Example("{prog} docs get api", "Show a specific page."),
-                Example(
-                    "{prog} docs search QUERY",
-                    "Search across docs/APIs/CLI/MCP.",
-                ),
+                Example(f"{{prog}} {name} list", "List doc pages."),
+                Example(f"{{prog}} {name} get", "Show available pages."),
+                Example(f"{{prog}} {name} get api", "Show a specific page."),
             ),
         ),
     )
@@ -56,8 +52,8 @@ def docs_click_group(package: str, name: str = "docs"):  # noqa: D401
         help_spec=CliHelp(
             summary="List available documentation pages.",
             examples=(
-                Example("{prog} docs list", "Human-readable list."),
-                Example("{prog} docs list --json", "Structured JSON."),
+                Example(f"{{prog}} {name} list", "Human-readable list."),
+                Example(f"{{prog}} {name} list --json", "Structured JSON."),
             ),
         ),
     )
@@ -78,9 +74,9 @@ def docs_click_group(package: str, name: str = "docs"):  # noqa: D401
         help_spec=CliHelp(
             summary="Show documentation. Without PAGE_NAME, shows package overview.",
             examples=(
-                Example("{prog} docs get", "Show the package overview."),
-                Example("{prog} docs get api", "Show a specific page."),
-                Example("{prog} docs get api --format json", "Page as JSON."),
+                Example(f"{{prog}} {name} get", "Show the package overview."),
+                Example(f"{{prog}} {name} get api", "Show a specific page."),
+                Example(f"{{prog}} {name} get api --format json", "Page as JSON."),
             ),
         ),
     )
