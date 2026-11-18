@@ -35,3 +35,11 @@ admission, complete package enrollment, Docs ordering and global-search wiring
 remain separate. Empty metadata is not permission to invent indices. Metadata
 presence is not proof of callable code, code ownership, host enablement, access
 or live availability. Use the owning API docstrings for the current contract.
+
+Dev declares only its own stable slot (`package:scitex-dev`, `3.4` under
+`scitex.intermediate`). For plain metadata without SDK imports, call
+`scitex_dev.hierarchy.get_hierarchy_declarations()`. Explicit
+`get_hierarchy_nodes()` needs the SDK hierarchy capability and returns one SDK
+record; it raises an actionable error when that capability is absent. Combine
+trusted parent records through SDK validation separately. The module docstrings describe the installed provider contract; the source
+guide is `docs/hierarchy-provider-metadata.md`.
