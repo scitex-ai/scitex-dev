@@ -34,6 +34,7 @@ from __future__ import annotations
 import click
 
 from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
+from ..._severity import SeverityChoice
 
 
 def register(ecosystem) -> None:
@@ -84,7 +85,7 @@ def register(ecosystem) -> None:
     )
     @click.option(
         "--severity",
-        type=click.Choice(["error", "warning", "info"]),
+        type=SeverityChoice(),
         default="warning",
         show_default=True,
         help=(
