@@ -53,7 +53,7 @@ def get_docs(
     Resolution chain per package:
         1. Pre-built _sphinx_html/ in installed package → fastest (production)
         2. Sphinx _build/ available → use existing build
-        3. Neither → introspect from docstrings + signatures (always works)
+        3. No page requested and neither built source exists → introspect package
 
     Args:
         package: Single package name (returns unwrapped result).
@@ -70,6 +70,7 @@ def get_docs(
     Raises:
         ValueError: If both package= and packages= are given.
         LookupError: If a requested package is not found.
+        FileNotFoundError: If a named page is unavailable in both built sources.
     """
     if package is not None and packages is not None:
         raise ValueError(
@@ -328,7 +329,14 @@ def _get_one(
         if result is not None:
             return _enrich_manifest(result, package)
 
-    # 3. Fallback: introspect
+    # Package introspection cannot substitute for a requested page.
+    if page is not None:
+        raise FileNotFoundError(
+            f"Documentation page '{page}' ({format or 'html'}) not found "
+            f"for package '{package}'."
+        )
+
+    # 3. Fallback: introspect the package overview only.
     from .._core.introspect import introspect_package
 
     return introspect_package(module_name)

@@ -243,7 +243,7 @@
 
     <span class="k">try</span><span class="p">:</span>
         <span class="n">result</span> <span class="o">=</span> <span class="n">get_docs</span><span class="p">(</span><span class="n">package</span><span class="o">=</span><span class="n">package</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="n">fetch_fmt</span><span class="p">,</span> <span class="n">page</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">page</span><span class="p">)</span>
-    <span class="k">except</span> <span class="ne">LookupError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+    <span class="k">except</span> <span class="p">(</span><span class="ne">LookupError</span><span class="p">,</span> <span class="ne">FileNotFoundError</span><span class="p">)</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
         <span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
         <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
 
