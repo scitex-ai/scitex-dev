@@ -89,6 +89,13 @@ It checks uncommitted changes before dispatching. Live operations require a safe
 Git working directory and run collision/permission checks. Preview does not
 require a Git repository.
 
+Application is sequential, not a transaction across all selected files and
+paths. The orchestrator in `rename/core.py` calls each step in order; the I/O
+helpers in `rename/io.py` write or move individual paths. No rollback restores
+earlier changes after a later step fails. Preflight collision/permission checks
+do not make the complete operation atomic. Inspect result errors and conflicts,
+and use reviewed Git state or a verified backup for recovery.
+
 The public CLI is available under the umbrella when its Dev adapter is installed:
 
 ```bash

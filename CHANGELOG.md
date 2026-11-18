@@ -10,6 +10,25 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.64.1] - 2026-11-19
+
+- Linter STX-S008: fewer false positives (research-script spot check 26% ->
+  10% non-parameters on a fresh random 50). Not reported any more: names or
+  keywords with a layout / display / identity / tolerance / infrastructure
+  token (`n_cols`, `tick_step`, `max_colwidth`, `n_hash_chars`, `abs_tol`,
+  `n_workers`, `timeout_s`, `ID_PREFIX`, `val_dx`, `max_output_tokens`), style
+  keywords used as names, unit-conversion constants (`SEC_PER_DAY`),
+  single-letter scratch locals, async code and classes driving it (UI/browser
+  automation), comparisons that only choose a display string
+  (`"p<0.001" if p < 0.001 else ...`), defaults of plotting helpers (take
+  `ax`/`fig`) and of formatters (return only text), calls handed an axes
+  positionally or with `ax=`/`transform=`/`bbox=`, and argparse options whose
+  own name is infrastructure (`--timeout`). Analysis parameters, seeds,
+  thresholds and argparse analysis options (`--n-perm`) are still reported.
+- Providers: deduplicate repeated physical metadata origins (#1067).
+- Rename docs describe sequential application and recovery limits (#1069);
+  CI timeout evidence captures bounded public callee stage observations (#1068).
+
 ## [0.64.0] - 2026-11-19
 
 - Linter STX-S008 now flags hard-coded analysis parameters anywhere in a

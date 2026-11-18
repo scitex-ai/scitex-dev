@@ -9,6 +9,7 @@ import re
 
 __all__ = [
     "_TRIVIAL_NUMBERS",
+    "_UNIT_CONVERSION",
     "_SKIP_NAMES",
     "_EXEMPT_KEYWORDS",
     "_LAYOUT_UNIT_SUFFIXES",
@@ -16,10 +17,12 @@ __all__ = [
     "_PLOT_MODULES",
     "_PLOT_RECEIVER",
     "_PLOT_METHODS",
+    "_PLOT_PARAMS",
     "_STYLE_KEYWORDS",
     "_SEED_KEYWORDS",
     "_SEED_CALLEES",
     "_ENUM_BASES",
+    "_EXEMPT_TOKENS",
 ]
 
 # Numbers that are structural, not chosen: index/identity/halving.
@@ -131,6 +134,8 @@ _PLOT_MODULES = frozenset(
     {"plt", "pyplot", "matplotlib", "mpl", "figrecipe", "fr", "sns", "seaborn"}
 )
 _PLOT_RECEIVER = re.compile(r"^(ax|axs|axes|fig|figure|panel|cbar|colorbar)\w*$")
+# Parameter names that make a function a plotting helper.
+_PLOT_PARAMS = frozenset({"ax", "axes", "axs", "fig", "figure"})
 _PLOT_METHODS = frozenset(
     {
         "plot",
@@ -208,8 +213,93 @@ _STYLE_KEYWORDS = frozenset(
         "elinewidth",
         "labelpad",
         "pad",
+        # an axes / transform / annotation-box argument marks a plotting call
+        "ax",
+        "transform",
+        "arrowprops",
+        "bbox",
     }
 )
+
+# Identifier TOKENS (``n_hash_chars`` -> {n, hash, chars}) that mark a value
+# as presentation, display, identity or infrastructure rather than analysis:
+# a name or keyword containing one is never reported.
+_EXEMPT_TOKENS = frozenset(
+    {
+        # figure / table layout and labelling
+        "col",
+        "cols",
+        "ncol",
+        "ncols",
+        "row",
+        "rows",
+        "nrow",
+        "nrows",
+        "tick",
+        "ticks",
+        "text",
+        "txt",
+        "font",
+        "legend",
+        "title",
+        "color",
+        "colour",
+        "gap",
+        "pad",
+        "padding",
+        "margin",
+        "spacing",
+        "width",
+        "height",
+        "colwidth",
+        "bar",
+        "box",
+        "boxes",
+        "dx",
+        "dy",
+        # string structure
+        "prefix",
+        "suffix",
+        # identity / hashing
+        "hash",
+        "hashes",
+        "digest",
+        "uuid",
+        "sha",
+        "checksum",
+        # numerical tolerance
+        "tol",
+        "rtol",
+        "atol",
+        "eps",
+        "epsilon",
+        # process / IO infrastructure
+        "timeout",
+        "worker",
+        "workers",
+        "jobs",
+        "threads",
+        "procs",
+        "retry",
+        "retries",
+        "attempt",
+        "attempts",
+        "port",
+        "verbose",
+        "tail",
+        "turns",
+        "tokens",
+    }
+)
+
+# Unit-conversion constants (``SEC_PER_DAY = 86_400``, ``MS_PER_S = 1000``)
+# are physics, not analysis choices.
+_UNITS = (
+    r"(ns|us|ms|s|sec|secs|second|seconds|min|mins|minute|minutes|h|hr|hrs|hour|"
+    r"hours|day|days|week|weeks|year|years|b|byte|bytes|kb|mb|gb|tb|kib|mib|gib|"
+    r"mm|cm|m|km|inch|inches|pt|px)"
+)
+_UNIT_CONVERSION = re.compile(rf"^{_UNITS}_per_{_UNITS}$")
 
 # Seeds are parameters even when they are 0 or 1.
 _SEED_KEYWORDS = frozenset({"seed", "random_state", "random_seed", "rng_seed"})

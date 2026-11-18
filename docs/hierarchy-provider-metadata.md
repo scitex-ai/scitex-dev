@@ -23,6 +23,14 @@ in targets are not accepted by this contract.
 The catalog preserves `name`, `target`, `distribution`, `version` and `summary`
 from the shared `ProviderMetadata` record. Missing versions remain unknown
 (`null` in JSON). Rows sort by declaration metadata, not hierarchy indices.
+Repeated searches of the same physical filesystem metadata directory count
+as one installation, including directory aliases that resolve to that origin.
+Distinct metadata directories remain separate claims even when their contents
+are identical. Duplicate declarations inside one directory are also preserved.
+Custom distribution finders and non-filesystem metadata without a proven
+physical origin retain their ambiguity; separate editable egg-info/dist-info
+metadata is not silently suppressed.
+
 Duplicate owner declarations, aliases that differ from the canonical owner,
 and malformed targets fail loudly. Validation covers the complete selected
 metadata search before optional package filtering, so filtering cannot hide an
