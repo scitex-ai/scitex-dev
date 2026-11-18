@@ -46,6 +46,12 @@ form. Inline images render as a row, centered.
 
 ## Literal template
 
+Section order follows [06_readme-section-order](06_readme-section-order.md):
+Problem and Solution → Quick Start / Demo → Installation → Architecture →
+Interfaces → Part of SciTeX. PS-143 checks that order. Replace every placeholder
+and validate the actual content; the schematic below does not establish a
+package's architecture.
+
 The badge block uses the **canonical SAC layout** (PS-167):
 
 - Order of preamble: H1 → centered logo → centered **tagline**
@@ -101,9 +107,16 @@ The badge block uses the **canonical SAC layout** (PS-167):
 
 | # | Problem | Solution |
 |---|---------|----------|
-| 1 | **<problem 1>** | **<solution 1>** |
-| 2 | **<problem 2>** | **<solution 2>** |
-| 3 | **<problem 3>** | **<solution 3>** |
+| 1 | **<key>** <describe problem 1 and its impact> | **<key>** <describe solution 1 and its benefit> |
+| 2 | **<key>** <describe problem 2 and its impact> | **<key>** <describe solution 2 and its benefit> |
+| 3 | **<key>** <describe problem 3 and its impact> | **<key>** <describe solution 3 and its benefit> |
+
+## Quick Start
+
+```python
+from <MODULE> import <api>
+# minimal end-to-end example
+```
 
 ## Installation
 
@@ -113,19 +126,24 @@ The badge block uses the **canonical SAC layout** (PS-167):
 > time depends on the selected package set and environment.
 
 ```bash
-# Recommended — uv resolver
 uv pip install '<PACKAGE>[all]'
 
 # Plain pip also works
 pip install '<PACKAGE>[all]'
 ```
 
-## Quick Start
+## Architecture
 
-```python
-from <MODULE> import <api>
-# minimal end-to-end example
+Replace this schematic with the package's actual input, processing and output.
+Check the flow against its source before publishing the README.
+
+```mermaid
+flowchart LR
+    Input["<INPUT>"] --> Package["<PACKAGE>"]
+    Package --> Output["<OUTPUT>"]
 ```
+
+<p align="center"><sub><b>Figure 1.</b> <DESCRIBE_ACTUAL_FLOW></sub></p>
 
 ## Five Interfaces
 
@@ -136,6 +154,8 @@ from <MODULE> import <api>
 | MCP | `<MCP_COMMAND>` |
 | Web API | `<WEB_API_URL>`, or explicitly unavailable |
 | Skills | `<SKILL_NAMESPACE>` |
+
+<p align="center"><sub><b>Table 1.</b> <DESCRIBE_ACTUAL_INTERFACES></sub></p>
 
 ## Part of SciTeX
 
@@ -166,6 +186,8 @@ establish the command's exit status or full audit acceptance.
 | Code  | Enforces                                                        |
 |-------|-----------------------------------------------------------------|
 | PS-106 | Coverage badge present in first ~4 KB                           |
+| PS-141 / PS-142 | Demo/Quick Start and Architecture sections share a requirement for at least one real visual |
+| PS-143 | Relative section order follows the section-order guide |
 | PS-107 | Required section checks: Installation, Interfaces and Part of SciTeX; Quick Start is optional in the current implementation |
 | PS-109 | PyPI version badge present in first ~4 KB                       |
 | PS-110 | Four Freedoms for Research blockquote present                   |

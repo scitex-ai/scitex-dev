@@ -1,17 +1,58 @@
-"""Run the CI contract with its original deadline and child-only evidence."""
+"""Run CI with its original deadline, child evidence and host IO context."""
 
 import json
+import math
+import os
+import stat
 import subprocess
 import threading
 import time
 from pathlib import Path
 
 
+def _numeric_proc_snapshot(name, value):
+    """Return only documented nonnegative counters, never arbitrary procfs text."""
+    try:
+        if name == "schedstat":
+            names = ("runtime_ns", "runqueue_wait_ns", "timeslices")
+            values = value.split()
+            if len(values) != len(names):
+                raise ValueError
+            result = dict(zip(names, map(int, values)))
+        elif name == "io":
+            names = {
+                "rchar",
+                "wchar",
+                "syscr",
+                "syscw",
+                "read_bytes",
+                "write_bytes",
+                "cancelled_write_bytes",
+            }
+            result = {}
+            for line in value.splitlines():
+                key, separator, number = line.partition(":")
+                if separator and key in names:
+                    if key in result:
+                        raise ValueError
+                    result[key] = int(number)
+            if set(result) != names:
+                raise ValueError
+        else:
+            raise ValueError
+        if any(number < 0 for number in result.values()):
+            raise ValueError
+        return result
+    except ValueError:
+        # Do not copy malformed fields into a diagnostic exception.
+        raise ValueError("procfs counters unavailable") from None
+
+
 def _child_snapshot(pid):
     """Read bounded Linux process fields, never argv, environment or other PIDs."""
     root = Path("/proc") / str(pid)
     result = {"pid": pid, "scope": "direct child only; descendants not inspected"}
-    for name in ("stat", "wchan", "syscall"):
+    for name in ("stat", "wchan", "syscall", "schedstat", "io"):
         try:
             with (root / name).open() as stream:
                 value = stream.read(4096)
@@ -25,11 +66,98 @@ def _child_snapshot(pid):
                     threads=int(fields[17]),
                     start_ticks=int(fields[19]),
                 )
+            elif name in ("schedstat", "io"):
+                result[name] = _numeric_proc_snapshot(name, value)
             else:
                 # The syscall number suffices; do not log memory addresses.
                 result[name] = value.split()[0] if value.split() else ""
         except (OSError, IndexError, ValueError) as error:
             result[name + "_unavailable"] = type(error).__name__
+    result["counter_limit"] = (
+        "cumulative direct-child counters; reads are not atomic; "
+        "no baseline delta, descendants, paths or root-cause verdict"
+    )
+    return result
+
+
+
+def _numeric_io_pressure(value):
+    """Parse only numeric IO PSI rows; averages are percent, totals microseconds.
+
+    Format: https://docs.kernel.org/accounting/psi.html
+    Unknown fields are never copied into diagnostic exceptions.
+    """
+    expected = {"avg10", "avg60", "avg300", "total"}
+    result = {}
+    try:
+        for line in value.splitlines():
+            fields = line.split()
+            if not fields or fields[0] not in {"some", "full"}:
+                continue
+            kind = fields[0]
+            if kind in result:
+                raise ValueError
+            row = {}
+            for field in fields[1:]:
+                key, separator, number = field.partition("=")
+                if key not in expected:
+                    continue
+                if not separator or key in row:
+                    raise ValueError
+                if key == "total":
+                    row[key] = int(number)
+                    if row[key] < 0:
+                        raise ValueError
+                else:
+                    row[key] = float(number)
+                    if not math.isfinite(row[key]) or not 0 <= row[key] <= 100:
+                        raise ValueError
+            if set(row) != expected:
+                raise ValueError
+            result[kind] = row
+        if set(result) != {"some", "full"}:
+            raise ValueError
+        return result
+    except ValueError:
+        raise ValueError("IO pressure counters unavailable") from None
+
+
+def _host_io_pressure_snapshot(path=Path("/proc/pressure/io")):
+    """Read bounded, host-wide pressure context, without causal attribution."""
+    result = {
+        "scope": "host-wide IO PSI; not per-child or a root-cause verdict",
+        "units": "avg10/avg60/avg300 percent; cumulative total microseconds",
+    }
+    try:
+        with path.open(encoding="ascii") as stream:
+            value = stream.read(4097)
+        if len(value) > 4096:
+            raise ValueError("pressure sample exceeds bound")
+        result["counters"] = _numeric_io_pressure(value)
+    except (OSError, ValueError) as error:
+        result["unavailable"] = type(error).__name__
+    return result
+
+
+def _executable_identity(path):
+    """Stat the owned executable target without copying its path or contents."""
+    result = {
+        "scope": "direct-child executable metadata; no path or runtime version; not a root-cause verdict",
+    }
+    try:
+        metadata = path.stat()
+        if not stat.S_ISREG(metadata.st_mode):
+            raise ValueError("executable metadata unavailable")
+        result.update(
+            status="available",
+            device_major=os.major(metadata.st_dev),
+            device_minor=os.minor(metadata.st_dev),
+            inode=metadata.st_ino,
+            size_bytes=metadata.st_size,
+            mtime_ns=metadata.st_mtime_ns,
+        )
+    except (OSError, ValueError) as error:
+        result.update(status="unavailable", unavailable=type(error).__name__)
     return result
 
 
@@ -39,6 +167,8 @@ def run_node(source, *, timeout=4):
     A daemon observer samples at three quarters of the deadline. The timeout
     path never waits for that observer or reads procfs: unavailable or incomplete
     evidence is explicit. Sampling is scheduled before the deadline; timestamps show any delay.
+    Host IO pressure is separate context, not per-child evidence or a cause.
+    The base sample is published before optional executable metadata is read.
     It is not a root-cause verdict.
     """
     command = ["node", "-"]
@@ -58,10 +188,23 @@ def run_node(source, *, timeout=4):
                 return
             sampled_at = time.monotonic() - started
             snapshot = _child_snapshot(child.pid)
+            host_io_pressure = _host_io_pressure_snapshot()
             evidence["sample"] = {
                 "elapsed_seconds": sampled_at,
                 "completed_elapsed_seconds": time.monotonic() - started,
                 **snapshot,
+                "host_io_pressure": host_io_pressure,
+                "executable_identity": {"status": "not-completed"},
+            }
+            if done.is_set():
+                return
+            identity_started = time.monotonic() - started
+            identity = _executable_identity(Path("/proc") / str(child.pid) / "exe")
+            evidence["sample"] = {
+                **evidence["sample"],
+                "executable_identity": identity,
+                "executable_started_elapsed_seconds": identity_started,
+                "executable_completed_elapsed_seconds": time.monotonic() - started,
             }
 
         observer = threading.Thread(target=observe, daemon=True)

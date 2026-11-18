@@ -12,6 +12,7 @@ from ._checks import (
     CallChecksMixin,
     ErrorHandlingMixin,
     ImportChecksMixin,
+    LiteralChecksMixin,
     TestQualityMixin,
     own_scitex_package,
 )
@@ -26,6 +27,7 @@ class SciTeXChecker(
     CallChecksMixin,
     ErrorHandlingMixin,
     TestQualityMixin,
+    LiteralChecksMixin,
     ast.NodeVisitor,
 ):
     """AST visitor detecting non-SciTeX patterns."""
@@ -51,6 +53,7 @@ class SciTeXChecker(
         self._own_package = own_scitex_package(filepath)  # for STX-I008
         self._is_script = is_script(filepath, self.config)
         self._func_depth = 0  # >0 means inside a function body
+        self._tree = None  # set by visit_Module; STX-S008 scans it post-visit
         # STX-P010 — top-level figrecipe usage inside an @stx.session
         # module. Recorded during the visit (import + call sites) and
         # emitted in get_issues() ONCE the whole module is seen, because
@@ -82,72 +85,18 @@ class SciTeXChecker(
         self._plugin_checkers = _plugins["checkers"]
         self._plugin_axes_hints = _plugins.get("axes_hints", {})
 
+    # -- Module visitor (STX-S008 needs the whole tree) --
+
+    def visit_Module(self, node: ast.Module) -> None:
+        self._tree = node
+        self.generic_visit(node)
+
     # -- Assignment visitors --
 
     def visit_Assign(self, node: ast.Assign) -> None:
         from ._naming_checker import check_assignment
 
         check_assignment(self, node)
-        self.generic_visit(node)
-
-    # -- Numeric-literal visitor (NL001) --
-
-    def visit_Constant(self, node: ast.Constant) -> None:
-        """Flag integer literals ≥ 1_000 written without `_` separators
-        (STX-NL001 / PEP 515 — see
-        `_skills/general/03_interface/01_python-api/14_numeric-literals.md`).
-
-        Carve-outs:
-        - bool / float / complex / str / bytes / None — skipped.
-        - abs(value) < 1000 — under threshold.
-        - source segment already contains `_` — already conformant.
-        - source segment is non-decimal (`0x…`, `0o…`, `0b…`) — left
-          alone; the PEP applies but the rule keeps its scope narrow.
-        - `# noqa: STX-NL001` on the line — explicit suppression for
-          identifiers that read as a whole (years, ports, codes).
-        """
-        # STX-HPC001 — SSH multiplexing disabled on the HPC path: a string
-        # literal that turns off the ssh control-master / control-path opens a
-        # fresh login-node connection per call (Spartan admin incident
-        # 2026-06-17: 440+ connections). The match tokens are split (`"=" + "no"`)
-        # so this detector's OWN source does not trip the rule.
-        _hpc_nomux = ("ControlMaster=" + "no", "ControlPath=" + "none")
-        if isinstance(node.value, str) and any(t in node.value for t in _hpc_nomux):
-            hpc_line = (
-                self.source_lines[node.lineno - 1]
-                if node.lineno - 1 < len(self.source_lines)
-                else ""
-            )
-            if not _is_allowed_by_comment(hpc_line, "STX-HPC001"):
-                self._add(rules.HPC001, node.lineno, node.col_offset, hpc_line)
-
-        # Only int literals; explicitly reject bool (`True is 1`).
-        if not isinstance(node.value, int) or isinstance(node.value, bool):
-            self.generic_visit(node)
-            return
-        if abs(node.value) < 1000:
-            self.generic_visit(node)
-            return
-        # Need the original source segment to see if `_` was used —
-        # `node.value` normalises `21_600` and `21600` to the same int.
-        src = ast.get_source_segment("\n".join(self.source_lines), node)
-        if src is None or "_" in src:
-            self.generic_visit(node)
-            return
-        if src.startswith(("0x", "0o", "0b", "0X", "0O", "0B")):
-            # Non-decimal — same PEP applies but the rule keeps its
-            # scope narrow to base-10 quantities for now.
-            self.generic_visit(node)
-            return
-        line = (
-            self.source_lines[node.lineno - 1]
-            if node.lineno - 1 < len(self.source_lines)
-            else ""
-        )
-        if _is_allowed_by_comment(line, "STX-NL001"):
-            self.generic_visit(node)
-            return
-        self._add(rules.NL001, node.lineno, node.col_offset, line)
         self.generic_visit(node)
 
     # -- Function/decorator visitors --
@@ -375,6 +324,22 @@ class SciTeXChecker(
             from ._rules._script_organization import check_script_organization
 
             check_script_organization(self)
+
+        # STX-S008 — hard-coded analysis parameters. Runs for plain scripts
+        # AND research scripts: a research project's analysis code lives
+        # under `scripts/`, which is_script() excludes, so the research-script
+        # verdict (decided only after the whole module is seen) is needed too.
+        from ._research_scope import is_test_file
+
+        if (
+            self._tree is not None
+            and not is_test_file(self.filepath)
+            and (self._is_script or self.is_research_script())
+        ):
+            from ._magic_numbers import check_hardcoded_parameters
+
+            check_hardcoded_parameters(self, self._tree)
+            self._tree = None  # idempotent if get_issues() is called again
 
         from ._severity_promotion import finalize_issues
 

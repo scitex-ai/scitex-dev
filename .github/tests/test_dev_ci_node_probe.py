@@ -53,6 +53,10 @@ class DevCINodeProbe(unittest.TestCase):
 
         self.assertEqual((note["stdout_bytes"], note["stderr_bytes"]), (0, 0))
 
+        pressure = note["sample"]["host_io_pressure"]
+        self.assertIn("host-wide", pressure["scope"])
+        self.assertEqual(int("counters" in pressure) + int("unavailable" in pressure), 1)
+
     def test_timeout_reports_lengths_without_copying_output_into_note(self):
         # Arrange
         stdout = "private-output-é"

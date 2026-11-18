@@ -5,6 +5,7 @@
 import click
 
 from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
+from ..._severity import SeverityChoice
 
 
 def register(ecosystem):
@@ -44,7 +45,7 @@ def register(ecosystem):
     @click.option("--json", "as_json", is_flag=True, help="Emit JSON output.")
     @click.option(
         "--severity",
-        type=click.Choice(["info", "warn", "error"]),
+        type=SeverityChoice("warn"),
         default="warn",
         help="Minimum severity to report (passed through to each auditor).",
     )

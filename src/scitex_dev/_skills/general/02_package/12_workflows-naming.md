@@ -135,6 +135,14 @@ Audited by PS-166 (severity `W` during adoption). The auditor warns on:
    (the auto-generated label is non-standard, so we require an explicit
    override).
 
+Write valid HTML attribute URLs with `&amp;` between query parameters, for
+example `?branch=develop&amp;label=tests`. PS-166 and PS-167 share one label
+reader: it decodes HTML character references once, splits real URL query
+fields, and percent-decodes their keys and values once. Double-escaped HTML,
+percent-encoded separators and fragment/value decoys do not manufacture an
+extra `label` parameter. Row roles are checked from Shields
+badge URLs, so an unrelated link cannot supply a missing metadata/CI label.
+
 Static badges (e.g. `https://img.shields.io/badge/license-MIT-blue`) are
 exempt — they're not part of the standardized status row.
 

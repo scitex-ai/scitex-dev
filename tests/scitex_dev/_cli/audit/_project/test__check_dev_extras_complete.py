@@ -79,3 +79,93 @@ def test_inapplicable_core_dependency_does_not_hide_missing_dev(tmp_path, marker
     check_dev_extras_complete(tmp_path, Violation, findings)
     # Assert
     assert [finding.rule for finding in findings] == ["PS-210"]
+
+
+@pytest.mark.parametrize(
+    "groups",
+    [
+        'dev=["scitex-logging>=0.2"]',
+        'Dev=[{include-group="Test_Tools"}]\nTest-Tools=["scitex-logging>=0.2"]',
+    ],
+)
+def test_dev_group_covers_an_unguarded_optional_import(tmp_path, groups):
+    # Arrange
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname="owned-package"\n'
+        '[project.optional-dependencies]\nall=["scitex-logging"]\n'
+        "[dependency-groups]\n" + groups + "\n"
+    )
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests/test_owned.py").write_text("import scitex_logging\n")
+    findings = []
+    # Act
+    check_dev_extras_complete(tmp_path, Violation, findings)
+    # Assert
+    assert findings == []
+
+
+@pytest.mark.parametrize(
+    "groups",
+    [
+        "dev=[]",
+        "dev=['scitex-logging; extra == \"dev\"']",
+        "dev=['scitex-logging; sys_platform == \"never-a-platform\"']",
+    ],
+)
+def test_dev_group_does_not_borrow_legacy_extra_coverage(tmp_path, groups):
+    # Arrange
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname="owned-package"\n'
+        '[project.optional-dependencies]\nall=["scitex-logging"]\ndev=["scitex-logging"]\n'
+        "[dependency-groups]\n" + groups + "\n"
+    )
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests/test_owned.py").write_text("import scitex_logging\n")
+    findings = []
+    # Act
+    check_dev_extras_complete(tmp_path, Violation, findings)
+    # Assert
+    assert [x.rule for x in findings] == ["PS-210"]
+
+
+@pytest.mark.parametrize(
+    "groups",
+    [
+        'dev=[{include-group="missing"}]',
+        'dev=[{include-group="other"}]\nother=[{include-group="dev"}]',
+        'dev="not-a-list"',
+        'dev=[{include-group="tools", extra="invalid"}]\ntools=[]',
+        'dev=["not a valid requirement!!!"]',
+        "dev=[]\nDev=[]",
+    ],
+)
+def test_invalid_dev_group_fails_loudly(tmp_path, groups):
+    # Arrange
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname="owned-package"\n'
+        '[project.optional-dependencies]\nall=["scitex-logging"]\n'
+        "[dependency-groups]\n" + groups + "\n"
+    )
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests/test_owned.py").write_text("import scitex_logging\n")
+    findings = []
+    # Act
+    check_dev_extras_complete(tmp_path, Violation, findings)
+    # Assert
+    assert any("Cannot resolve" in x.detail for x in findings)
+
+
+def test_group_install_does_not_activate_an_undeclared_dev_extra(tmp_path):
+    # Arrange
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname="owned-package"\n'
+        "dependencies=['scitex-logging; extra == \"dev\"']\n"
+        '[project.optional-dependencies]\nall=["scitex-logging"]\n'
+    )
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests/test_owned.py").write_text("import scitex_logging\n")
+    findings = []
+    # Act
+    check_dev_extras_complete(tmp_path, Violation, findings)
+    # Assert
+    assert [x.rule for x in findings] == ["PS-210"]

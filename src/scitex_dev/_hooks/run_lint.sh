@@ -147,6 +147,30 @@ lint_python() {
 lint_js_ts() {
     local file="$1"
     if command -v eslint &>/dev/null; then
+        if [[ "${ESLINT_USE_FLAT_CONFIG:-}" != "false" ]]; then
+            # Native flat-config patterns are relative to the config directory.
+            # A subshell preserves the caller's cwd; normalize relative inputs
+            # before selecting the nearest file-owned config.
+            local config_dir config_name absolute_file
+            config_dir=$(cd -- "$(dirname -- "$file")" && pwd -P) || return $?
+            absolute_file="$config_dir/$(basename -- "$file")"
+            while :; do
+                for config_name in eslint.config.js eslint.config.mjs eslint.config.cjs \
+                    eslint.config.ts eslint.config.mts eslint.config.cts; do
+                    if [[ -f "$config_dir/$config_name" ]]; then
+                        (
+                            cd -- "$config_dir" || exit $?
+                            eslint --config "$config_dir/$config_name" --fix "$absolute_file" 2>&1
+                        )
+                        return $?
+                    fi
+                done
+                [[ "$config_dir" == "/" ]] && break
+                config_dir=$(dirname -- "$config_dir")
+            done
+        fi
+        # Preserve native cwd/legacy lookup and diagnostics when no flat
+        # config is present or the caller explicitly requests legacy mode.
         eslint --fix "$file" 2>&1
         return $?
     fi

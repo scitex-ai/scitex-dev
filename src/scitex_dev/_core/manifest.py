@@ -26,8 +26,23 @@ from typing import Any, Optional
 logger = slogging.getLogger(__name__)
 
 
+def _scoped_path(docs_dir: Path, name: str) -> Path | None:
+    """Return a path only when its target stays in the docs directory."""
+    candidate = docs_dir / name
+    if candidate.resolve().is_relative_to(docs_dir.resolve()):
+        return candidate
+    return None
+
+
+def _page_file(docs_dir: Path, name: str) -> Path | None:
+    """Return a regular page only when its target stays in the docs directory."""
+    if (docs_dir / name).is_file():
+        return _scoped_path(docs_dir, name)
+    return None
+
+
 def read_manifest(docs_dir: Path) -> Optional[dict[str, Any]]:
-    """Read manifest.json from a _sphinx_html/ directory.
+    """Read a regular manifest.json whose target stays in the docs directory.
 
     Args:
         docs_dir: Path to the _sphinx_html/ directory.
@@ -35,8 +50,8 @@ def read_manifest(docs_dir: Path) -> Optional[dict[str, Any]]:
     Returns:
         Parsed manifest dict, or None if not found/invalid.
     """
-    manifest_path = docs_dir / "manifest.json"
-    if not manifest_path.exists():
+    manifest_path = _page_file(docs_dir, "manifest.json")
+    if manifest_path is None:
         return None
     try:
         with open(manifest_path, encoding="utf-8") as f:
@@ -55,9 +70,14 @@ def write_manifest(docs_dir: Path, manifest: dict[str, Any]) -> Path:
 
     Returns:
         Path to the written manifest file.
+
+    Raises:
+        ValueError: If manifest.json resolves outside the docs directory.
     """
     docs_dir.mkdir(parents=True, exist_ok=True)
-    manifest_path = docs_dir / "manifest.json"
+    manifest_path = _scoped_path(docs_dir, "manifest.json")
+    if manifest_path is None:
+        raise ValueError("Manifest target must remain within the docs directory")
     with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2, ensure_ascii=False)
     return manifest_path
@@ -70,7 +90,11 @@ def generate_manifest(
 ) -> dict[str, Any]:
     """Generate a manifest by scanning a built docs directory.
 
-    Discovers HTML and JSON pages by walking the directory.
+    Lists regular HTML pages and detects JSON from regular page files whose
+    resolved targets stay in the docs directory. JSON is
+    available when a Sphinx ``.fjson`` page or a JSON sidecar for a listed
+    HTML page exists. Inventory/control metadata alone is not a page format.
+    This checks asset presence, not page validity or every page's formats.
 
     Args:
         package: Package name (e.g. "scitex-writer").
@@ -85,9 +109,11 @@ def generate_manifest(
     pages = []
     formats = set()
 
-    if docs_dir.exists():
+    if docs_dir.is_dir():
         for html_file in sorted(docs_dir.rglob("*.html")):
             rel = html_file.relative_to(docs_dir)
+            if _page_file(docs_dir, str(rel)) is None:
+                continue
             name = rel.stem if rel.parent == Path(".") else str(rel.with_suffix(""))
             pages.append(
                 {
@@ -98,8 +124,20 @@ def generate_manifest(
             )
             formats.add("html")
 
-        if (docs_dir / "objects.inv").exists():
-            formats.add("json")  # Sphinx JSON builder likely available
+        json_pages = any(
+            _page_file(docs_dir, str(path.relative_to(docs_dir))) is not None
+            for path in docs_dir.rglob("*.fjson")
+        )
+        json_sidecars = any(
+            _page_file(docs_dir, str(Path(page["path"]).with_suffix(".json")))
+            is not None
+            for page in pages
+            if page["path"] not in {
+                "manifest.html", "globalcontext.html", "searchindex.html"
+            }
+        )
+        if json_pages or json_sidecars:
+            formats.add("json")
 
     return {
         "package": package,

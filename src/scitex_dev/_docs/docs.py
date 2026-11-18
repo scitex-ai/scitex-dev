@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from .._core.discovery import discover_packages, get_package_root, get_sphinx_source
+from .._core.manifest import _page_file
 
 logger = slogging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ def get_docs(
     Resolution chain per package:
         1. Pre-built _sphinx_html/ in installed package → fastest (production)
         2. Sphinx _build/ available → use existing build
-        3. Neither → introspect from docstrings + signatures (always works)
+        3. No page requested and neither built source exists → introspect package
 
     Args:
         package: Single package name (returns unwrapped result).
@@ -70,6 +71,7 @@ def get_docs(
     Raises:
         ValueError: If both package= and packages= are given.
         LookupError: If a requested package is not found.
+        FileNotFoundError: If a named page is unavailable in both built sources.
     """
     if package is not None and packages is not None:
         raise ValueError(
@@ -328,7 +330,14 @@ def _get_one(
         if result is not None:
             return _enrich_manifest(result, package)
 
-    # 3. Fallback: introspect
+    # Package introspection cannot substitute for a requested page.
+    if page is not None:
+        raise FileNotFoundError(
+            f"Documentation page '{page}' ({format or 'html'}) not found "
+            f"for package '{package}'."
+        )
+
+    # 3. Fallback: introspect the package overview only.
     from .._core.introspect import introspect_package
 
     return introspect_package(module_name)
@@ -342,9 +351,14 @@ def _resolve_from_built(
 ) -> Any:
     """Try to resolve docs from a built docs directory.
 
-    Returns None if the directory doesn't exist or doesn't have the requested content.
+    JSON-only Sphinx builds do not require an HTML build. JSON indexes list
+    distinct regular page files recursively, excluding root control metadata.
+    Named pages and indexed files must resolve within their docs directory.
+    Returns None if the directories lack the requested content.
     """
-    if not html_dir.exists():
+    if not html_dir.is_dir() and not (
+        format == "json" and json_dir is not None and json_dir.is_dir()
+    ):
         return None
 
     # If page requested but no format, default to html
@@ -367,10 +381,10 @@ def _resolve_from_built(
     # HTML format → return path
     if format == "html":
         if page is not None:
-            page_path = html_dir / f"{page}.html"
-            if not page_path.exists():
-                page_path = html_dir / page
-            if page_path.exists():
+            page_path = _page_file(html_dir, f"{page}.html")
+            if page_path is None:
+                page_path = _page_file(html_dir, page)
+            if page_path is not None:
                 return page_path
             return None
         if (html_dir / "index.html").exists():
@@ -379,27 +393,35 @@ def _resolve_from_built(
 
     # JSON format → try Sphinx JSON builder output or read HTML
     if format == "json":
-        target_dir = json_dir if json_dir and json_dir.exists() else html_dir
+        target_dir = json_dir if json_dir and json_dir.is_dir() else html_dir
         if page is not None:
-            json_path = target_dir / f"{page}.fjson"
-            if json_path.exists():
+            json_path = _page_file(target_dir, f"{page}.fjson")
+            if json_path is not None:
                 with open(json_path, encoding="utf-8") as f:
                     return json.load(f)
             # Try .json extension
-            json_path = target_dir / f"{page}.json"
-            if json_path.exists():
+            json_path = _page_file(target_dir, f"{page}.json")
+            if json_path is not None:
                 with open(json_path, encoding="utf-8") as f:
                     return json.load(f)
             return None
         # Return list of available pages
-        pages = []
+        pages = set()
         for ext in ("*.fjson", "*.json"):
-            for p in sorted(target_dir.glob(ext)):
-                pages.append(p.stem)
+            for p in target_dir.rglob(ext):
+                rel = p.relative_to(target_dir)
+                if _page_file(target_dir, rel.as_posix()) is not None and rel.as_posix() not in {
+                    "manifest.json", "globalcontext.json", "searchindex.json"
+                }:
+                    pages.add(rel.with_suffix("").as_posix())
         if pages:
-            return {"pages": pages}
+            return {"pages": sorted(pages)}
         # Fall back to listing HTML pages
-        html_pages = [p.stem for p in sorted(html_dir.glob("*.html"))]
+        html_pages = [
+            p.relative_to(html_dir).with_suffix("").as_posix()
+            for p in sorted(html_dir.rglob("*.html"))
+            if _page_file(html_dir, str(p.relative_to(html_dir))) is not None
+        ]
         if html_pages:
             return {"pages": html_pages, "note": "JSON not built, listing HTML pages"}
         return None

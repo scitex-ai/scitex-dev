@@ -158,3 +158,15 @@ class TestRepoIsRequired:
 
 
 # EOF
+
+
+def test_ci_group_help_leads_with_purpose_before_usage():
+    # Arrange
+    root = click.Group("owned")
+    register_ci_commands(root)
+    # Act
+    result = CliRunner().invoke(root, ["ci", "--help"])
+    # Assert
+    assert result.exit_code == 0 and result.output.index(
+        "CI verdicts and CI plumbing."
+    ) < result.output.index("Usage:")

@@ -58,6 +58,29 @@ and conflicts before treating an operation as successful. Definitions are in
 `rename/config.py`; preview, application and configuration dispatch are in
 `rename/core.py`.
 
+## Protected content remains visible
+
+Literal mode replaces matching text inside ordinary quoted strings too; it is
+not a Python symbol-aware refactoring engine. Its default source filters protect
+whole matching lines containing `db_table=`, `related_name=`, `table=`, `name=`,
+`old_name=` or `new_name=`. These are substring checks, so `prog_name=` also
+matches `name=`. Django-specific protections apply separately.
+
+For example, a file containing only `prog_name="scitex-business"` is retained
+unchanged by a literal rename of `scitex-business`. Its content record reports
+zero replaceable matches and one protected line; preview includes an
+`action="protect"` detail. `summary.content_files` counts files with replaceable
+matches, while `content_protected` counts protected lines and `protected_files`
+counts files containing them. Quiet CLI output appends the protected-line count
+when nonzero. Protected-only files are reported without rewriting their bytes.
+
+These reports describe matched, selected files, not every excluded path or
+unreadable file. Preview line details are capped at twenty records per file.
+Regex mode uses whole-file replacement without these literal-mode source/Django
+line protections; it is not an equivalent way to inspect protected literals.
+The owning checks are in `tests/scitex_dev/rename/test_steps.py` and
+`tests/scitex_dev/_cli/test__rename.py`.
+
 ## Application
 
 `execute_rename` accepts `pattern`, `replacement`, `directory`, Django protection,

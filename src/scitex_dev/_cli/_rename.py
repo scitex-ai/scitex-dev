@@ -153,11 +153,13 @@ def register(main: click.Group) -> None:
                 sys.exit(1)
             s = result.summary or {}
             verb = "would rename" if dry_run else "renamed"
+            protected = s.get("content_protected", 0)
+            protection_note = f" / {protected} protected lines" if protected else ""
             click.echo(
                 f"{verb}: "
                 f"{s.get('content_files', 0)} files / "
                 f"{s.get('content_matches', 0)} matches / "
-                f"{s.get('collisions', 0)} collisions"
+                f"{s.get('collisions', 0)} collisions{protection_note}"
             )
             sys.exit(0)
 

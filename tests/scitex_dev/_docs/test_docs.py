@@ -2,12 +2,13 @@
 # -*- coding: utf-8 -*-
 """Tests for the main docs module."""
 
+import json
 from pathlib import Path
 
 import pytest
 
 from scitex_dev._core.discovery import invalidate_cache
-from scitex_dev._docs.docs import build_docs, get_docs, search_docs
+from scitex_dev._docs.docs import _resolve_from_built, build_docs, get_docs, search_docs
 
 
 @pytest.fixture(autouse=True)
@@ -235,3 +236,253 @@ class TestBuildDocs:
         # Assert
         with pytest.raises(LookupError, match="not found"):
             build_docs(package="nonexistent", _discover_fn=_empty_discover)
+
+
+def _prepare_page_fixture(tmp_path, format, location, present):
+    package = tmp_path / "package"
+    source = tmp_path / "docs"
+    html = package / "_sphinx_html" if location == "bundle" else source / "_build/html"
+    if location != "absent":
+        html.mkdir(parents=True)
+        (html / "index.html").write_text("Unrelated index")
+    if present:
+        target = html if format != "json" or location == "bundle" else source / "_build/json"
+        target.mkdir(parents=True, exist_ok=True)
+        (target / ("owned.fjson" if format == "json" else "owned.html")).write_text(
+            json.dumps({"body": "Requested body"}) if format == "json" else "Requested body"
+        )
+    return package, source
+
+
+@pytest.mark.parametrize("format", [None, "html", "json"])
+@pytest.mark.parametrize("location,present", [
+    ("bundle", True), ("build", True), ("bundle", False),
+    ("build", False), ("absent", False),
+])
+def test_named_page_preserves_scope_across_resolution_chain(tmp_path, format, location, present):
+    # Arrange
+    package, source = _prepare_page_fixture(tmp_path, format, location, present)
+    expected = ("page", "Requested body") if present else ("missing", True)
+    # Act
+    try:
+        result = get_docs(
+            package="owned-docs", page="owned", format=format,
+            _discover_fn=lambda: {"owned-docs": "json"},
+            _root_fn=lambda name: package,
+            _sphinx_fn=lambda name: source,
+        )
+        actual = ("page", result.get("body") if isinstance(result, dict) else result.read_text())
+    except FileNotFoundError as error:
+        actual = ("missing", "owned" in str(error) and "owned-docs" in str(error))
+    # Assert
+    assert actual == expected
+
+
+def test_multiple_package_page_request_propagates_missing_page(tmp_path):
+    # Arrange
+    # Act
+    # Assert
+    with pytest.raises(FileNotFoundError, match="owned.*owned-docs"):
+        get_docs(
+            packages=["owned-docs"], page="owned", format="json",
+            _discover_fn=lambda: {"owned-docs": "json"},
+            _root_fn=lambda name: tmp_path,
+            _sphinx_fn=lambda name: None,
+        )
+
+
+@pytest.mark.parametrize("format,name", [
+    (None, "owned.html"), (None, "owned"), ("html", "owned.html"),
+    ("html", "owned"), ("json", "owned.fjson"), ("json", "owned.json"),
+])
+def test_directory_cannot_satisfy_named_page(tmp_path, format, name):
+    # Arrange
+    (tmp_path / "_sphinx_html" / name).mkdir(parents=True)
+    # Act
+    # Assert
+    with pytest.raises(FileNotFoundError, match="owned.*owned-docs"):
+        get_docs(
+            package="owned-docs", page="owned", format=format,
+            _discover_fn=lambda: {"owned-docs": "json"},
+            _root_fn=lambda name: tmp_path, _sphinx_fn=lambda name: None,
+        )
+
+
+@pytest.mark.parametrize("format,primary,fallback", [
+    ("html", "owned.html", "owned"), ("json", "owned.fjson", "owned.json"),
+])
+def test_directory_does_not_hide_regular_fallback_page(tmp_path, format, primary, fallback):
+    # Arrange
+    html = tmp_path / "_sphinx_html"
+    (html / primary).mkdir(parents=True)
+    (html / fallback).write_text(json.dumps({"body": "Real page body"}))
+    # Act
+    result = get_docs(
+        package="owned-docs", page="owned", format=format,
+        _discover_fn=lambda: {"owned-docs": "json"},
+        _root_fn=lambda name: tmp_path, _sphinx_fn=lambda name: None,
+    )
+    body = result.get("body") if isinstance(result, dict) else json.loads(result.read_text())["body"]
+    # Assert
+    assert body == "Real page body"
+
+
+@pytest.fixture(params=["bundle", "json-only-build"])
+def json_provider(tmp_path, request):
+    """Use the same page assets in bundled and JSON-only Sphinx layouts."""
+    package = tmp_path / "package"
+    source = tmp_path / "docs"
+    target = (
+        package / "_sphinx_html"
+        if request.param == "bundle"
+        else source / "_build" / "json"
+    )
+    target.mkdir(parents=True)
+    (target / "guide").mkdir()
+    body = {"body": "<h1>Setup</h1>", "title": "Setup"}
+    for name in ["index.fjson", "index.json", "guide/setup.fjson"]:
+        (target / name).write_text(json.dumps(body))
+    for name in ["manifest.json", "globalcontext.json", "searchindex.json"]:
+        (target / name).write_text(json.dumps({"metadata": "not a page"}))
+    (target / "not-a-page.fjson").mkdir()
+    (target / "not-a-page.json").mkdir()
+    return package, source, target, body
+
+
+def _read_provider(package, source, **kwargs):
+    """Exercise public resolution without installed provider dependencies."""
+    return get_docs(
+        package="owned-docs",
+        _discover_fn=lambda: {"owned-docs": "json"},
+        _root_fn=lambda _module: package,
+        _sphinx_fn=lambda _module: source,
+        **kwargs,
+    )
+
+
+def test_json_page_index_lists_nested_pages_once_without_controls(json_provider):
+    # Arrange
+    package, source, _, _ = json_provider
+    # Act
+    result = _read_provider(package, source, format="json")
+    # Assert
+    assert result == {"pages": ["guide/setup", "index"]}
+
+
+def test_listed_nested_json_page_can_be_read(json_provider):
+    # Arrange
+    package, source, _, body = json_provider
+    # Act
+    result = _read_provider(package, source, format="json", page="guide/setup")
+    # Assert
+    assert result == body
+
+
+def test_nested_json_page_with_control_basename_is_not_root_metadata(json_provider):
+    # Arrange
+    package, source, target, body = json_provider
+    (target / "guide/manifest.json").write_text(json.dumps(body))
+    # Act
+    result = _read_provider(package, source, format="json")
+    # Assert
+    assert result == {"pages": ["guide/manifest", "guide/setup", "index"]}
+
+
+def test_json_index_falls_back_to_nested_regular_html_pages(tmp_path):
+    # Arrange
+    (tmp_path / "guide").mkdir()
+    (tmp_path / "guide/setup.html").write_text("<h1>Setup</h1>")
+    (tmp_path / "index.html").write_text("<h1>Home</h1>")
+    (tmp_path / "directory.html").mkdir()
+    (tmp_path / "manifest.json").write_text("{}")
+    # Act
+    result = _resolve_from_built(tmp_path, format="json")
+    # Assert
+    assert result == {
+        "pages": ["guide/setup", "index"],
+        "note": "JSON not built, listing HTML pages",
+    }
+
+
+def test_metadata_and_directories_alone_are_not_json_pages(tmp_path):
+    # Arrange
+    (tmp_path / "manifest.json").write_text("{}")
+    (tmp_path / "globalcontext.json").write_text("{}")
+    (tmp_path / "searchindex.json").write_text("{}")
+    (tmp_path / "directory.fjson").mkdir()
+    # Act
+    result = _resolve_from_built(tmp_path, format="json")
+    # Assert
+    assert result is None
+
+
+def _outside_page_alias(docs, external, kind):
+    """Build different outside-page inputs for one refusal contract."""
+    if kind == "parent":
+        return "../outside/private"
+    if kind == "absolute":
+        return str(external.with_suffix(""))
+    if kind == "file-link":
+        (docs / ("alias" + external.suffix)).symlink_to(external)
+        return "alias"
+    (docs / "alias").symlink_to(external.parent, target_is_directory=True)
+    return "alias/private"
+
+
+@pytest.mark.parametrize("format", [None, "html", "json"])
+@pytest.mark.parametrize("kind", ["parent", "absolute", "file-link", "directory-link"])
+def test_named_page_cannot_leave_docs_directory(tmp_path, format, kind):
+    # Arrange
+    package = tmp_path / "package"
+    docs = package / "_sphinx_html"
+    docs.mkdir(parents=True)
+    outside = package / "outside"
+    outside.mkdir()
+    extension = ".fjson" if format == "json" else ".html"
+    external = outside / ("private" + extension)
+    external.write_text(json.dumps({"body": "Outside sentinel"}))
+    page = _outside_page_alias(docs, external, kind)
+    # Act
+    with pytest.raises(FileNotFoundError, match="Documentation page"):
+        # Assert
+        get_docs(
+            package="owned-docs", page=page, format=format,
+            _discover_fn=lambda: {"owned-docs": "json"},
+            _root_fn=lambda _module: package, _sphinx_fn=lambda _module: None,
+        )
+
+
+@pytest.mark.parametrize("format", [None, "html", "json"])
+def test_internal_page_symlink_remains_readable(tmp_path, format):
+    # Arrange
+    package = tmp_path / "package"
+    docs = package / "_sphinx_html"
+    (docs / "guide").mkdir(parents=True)
+    extension = ".fjson" if format == "json" else ".html"
+    page = docs / "guide" / ("setup" + extension)
+    page.write_text(json.dumps({"body": "Inside sentinel"}))
+    (docs / ("alias" + extension)).symlink_to(page)
+    # Act
+    result = get_docs(
+        package="owned-docs", page="alias", format=format,
+        _discover_fn=lambda: {"owned-docs": "json"},
+        _root_fn=lambda _module: package, _sphinx_fn=lambda _module: None,
+    )
+    body = result if isinstance(result, dict) else json.loads(result.read_text())
+    # Assert
+    assert body == {"body": "Inside sentinel"}
+
+
+@pytest.mark.parametrize("suffix", [".fjson", ".json", ".html"])
+def test_json_page_index_omits_external_symlinks(tmp_path, suffix):
+    # Arrange
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    external = tmp_path / ("outside" + suffix)
+    external.write_text(json.dumps({"body": "Outside sentinel"}))
+    (docs / ("inside" + suffix)).write_text(json.dumps({"body": "Inside"}))
+    (docs / ("alias" + suffix)).symlink_to(external)
+    # Act
+    result = _resolve_from_built(docs, format="json")
+    # Assert
+    assert result["pages"] == ["inside"]

@@ -92,6 +92,12 @@ stx.io.load(eval(CONFIG.PATH.RAW_CSV))   # PATH values are f-strings → eval
   `CONFIG` parameter.
 - **Move module-scope domain literals into config** — event orders, key maps,
   layout toggles belong in `config/*.yaml`, not as top-of-file constants.
+- **Every analysis parameter lives in config** — thresholds, window sizes,
+  seeds, alpha, bootstrap counts, frequency bands — whether it was written
+  at module scope, inside `main()`, as a keyword argument, or as a signature
+  default. The linter's STX-S008 flags these (warning in
+  `project-type: research`); keep a deliberate constant with
+  `# stx-allow: STX-S008`.
 
 ### Pre-flight rules (config corner cases that crash silently)
 

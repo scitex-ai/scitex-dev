@@ -5,7 +5,8 @@
 ``_run_docs_command`` / ``_print_page_list`` / ``_get_tldr`` are shared
 with ``_docs_click.py`` (the Click flavor) -- both front-ends dispatch
 into the SAME execution path so behavior never drifts between the two
-CLI frameworks a downstream package might choose.
+CLI frameworks a downstream package might choose. CLI responses use the plain
+output channel so logging thresholds cannot suppress documentation content.
 """
 
 from __future__ import annotations
@@ -18,9 +19,6 @@ from pathlib import Path
 import scitex_logging as slogging
 
 log = slogging.getLogger(__name__)
-
-console = slogging.getConsole(f"{__name__}.console")
-
 
 def register_docs_subcommand(
     subparsers: argparse._SubParsersAction,
@@ -99,11 +97,11 @@ def register_docs_subcommand(
     def _default_handler(args):
         if getattr(args, "help_recursive", False):
             parser.print_help()
-            console.info("")
+            slogging.getPlainConsole(__name__).emit("")
             for sub_name, sub_p in [("list", list_p), ("get", get_p)]:
-                console.info(f"--- {sub_name} ---")
+                slogging.getPlainConsole(__name__).emit(f"--- {sub_name} ---")
                 sub_p.print_help()
-                console.info("")
+                slogging.getPlainConsole(__name__).emit("")
             return
         if args.docs_command is None:
             parser.print_help()
@@ -148,7 +146,7 @@ def _run_docs_command(args: argparse.Namespace, package: str) -> None:
                 json.dumps({"package": package, "tldr": tldr}), flush=False
             )
         else:
-            console.info(tldr)
+            slogging.getPlainConsole(__name__).emit(tldr)
         return
 
     # Determine format. Note: page listings always use the rich manifest
@@ -164,7 +162,7 @@ def _run_docs_command(args: argparse.Namespace, package: str) -> None:
 
     try:
         result = get_docs(package=package, format=fetch_fmt, page=args.page)
-    except LookupError as e:
+    except (LookupError, FileNotFoundError) as e:
         log.error(str(e))
         sys.exit(2)
 
@@ -184,9 +182,9 @@ def _run_docs_command(args: argparse.Namespace, package: str) -> None:
         )
     elif isinstance(result, Path) and result.is_file():
         # --page returns a file path — print its content
-        console.info(result.read_text(encoding="utf-8"))
+        slogging.getPlainConsole(__name__).emit(result.read_text(encoding="utf-8"))
     else:
-        console.info(result)
+        slogging.getPlainConsole(__name__).emit(result)
 
 
 def _print_page_list(result, as_json: bool = False) -> None:
@@ -200,14 +198,14 @@ def _print_page_list(result, as_json: bool = False) -> None:
         else:
             if isinstance(pages, list) and pages and isinstance(pages[0], dict):
                 for p in pages:
-                    console.info(f"  {p.get('name', '?'):20s} {p.get('title', '')}")
+                    slogging.getPlainConsole(__name__).emit(f"  {p.get('name', '?'):20s} {p.get('title', '')}")
             elif isinstance(pages, list):
                 for name in pages:
-                    console.info(f"  {name}")
+                    slogging.getPlainConsole(__name__).emit(f"  {name}")
             else:
-                console.info("  (no pages found)")
+                slogging.getPlainConsole(__name__).emit("  (no pages found)")
     else:
-        console.info(result)
+        slogging.getPlainConsole(__name__).emit(result)
 
 
 def _get_tldr(package: str) -> str:

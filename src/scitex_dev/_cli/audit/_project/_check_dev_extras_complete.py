@@ -1,4 +1,4 @@
-"""PS-210 — `[dev]` extras completeness.
+"""PS-210 — contributor dev dependency completeness.
 
 Implements the rule from
 `_skills/general/01_ecosystem/02_dependency-and-version-pinning.md`
@@ -15,7 +15,7 @@ Decision rule the auditor enforces:
   if a project distribution name imported anywhere in ``tests/``
   is declared in some ``[X]`` extra and NOT in core or ``[dev]``,
   AND the test imports it WITHOUT a guarding ``pytest.importorskip``,
-  emit PS-210 (warn).
+  emit PS-210. Severity remains defined by the shared rule registry.
 
 The auditor is intentionally limited to **distribution-level** deps so
 it stays language-agnostic and doesn't need to model every transitive
@@ -44,6 +44,8 @@ import re
 from pathlib import Path
 
 from packaging.requirements import InvalidRequirement, Requirement
+
+from ._dev_group import dev_group_requirements
 
 try:
     import tomllib  # 3.11+
@@ -104,18 +106,27 @@ def _strip_version(spec: str) -> str:
 
 def _extras_index(
     meta: dict,
-) -> tuple[set[str], dict[str, set[str]], str]:
-    """Return (deps_in_dev, {extra_name: {dep_dist_name, …}, …}, self_name)."""
+) -> tuple[set[str], dict[str, set[str]], str, bool]:
+    """Index contributor coverage; a declared dev group takes precedence.
+
+    Legacy dev extras remain supported only without a selected group.
+    """
     project = meta.get("project", {}) or {}
     self_name = (project.get("name") or "").replace("-", "_").lower()
     od = project.get("optional-dependencies", {}) or {}
-    dev = {_strip_version(s) for s in od.get("dev", [])}
+    requirements = dev_group_requirements(meta)
+    grouped = requirements is not None or "dev" not in od
+    dev = (
+        {_strip_version(str(r)) for r in requirements}
+        if requirements is not None
+        else {_strip_version(s) for s in od.get("dev", [])}
+    )
     others = {
         name: {_strip_version(s) for s in deps}
         for name, deps in od.items()
         if name != "dev"
     }
-    return dev, others, self_name
+    return dev, others, self_name, grouped
 
 
 def _scan_py_dir(py_dir: Path) -> tuple[set[str], set[str]]:
@@ -142,15 +153,25 @@ def check_dev_extras_complete(repo: Path, violation_cls: type, out: list) -> Non
     """Append PS-210 violations.
 
     Fires when a dep is declared in some `[X]` extra, used unguarded in
-    tests, but absent from applicable core requirements and `[dev]`. The fix
-    is to add the dep to `[dev]`
-    or guard the tests with ``pytest.importorskip``.
+    tests, but absent from applicable core and contributor dev requirements.
+    Group includes are statically resolved; malformed dev declarations fail
+    loudly. Legacy extra coverage is retained only without a dev group.
     """
     meta = _parse_pyproject(repo)
     if meta is None:
         return
 
-    dev, extras, self_name = _extras_index(meta)
+    try:
+        dev, extras, self_name, grouped = _extras_index(meta)
+    except (ValueError, TypeError) as error:
+        out.append(
+            violation_cls(
+                "PS-210",
+                str(repo / "pyproject.toml"),
+                "Cannot resolve contributor dev requirements: " + str(error)[:500],
+            )
+        )
+        return
     project = meta.get("project", {}) or {}
     core_specs = project.get("dependencies", [])
     if not isinstance(core_specs, list):
@@ -164,7 +185,8 @@ def check_dev_extras_complete(repo: Path, violation_cls: type, out: list) -> Non
         except InvalidRequirement:
             continue  # Malformed declarations are not evidence of installation.
         if requirement.marker is not None and not any(
-            requirement.marker.evaluate({"extra": extra}) for extra in ("", "dev")
+            requirement.marker.evaluate({"extra": extra})
+            for extra in (("",) if grouped else ("", "dev"))
         ):
             continue
         covered.add(_strip_version(spec))
@@ -183,6 +205,8 @@ def check_dev_extras_complete(repo: Path, violation_cls: type, out: list) -> Non
     #   - direct: a test file does ``from <dep> import …``
     #   - transitive: src/ imports the dep AND tests import a src/ module
     #     (the failure mode is "fresh `[dev]` install can't collect tests").
+    target = "[dependency-groups].dev" if grouped else "[dev] extra"
+    command = "pip install -e . --group dev" if grouped else "pip install -e .[dev]"
     for extra_name, deps in extras.items():
         for dep in sorted(deps):
             if dep in _AMBIENT:
@@ -205,9 +229,9 @@ def check_dev_extras_complete(repo: Path, violation_cls: type, out: list) -> Non
                     str(repo / "pyproject.toml"),
                     (
                         f"`[{extra_name}]` extra declares `{dep}` and tests "
-                        f"import it unguarded, but `[dev]` does not include "
-                        f"it. Either add `{dep}` to `[dev]` so a fresh "
-                        f"`pip install -e .[dev]` runs the full suite, or "
+                        f"import it unguarded, but `{target}` does not include "
+                        f"it. Either add `{dep}` to `{target}` so a fresh "
+                        f"`{command}` runs the full suite, or "
                         f"guard the test imports with "
                         f'`pytest.importorskip("{dep}")`. See '
                         f"_skills/general/01_ecosystem/02_dependency-and-"

@@ -188,6 +188,11 @@ explicit owner attribution and unknown client context, without echoing tool
 descriptions. See [scope, schema and client limits](docs/context-discovery.md).
 The umbrella route is `scitex dev context measure` when Dev is installed.
 
+For package navigation, `scitex-dev hierarchy list --json` and
+`scitex_dev.list_hierarchy_providers` inspect installed leaf declarations
+without importing providers or SDK code. This catalog is separate from tree
+construction and host admission. See [hierarchy metadata](docs/hierarchy-provider-metadata.md).
+
 ## Five Interfaces
 
 <details>

@@ -21,7 +21,7 @@ Docs Aggregation
    # Single package
    get_docs(package="scitex-writer", format="json")
 
-   # Build Sphinx docs
+   # Build requires the docs extra and the package documentation sources
    build_docs(package="scitex-writer")
 
 Unified Search
@@ -38,10 +38,13 @@ Unified Search
 CLI Mixin
 ---------
 
-Each package gets a ``docs`` subcommand with minimal boilerplate:
+A leaf can mount the shared ``docs list`` and ``docs get`` adapters.
+Dev's own registered documentation can be inspected with:
 
 .. code-block:: bash
 
-   scitex-writer docs --list
-   scitex-writer docs --json
-   scitex-writer docs --tldr
+   scitex-dev docs list
+   scitex-dev docs list --json
+   scitex-dev docs get cli
+
+See :doc:`cli` for adapter registration, format limits and verified command scope.

@@ -9,6 +9,10 @@ tags: [scitex-dev-linter-cli-reference]
 
 `scitex-dev linter` is the entry point installed by `pip install scitex-dev`.
 
+The standalone compatibility entry point renders the same `scitex-dev linter`
+usage and examples. Subcommands appear once in example paths; mounting the
+group under another CLI prefix retains that prefix.
+
 ## Top-level options
 
 | Flag                | Purpose                                                |

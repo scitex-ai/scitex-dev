@@ -216,11 +216,20 @@ def load_config(start_path: str | None = None) -> LinterConfig:
         # any of these still takes precedence. The `# stx-allow: STX-<ID>`
         # per-line opt-out is unaffected (handled in checker._add before
         # severity is assigned — a suppressed line never reaches here).
+        #
+        # STX-S008 (hard-coded analysis parameter) is promoted info -> WARNING,
+        # not error: research config/*.yaml must hold every parameter, but the
+        # rule is a heuristic over literals and existing research trees carry
+        # hundreds of pre-existing findings (measured 2026-11-19: 562 in 179 of
+        # 417 scripts across two research repos) — an error would block the
+        # post-edit hook on every touch of those files. A project pins it to
+        # error via per_rule_severity once its scripts are clean.
         _existing_per_rule = config_dict.get("per_rule_severity", {}) or {}
         config_dict["per_rule_severity"] = {
             "STX-I001": "error",
             "STX-I002": "error",
             "STX-I009": "error",
+            "STX-S008": "warning",
             **_existing_per_rule,
         }
 

@@ -4,6 +4,8 @@
 
 import json
 
+import pytest
+
 
 from scitex_dev._core.manifest import (
     generate_manifest,
@@ -167,3 +169,227 @@ class TestGenerateManifest:
         # Assert
         result = generate_manifest("test-pkg", tmp_path / "nope")
         assert result["pages"] == []
+
+
+@pytest.mark.parametrize(
+    ("asset", "expected"),
+    [
+        ("objects.inv", ["html"]),
+        ("manifest.json", ["html"]),
+        ("globalcontext.json", ["html"]),
+        ("api.fjson", ["html", "json"]),
+        ("api.json", ["html", "json"]),
+        ("other.json", ["html"]),
+        ("nested/api.fjson", ["html", "json"]),
+    ],
+)
+def test_formats_follow_page_assets_instead_of_inventory(tmp_path, asset, expected):
+    # Arrange
+    (tmp_path / "api.html").write_text("<h1>API</h1>")
+    target = tmp_path / asset
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps({"body": "<h1>API</h1>", "title": "API"}))
+    # Act
+    result = generate_manifest("owned-docs", tmp_path)
+    # Assert
+    assert result["formats"] == expected
+
+
+def test_directory_named_like_json_page_does_not_advertise_format(tmp_path):
+    # Arrange
+    (tmp_path / "api.html").write_text("<h1>API</h1>")
+    (tmp_path / "api.fjson").mkdir()
+    (tmp_path / "api.json").mkdir()
+    # Act
+    result = generate_manifest("owned-docs", tmp_path)
+    # Assert
+    assert result["formats"] == ["html"]
+
+
+def test_json_builder_page_without_html_advertises_json(tmp_path):
+    # Arrange
+    (tmp_path / "index.fjson").write_text(json.dumps({"body": "Page body"}))
+    # Act
+    result = generate_manifest("owned-docs", tmp_path)
+    # Assert
+    assert result["formats"] == ["json"]
+
+
+@pytest.mark.parametrize("name", ["manifest", "globalcontext", "searchindex"])
+def test_control_json_is_not_a_page_sidecar(tmp_path, name):
+    # Arrange
+    (tmp_path / f"{name}.html").write_text("<h1>Documentation</h1>")
+    (tmp_path / f"{name}.json").write_text(json.dumps({"metadata": "not a page"}))
+    # Act
+    result = generate_manifest("owned-docs", tmp_path)
+    # Assert
+    assert result["formats"] == ["html"]
+
+
+def test_manifest_link_outside_docs_is_not_read(tmp_path):
+    # Arrange
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    outside = tmp_path / "outside.json"
+    outside.write_text(json.dumps({"package": "outside-sentinel"}))
+    (docs / "manifest.json").symlink_to(outside)
+    # Act
+    result = read_manifest(docs)
+    # Assert
+    assert result is None
+
+
+def test_manifest_link_inside_docs_remains_readable(tmp_path):
+    # Arrange
+    target = tmp_path / "metadata.json"
+    expected = {"package": "inside-sentinel", "pages": []}
+    target.write_text(json.dumps(expected))
+    (tmp_path / "manifest.json").symlink_to(target)
+    # Act
+    result = read_manifest(tmp_path)
+    # Assert
+    assert result == expected
+
+
+@pytest.mark.parametrize("suffix", [".html", ".fjson", ".json"])
+def test_external_assets_are_not_manifest_pages_or_formats(tmp_path, suffix):
+    # Arrange
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "owned.html").write_text("<h1>Owned</h1>")
+    outside = tmp_path / ("outside" + suffix)
+    outside.write_text(json.dumps({"body": "Outside sentinel"}))
+    name = "owned.json" if suffix == ".json" else "alias" + suffix
+    (docs / name).symlink_to(outside)
+    # Act
+    result = generate_manifest("owned-docs", docs)
+    # Assert
+    assert (result["pages"], result["formats"]) == (
+        [{"name": "owned", "title": "Owned", "path": "owned.html"}], ["html"]
+    )
+
+
+@pytest.mark.parametrize("suffix", [".html", ".fjson", ".json"])
+def test_directory_assets_are_not_manifest_pages_or_formats(tmp_path, suffix):
+    # Arrange
+    (tmp_path / "owned.html").write_text("<h1>Owned</h1>")
+    name = "owned.json" if suffix == ".json" else "directory" + suffix
+    (tmp_path / name).mkdir()
+    # Act
+    result = generate_manifest("owned-docs", tmp_path)
+    # Assert
+    assert (result["pages"], result["formats"]) == (
+        [{"name": "owned", "title": "Owned", "path": "owned.html"}], ["html"]
+    )
+
+
+@pytest.mark.parametrize("asset,formats,names", [
+    ("alias.html", ["html"], ["alias", "owned"]),
+    ("alias.fjson", ["html", "json"], ["owned"]),
+    ("owned.json", ["html", "json"], ["owned"]),
+])
+def test_internal_asset_links_remain_available(tmp_path, asset, formats, names):
+    # Arrange
+    (tmp_path / "owned.html").write_text("<h1>Owned</h1>")
+    target = tmp_path / "payload"
+    target.write_text(json.dumps({"body": "Inside sentinel"}))
+    (tmp_path / asset).symlink_to(target)
+    # Act
+    result = generate_manifest("owned-docs", tmp_path)
+    # Assert
+    assert ([page["name"] for page in result["pages"]], result["formats"]) == (
+        names, formats
+    )
+
+
+def test_public_overview_regenerates_from_safe_assets_after_external_manifest(tmp_path):
+    # Arrange
+    from scitex_dev import get_docs
+
+    docs = tmp_path / "package" / "_sphinx_html"
+    docs.mkdir(parents=True)
+    outside = tmp_path / "outside.json"
+    outside.write_text(json.dumps({"pages": [{"name": "outside-sentinel"}]}))
+    (docs / "manifest.json").symlink_to(outside)
+    (docs / "owned.html").write_text("<h1>Owned</h1>")
+    # Act
+    result = get_docs(
+        package="owned-docs", _discover_fn=lambda: {"owned-docs": "json"},
+        _root_fn=lambda _module: docs.parent, _sphinx_fn=lambda _module: None,
+    )
+    # Assert
+    assert result["pages"] == [{"name": "owned", "title": "Owned", "path": "owned.html"}]
+
+
+def _write_error(docs, payload):
+    """Observe write refusal alongside file preservation in owned fixtures."""
+    try:
+        write_manifest(docs, payload)
+    except ValueError as error:
+        return error
+    return None
+
+
+def _linked_manifest(tmp_path, existing):
+    """Create an existing or dangling target outside the selected docs root."""
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    outside = tmp_path / "outside.json"
+    if existing:
+        outside.write_bytes(b"Outside sentinel, preserve exactly.\n")
+    (docs / "manifest.json").symlink_to(outside)
+    return docs, outside
+
+
+@pytest.mark.parametrize("existing", [True, False])
+def test_manifest_write_refuses_external_link_without_changing_target(tmp_path, existing):
+    # Arrange
+    docs, outside = _linked_manifest(tmp_path, existing)
+    expected_bytes = b"Outside sentinel, preserve exactly.\n" if existing else None
+    # Act
+    error = _write_error(docs, {"package": "owned"})
+    # Assert
+    assert (
+        isinstance(error, ValueError), outside.exists(),
+        outside.read_bytes() if outside.exists() else None,
+        (docs / "manifest.json").is_symlink(),
+    ) == (True, existing, expected_bytes, True)
+
+
+def _internal_manifest_link(tmp_path, existing):
+    """Keep internal links valid for both existing and not-yet-created files."""
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    target = docs / "metadata.json"
+    if existing:
+        target.write_bytes(b"Old metadata\n")
+    (docs / "manifest.json").symlink_to(target)
+    return docs, target
+
+
+@pytest.mark.parametrize("existing", [True, False])
+def test_manifest_write_preserves_internal_link_behavior(tmp_path, existing):
+    # Arrange
+    docs, target = _internal_manifest_link(tmp_path, existing)
+    payload = {"package": "owned", "pages": []}
+    # Act
+    result = write_manifest(docs, payload)
+    # Assert
+    assert (result, json.loads(target.read_text()), result.is_symlink()) == (
+        docs / "manifest.json", payload, True
+    )
+
+
+def test_manifest_write_accepts_explicit_symlinked_docs_root(tmp_path):
+    # Arrange
+    real = tmp_path / "real-docs"
+    real.mkdir()
+    alias = tmp_path / "docs-alias"
+    alias.symlink_to(real, target_is_directory=True)
+    payload = {"package": "owned"}
+    # Act
+    path = write_manifest(alias, payload)
+    # Assert
+    assert (path, json.loads((real / "manifest.json").read_text())) == (
+        alias / "manifest.json", payload
+    )

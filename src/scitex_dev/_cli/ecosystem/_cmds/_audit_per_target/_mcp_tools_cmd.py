@@ -5,6 +5,7 @@
 import click
 
 from ....._ecosystem.help_spec import CliHelp, Example, SpecCommand
+from ...._severity import SeverityChoice
 
 
 def register(ecosystem):
@@ -103,7 +104,7 @@ def register(ecosystem):
     @click.option(
         "--severity",
         "min_severity",
-        type=click.Choice(["info", "warn", "error"], case_sensitive=False),
+        type=SeverityChoice("warn", case_sensitive=False),
         default=None,
         help="Only report violations at or above this severity.",
     )

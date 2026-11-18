@@ -57,7 +57,7 @@
 <li class="toctree-l1"><a class="reference internal" href="api.html">API Reference</a></li>
 <li class="toctree-l1"><a class="reference internal" href="unified-search.html">Unified Search</a></li>
 <li class="toctree-l1"><a class="reference internal" href="documentation-verification.html">Scoped documentation verification</a></li>
-<li class="toctree-l1"><a class="reference internal" href="cli.html">CLI Mixin</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cli.html">CLI documentation adapters</a></li>
 </ul>
 
         </div>
@@ -102,7 +102,7 @@
 <span class="c1"># Single package</span>
 <span class="n">get_docs</span><span class="p">(</span><span class="n">package</span><span class="o">=</span><span class="s2">"scitex-writer"</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s2">"json"</span><span class="p">)</span>
 
-<span class="c1"># Build Sphinx docs</span>
+<span class="c1"># Build requires the docs extra and the package documentation sources</span>
 <span class="n">build_docs</span><span class="p">(</span><span class="n">package</span><span class="o">=</span><span class="s2">"scitex-writer"</span><span class="p">)</span>
 </pre></div>
 </div>
@@ -119,12 +119,14 @@
 </section>
 <section id="cli-mixin">
 <h2>CLI Mixin<a class="headerlink" href="#cli-mixin" title="Link to this heading"></a></h2>
-<p>Each package gets a <code class="docutils literal notranslate"><span class="pre">docs</span></code> subcommand with minimal boilerplate:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>scitex-writer<span class="w"> </span>docs<span class="w"> </span>--list
-scitex-writer<span class="w"> </span>docs<span class="w"> </span>--json
-scitex-writer<span class="w"> </span>docs<span class="w"> </span>--tldr
+<p>A leaf can mount the shared <code class="docutils literal notranslate"><span class="pre">docs</span> <span class="pre">list</span></code> and <code class="docutils literal notranslate"><span class="pre">docs</span> <span class="pre">get</span></code> adapters.
+Dev’s own registered documentation can be inspected with:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>scitex-dev<span class="w"> </span>docs<span class="w"> </span>list
+scitex-dev<span class="w"> </span>docs<span class="w"> </span>list<span class="w"> </span>--json
+scitex-dev<span class="w"> </span>docs<span class="w"> </span>get<span class="w"> </span>cli
 </pre></div>
 </div>
+<p>See <a class="reference internal" href="cli.html"><span class="doc">CLI documentation adapters</span></a> for adapter registration, format limits and verified command scope.</p>
 </section>
 </section>
 

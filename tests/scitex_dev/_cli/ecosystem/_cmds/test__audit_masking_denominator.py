@@ -48,6 +48,10 @@ and never reconciled. It wants its own named signal, not a seat in the
 bucket that gates. Card: audit-headline-count-vs-classified-count-reconcile.
 """
 
+import os
+import subprocess
+import sys
+
 import pytest
 
 from scitex_dev._cli.ecosystem._cmds._audit_masking import (
@@ -348,3 +352,24 @@ def test_a_summary_cannot_be_rendered_without_saying_how_the_run_ended():
     # Assert
     with raised:
         call()
+
+
+def test_actual_logging_console_findings_are_counted():
+    # Arrange
+    code = """
+from click import style
+from scitex_logging import getConsole
+console = getConsole('owned.audit.tally')
+console.error(style('  [PA-307 §3 test-quality] owned: real error', fg='red'))
+console.warning(style('  [§12] owned: real warning', fg='yellow'))
+"""
+    # Act
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, timeout=20,
+        env={**os.environ, "SCITEX_LOGGING_LEVEL": "warning"}, check=False,
+    )
+    raw = result.stdout + result.stderr
+    report = classify_output(raw, [])
+    # Assert
+    assert (result.returncode, "\x1b[" in raw, report.unmasked_error_count, report.unmasked_count,
+            len(report.unreadable)) == (0, True, 1, 2, 0), result.stderr
