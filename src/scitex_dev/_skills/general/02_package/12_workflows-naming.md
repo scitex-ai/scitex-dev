@@ -74,44 +74,53 @@ or `build` + `build-docs`). If they don't (e.g. `test` + `install-check`,
 or `lint` + `docs`), split into two files. The "common stem" rule
 captures matrix-style fanout vs. unrelated concerns.
 
-### Carve-outs to the splitting heuristic
+### What the static auditor recognizes
 
-Two patterns are explicitly NOT split-violations even when job IDs look
-unrelated at a glance:
+PS-164's `_share_stem` helper recognizes a group when the job IDs have a
+common prefix of at least three characters, or share a token after splitting
+on non-alphanumeric characters. It also recognizes jobs whose tokens are all
+represented in the filename. For a filename containing `publish` or `release`,
+it additionally accepts the helper's fixed release-step vocabulary, such as
+`build`, `publish` and `github-release`.
 
-1. **Matrix fan-out.** A single test matrix across Python versions /
-   OSes / extras is one logical check; the GitHub UI already shows one
-   row per matrix cell, so we don't need separate files. Captured by
-   the common-stem rule above.
-2. **Build → publish → release pipelines.** A release workflow that
-   chains `build` → `test-built-wheel` → `publish-pypi` → `create-github-release`
-   is one logical pipeline whose later jobs depend on earlier ones via
-   `needs:`. The job IDs don't share a stem, but splitting them across
-   files would break the artifact handoff. The auditor (PS-164) treats
-   a workflow as a pipeline (and skips the multi-job check) when at
-   least one job has a `needs:` edge pointing inside the same file.
+A release pipeline should still order dependent jobs with `needs:`. The
+current auditor does not inspect dependency edges: adding `needs:` to unrelated
+`lint` and `docs` jobs does not exempt them. Conversely, recognized release
+step names can pass this grouping heuristic without an edge. A grouping pass
+therefore does not verify execution order or artifact handoff. Keep matrix
+fan-out and release pipelines logically coherent and review their dependencies
+separately.
+
+The implementation lives in
+`src/scitex_dev/_cli/audit/_project/_check_workflows_naming.py`.
+Its `_job_ids` reader is a two-space block-style text heuristic, not a full YAML
+or GitHub Actions validator. Unsupported formatting can under-report jobs;
+this check does not establish workflow validity or successful execution.
 
 ### Filename ↔ `name:` token-overlap (linter)
 
-PS-164's check (3) measures Jaccard similarity between the filename
-stem and the workflow's `name:` slug. Zero-token-overlap drift (e.g.
-filename `pytest-on-ubuntu-py3-11-3-12-3-13.yml` with `name: Quality
-Gate`) is rejected because branch protection keys on display name and a
-reviewer scanning the Actions tab can no longer correlate filename to
-row. Keep at least one substantive token shared between filename and
-`name:`.
+The `_name_field_matches_filename` helper checks for obvious mismatches; it
+does not compute a Jaccard score or apply a similarity threshold. It accepts
+an empty token set, a name with fewer than two tokens, any shared token, or a
+lowercased name with spaces removed that appears within the filename stem.
+
+For example, filename `pytest-on-ubuntu-py3-11-3-12-3-13.yml` with
+`name: Quality Gate` is flagged, while `name: Pytest Quality Gate` shares a
+token and passes. Even a low overlap ratio passes; short labels such as
+`name: Test` also pass. These deliberately loose checks are not semantic
+validation of the workflow's purpose. Prefer a clear shared substantive token
+and keep display names aligned with the actual check.
 
 ## Audit
 
 `PS-164` (severity `W` — warning) scans `.github/workflows/` for:
 
 1. Files with a vague-name denylist match: `docs.yml`, `test.yml`,
-   `lint.yml`, `ci.yml`, `build.yml`, `release.yml`, `publish.yml`,
+   `tests.yml`, `lint.yml`, `ci.yml`, `build.yml`, `release.yml`, `publish.yml`,
    `audit.yml`, `quality.yml`, `sync.yml`, `integration.yml`.
-2. Files with more than one job whose IDs do not share a common stem
-   (heuristic for "multiple unrelated concerns").
-3. Workflow `name:` field that obviously mismatches the filename
-   (filename stem vs. `name:` slug Jaccard < 0.2).
+2. Files with more than one recognized job ID that fail the grouping
+   heuristics above.
+3. Workflow `name:` fields that fail the loose token/substring match above.
 
 `cla.yml` is excluded from all three checks. The exact recognized canonical
 caller follows the separate contract above; merely naming a file `ci.yml` does
