@@ -57,3 +57,26 @@ provider refusal and catalog behavior are covered by
 JSON inheritance and error exits. Installed provider discovery is distinct from
 SDK-owned record validation, umbrella-owned root/layer declarations, other leaf
 allocations, Docs ordering, global search, live availability and access policy.
+
+## Dev's own declaration
+
+Dev is also an owning leaf. `scitex_dev.hierarchy.get_hierarchy_declarations()`
+returns an independent JSON-shaped copy of its single declaration:
+`package:scitex-dev`, index `3.4`, label `scitex-dev`, parent
+`scitex.intermediate`, distribution `scitex-dev`. Plain access imports no SDK.
+Its installed entry point is
+`scitex-dev = scitex_dev.hierarchy:get_hierarchy_nodes` in the same group.
+
+`get_hierarchy_nodes()` explicitly constructs the SDK's `HierarchyNode` record.
+It requires a hierarchy-capable SDK; there is no new hard SDK dependency.
+Missing SDK/hierarchy capability raises an actionable `RuntimeError` pointing
+to plain access. Other dependency failures propagate. This leaf record needs
+umbrella-owned parent records before the SDK can validate a complete tree.
+The metadata catalog still never invokes this provider. Registering Dev does
+not automatically enroll other packages, load a tree or enable hosted search.
+
+The owning [provider](../src/scitex_dev/hierarchy/__init__.py) and
+[behavior tests](../tests/scitex_dev/hierarchy/test___init__.py) cover independent copies,
+serialization, metadata registration and actual SDK-capability behavior.
+Source, installed artifact, complete dependency cohort and host availability
+must still be qualified separately.

@@ -228,6 +228,9 @@ scitex-dev-testmon = "scitex_dev._hooks.run_testmon_cli:main"
 [project.entry-points."pytest11"]
 scitex_dev_test_execution = "scitex_dev._core._test_execution_plugin"
 
+[project.entry-points."scitex_dev.hierarchy"]
+scitex-dev = "scitex_dev.hierarchy:get_hierarchy_nodes"
+
 [project.entry-points."scitex_dev.docs"]
 scitex-dev = "scitex_dev"
 
