@@ -414,3 +414,75 @@ def test_metadata_and_directories_alone_are_not_json_pages(tmp_path):
     result = _resolve_from_built(tmp_path, format="json")
     # Assert
     assert result is None
+
+
+def _outside_page_alias(docs, external, kind):
+    """Build different outside-page inputs for one refusal contract."""
+    if kind == "parent":
+        return "../outside/private"
+    if kind == "absolute":
+        return str(external.with_suffix(""))
+    if kind == "file-link":
+        (docs / ("alias" + external.suffix)).symlink_to(external)
+        return "alias"
+    (docs / "alias").symlink_to(external.parent, target_is_directory=True)
+    return "alias/private"
+
+
+@pytest.mark.parametrize("format", [None, "html", "json"])
+@pytest.mark.parametrize("kind", ["parent", "absolute", "file-link", "directory-link"])
+def test_named_page_cannot_leave_docs_directory(tmp_path, format, kind):
+    # Arrange
+    package = tmp_path / "package"
+    docs = package / "_sphinx_html"
+    docs.mkdir(parents=True)
+    outside = package / "outside"
+    outside.mkdir()
+    extension = ".fjson" if format == "json" else ".html"
+    external = outside / ("private" + extension)
+    external.write_text(json.dumps({"body": "Outside sentinel"}))
+    page = _outside_page_alias(docs, external, kind)
+    # Act
+    with pytest.raises(FileNotFoundError, match="Documentation page"):
+        # Assert
+        get_docs(
+            package="owned-docs", page=page, format=format,
+            _discover_fn=lambda: {"owned-docs": "json"},
+            _root_fn=lambda _module: package, _sphinx_fn=lambda _module: None,
+        )
+
+
+@pytest.mark.parametrize("format", [None, "html", "json"])
+def test_internal_page_symlink_remains_readable(tmp_path, format):
+    # Arrange
+    package = tmp_path / "package"
+    docs = package / "_sphinx_html"
+    (docs / "guide").mkdir(parents=True)
+    extension = ".fjson" if format == "json" else ".html"
+    page = docs / "guide" / ("setup" + extension)
+    page.write_text(json.dumps({"body": "Inside sentinel"}))
+    (docs / ("alias" + extension)).symlink_to(page)
+    # Act
+    result = get_docs(
+        package="owned-docs", page="alias", format=format,
+        _discover_fn=lambda: {"owned-docs": "json"},
+        _root_fn=lambda _module: package, _sphinx_fn=lambda _module: None,
+    )
+    body = result if isinstance(result, dict) else json.loads(result.read_text())
+    # Assert
+    assert body == {"body": "Inside sentinel"}
+
+
+@pytest.mark.parametrize("suffix", [".fjson", ".json", ".html"])
+def test_json_page_index_omits_external_symlinks(tmp_path, suffix):
+    # Arrange
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    external = tmp_path / ("outside" + suffix)
+    external.write_text(json.dumps({"body": "Outside sentinel"}))
+    (docs / ("inside" + suffix)).write_text(json.dumps({"body": "Inside"}))
+    (docs / ("alias" + suffix)).symlink_to(external)
+    # Act
+    result = _resolve_from_built(docs, format="json")
+    # Assert
+    assert result["pages"] == ["inside"]

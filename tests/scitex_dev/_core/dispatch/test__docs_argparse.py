@@ -236,3 +236,23 @@ def test_page_directory_is_reported_as_missing(tmp_path, docs_site, adapter, arg
     assert (result.returncode, result.stdout, "not found" in result.stderr) == (
         2, "", True
     ), result.stderr
+
+
+@pytest.mark.parametrize("adapter", ["argparse", "click"])
+@pytest.mark.parametrize("format", ["html", "json"])
+def test_external_page_is_a_cli_missing_page(tmp_path, docs_site, adapter, format):
+    # Arrange
+    suffix = ".fjson" if format == "json" else ".html"
+    outside = tmp_path / ("outside-page" + suffix)
+    outside.write_text(json.dumps({"body": "Outside content sentinel"}))
+    arguments = ["docs", "get", str(outside.with_suffix("")), "--format", format]
+    # Act
+    result = subprocess.run(
+        [sys.executable, "-c", PROGRAM, adapter, json.dumps(arguments)],
+        cwd=tmp_path, env=_docs_environment(docs_site, "warning"),
+        capture_output=True, text=True, timeout=20, check=False,
+    )
+    # Assert
+    assert (result.returncode, result.stdout, "not found" in result.stderr) == (
+        2, "", True
+    ), result.stderr

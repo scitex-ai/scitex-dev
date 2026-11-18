@@ -342,6 +342,14 @@ def _get_one(
     return introspect_package(module_name)
 
 
+def _page_file(docs_dir: Path, name: str) -> Path | None:
+    """Return a regular page only when its target stays in the docs directory."""
+    candidate = docs_dir / name
+    if candidate.is_file() and candidate.resolve().is_relative_to(docs_dir.resolve()):
+        return candidate
+    return None
+
+
 def _resolve_from_built(
     html_dir: Path,
     format: Optional[str] = None,
@@ -352,6 +360,7 @@ def _resolve_from_built(
 
     JSON-only Sphinx builds do not require an HTML build. JSON indexes list
     distinct regular page files recursively, excluding root control metadata.
+    Named pages and indexed files must resolve within their docs directory.
     Returns None if the directories lack the requested content.
     """
     if not html_dir.is_dir() and not (
@@ -379,10 +388,10 @@ def _resolve_from_built(
     # HTML format → return path
     if format == "html":
         if page is not None:
-            page_path = html_dir / f"{page}.html"
-            if not page_path.is_file():
-                page_path = html_dir / page
-            if page_path.is_file():
+            page_path = _page_file(html_dir, f"{page}.html")
+            if page_path is None:
+                page_path = _page_file(html_dir, page)
+            if page_path is not None:
                 return page_path
             return None
         if (html_dir / "index.html").exists():
@@ -393,13 +402,13 @@ def _resolve_from_built(
     if format == "json":
         target_dir = json_dir if json_dir and json_dir.is_dir() else html_dir
         if page is not None:
-            json_path = target_dir / f"{page}.fjson"
-            if json_path.is_file():
+            json_path = _page_file(target_dir, f"{page}.fjson")
+            if json_path is not None:
                 with open(json_path, encoding="utf-8") as f:
                     return json.load(f)
             # Try .json extension
-            json_path = target_dir / f"{page}.json"
-            if json_path.is_file():
+            json_path = _page_file(target_dir, f"{page}.json")
+            if json_path is not None:
                 with open(json_path, encoding="utf-8") as f:
                     return json.load(f)
             return None
@@ -408,7 +417,7 @@ def _resolve_from_built(
         for ext in ("*.fjson", "*.json"):
             for p in target_dir.rglob(ext):
                 rel = p.relative_to(target_dir)
-                if p.is_file() and rel.as_posix() not in {
+                if _page_file(target_dir, rel.as_posix()) is not None and rel.as_posix() not in {
                     "manifest.json", "globalcontext.json", "searchindex.json"
                 }:
                     pages.add(rel.with_suffix("").as_posix())
@@ -418,7 +427,7 @@ def _resolve_from_built(
         html_pages = [
             p.relative_to(html_dir).with_suffix("").as_posix()
             for p in sorted(html_dir.rglob("*.html"))
-            if p.is_file()
+            if _page_file(html_dir, str(p.relative_to(html_dir))) is not None
         ]
         if html_pages:
             return {"pages": html_pages, "note": "JSON not built, listing HTML pages"}
