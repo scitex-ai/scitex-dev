@@ -70,7 +70,10 @@ def generate_manifest(
 ) -> dict[str, Any]:
     """Generate a manifest by scanning a built docs directory.
 
-    Discovers HTML and JSON pages by walking the directory.
+    Lists HTML pages and detects JSON from regular page files. JSON is
+    available when a Sphinx ``.fjson`` page or a JSON sidecar for a listed
+    HTML page exists. Inventory/control metadata alone is not a page format.
+    This checks asset presence, not page validity or every page's formats.
 
     Args:
         package: Package name (e.g. "scitex-writer").
@@ -98,8 +101,16 @@ def generate_manifest(
             )
             formats.add("html")
 
-        if (docs_dir / "objects.inv").exists():
-            formats.add("json")  # Sphinx JSON builder likely available
+        json_pages = any(path.is_file() for path in docs_dir.rglob("*.fjson"))
+        json_sidecars = any(
+            (docs_dir / page["path"]).with_suffix(".json").is_file()
+            for page in pages
+            if page["path"] not in {
+                "manifest.html", "globalcontext.html", "searchindex.html"
+            }
+        )
+        if json_pages or json_sidecars:
+            formats.add("json")
 
     return {
         "package": package,

@@ -4,6 +4,8 @@
 
 import json
 
+import pytest
+
 
 from scitex_dev._core.manifest import (
     generate_manifest,
@@ -167,3 +169,58 @@ class TestGenerateManifest:
         # Assert
         result = generate_manifest("test-pkg", tmp_path / "nope")
         assert result["pages"] == []
+
+
+@pytest.mark.parametrize(
+    ("asset", "expected"),
+    [
+        ("objects.inv", ["html"]),
+        ("manifest.json", ["html"]),
+        ("globalcontext.json", ["html"]),
+        ("api.fjson", ["html", "json"]),
+        ("api.json", ["html", "json"]),
+        ("other.json", ["html"]),
+        ("nested/api.fjson", ["html", "json"]),
+    ],
+)
+def test_formats_follow_page_assets_instead_of_inventory(tmp_path, asset, expected):
+    # Arrange
+    (tmp_path / "api.html").write_text("<h1>API</h1>")
+    target = tmp_path / asset
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps({"body": "<h1>API</h1>", "title": "API"}))
+    # Act
+    result = generate_manifest("owned-docs", tmp_path)
+    # Assert
+    assert result["formats"] == expected
+
+
+def test_directory_named_like_json_page_does_not_advertise_format(tmp_path):
+    # Arrange
+    (tmp_path / "api.html").write_text("<h1>API</h1>")
+    (tmp_path / "api.fjson").mkdir()
+    (tmp_path / "api.json").mkdir()
+    # Act
+    result = generate_manifest("owned-docs", tmp_path)
+    # Assert
+    assert result["formats"] == ["html"]
+
+
+def test_json_builder_page_without_html_advertises_json(tmp_path):
+    # Arrange
+    (tmp_path / "index.fjson").write_text(json.dumps({"body": "Page body"}))
+    # Act
+    result = generate_manifest("owned-docs", tmp_path)
+    # Assert
+    assert result["formats"] == ["json"]
+
+
+@pytest.mark.parametrize("name", ["manifest", "globalcontext", "searchindex"])
+def test_control_json_is_not_a_page_sidecar(tmp_path, name):
+    # Arrange
+    (tmp_path / f"{name}.html").write_text("<h1>Documentation</h1>")
+    (tmp_path / f"{name}.json").write_text(json.dumps({"metadata": "not a page"}))
+    # Act
+    result = generate_manifest("owned-docs", tmp_path)
+    # Assert
+    assert result["formats"] == ["html"]
