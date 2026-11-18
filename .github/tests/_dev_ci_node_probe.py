@@ -2,6 +2,8 @@
 
 import json
 import math
+import os
+import stat
 import subprocess
 import threading
 import time
@@ -136,6 +138,29 @@ def _host_io_pressure_snapshot(path=Path("/proc/pressure/io")):
         result["unavailable"] = type(error).__name__
     return result
 
+
+def _executable_identity(path):
+    """Stat the owned executable target without copying its path or contents."""
+    result = {
+        "scope": "direct-child executable metadata; no path or runtime version; not a root-cause verdict",
+    }
+    try:
+        metadata = path.stat()
+        if not stat.S_ISREG(metadata.st_mode):
+            raise ValueError("executable metadata unavailable")
+        result.update(
+            status="available",
+            device_major=os.major(metadata.st_dev),
+            device_minor=os.minor(metadata.st_dev),
+            inode=metadata.st_ino,
+            size_bytes=metadata.st_size,
+            mtime_ns=metadata.st_mtime_ns,
+        )
+    except (OSError, ValueError) as error:
+        result.update(status="unavailable", unavailable=type(error).__name__)
+    return result
+
+
 def run_node(source, *, timeout=4):
     """Preserve Node results and TimeoutExpired; never retry or extend its budget.
 
@@ -143,6 +168,7 @@ def run_node(source, *, timeout=4):
     path never waits for that observer or reads procfs: unavailable or incomplete
     evidence is explicit. Sampling is scheduled before the deadline; timestamps show any delay.
     Host IO pressure is separate context, not per-child evidence or a cause.
+    The base sample is published before optional executable metadata is read.
     It is not a root-cause verdict.
     """
     command = ["node", "-"]
@@ -168,6 +194,17 @@ def run_node(source, *, timeout=4):
                 "completed_elapsed_seconds": time.monotonic() - started,
                 **snapshot,
                 "host_io_pressure": host_io_pressure,
+                "executable_identity": {"status": "not-completed"},
+            }
+            if done.is_set():
+                return
+            identity_started = time.monotonic() - started
+            identity = _executable_identity(Path("/proc") / str(child.pid) / "exe")
+            evidence["sample"] = {
+                **evidence["sample"],
+                "executable_identity": identity,
+                "executable_started_elapsed_seconds": identity_started,
+                "executable_completed_elapsed_seconds": time.monotonic() - started,
             }
 
         observer = threading.Thread(target=observe, daemon=True)
