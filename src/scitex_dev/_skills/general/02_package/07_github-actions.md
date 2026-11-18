@@ -13,7 +13,8 @@ tags: [scitex-general-package-github-actions]
 
 Operator decision (2026-07-21): every scitex-* repo ships exactly ONE CI
 workflow, `.github/workflows/ci.yml` — a thin caller that delegates all job
-bodies to the org-level reusable workflows in `scitex-ai/.github@main`
+bodies to the org-level reusable workflows in `scitex-ai/.github` at the
+reviewed immutable revision pinned in the bundled `ci.yml.tmpl`
 (`pytest-matrix.yml`, `import-smoke.yml`, `quality-audit.yml`,
 `rtd-sphinx-build.yml`). A shared workflow cannot drift per-repo.
 
@@ -27,13 +28,11 @@ scitex-dev ci runner register <repo-dir> --yes
 
 Rules:
 
-- Runner selection: Actions Variable `CI_RUNS_ON`, default
-  `["self-hosted","Linux","X64","scitex-ci"]`. Prefer hardware we own where
-  CI turnaround matters; `ubuntu-latest` is ALLOWED (free for public repos,
-  just slower) and is reported by PS-169 at **W — advisory, never blocking**.
-  Operator directive 2026-08-05 superseded the 2026-07-14 self-hosted-only
-  mandate; do NOT cite PS-169 as an ERROR, which this line did until now and
-  which led two peer agents to misdiagnose a blocked migration.
+- Runner preference: Actions Variable `CI_RUNS_ON`; the bundled caller defaults
+  to `["ubuntu-latest"]` when absent. The reusable workflow owns actual runner
+  admission. A preference or label set confers no authorization; company runners
+  require the membership checks documented by the owning admission workflow.
+  GitHub-hosted runners remain allowed (PS-169 is advisory during adoption).
 - The runner rule that DOES block is **PS-224 (E)**: a **self-hosted** label
   set no registered machine serves. Such a job is not slow, it is
   undeliverable — GitHub queues an unmatchable job forever instead of
@@ -42,8 +41,13 @@ Rules:
 - Do NOT hand-write per-repo CI job bodies (the retired consolidated
   `pr-ci.yml`/`release-ci.yml` pair and the in-SIF `ci.yml.template` are
   gone); `apply` deletes superseded files, including `newb-docs*`.
-- Preserved alongside `ci.yml`: `cla.yml`, `auto-merge-to-develop.*`,
-  `pypi-publish-*`, `rtd-sphinx-*`.
+- Separate CLA, publishing and release-sync workflows remain required. `apply`
+  preserves protected CLA, auto-merge and publisher prefixes. RTD protection is
+  lifted only when the emitted caller actually declares its superseding RTD job;
+  see `ci_template/_workflows.py` and `test__workflows.py`.
+- PS-164/PS-165 recognize the complete bundled caller configuration, rather than
+  exempting its filename alone. See [workflow presence](07b_workflow-presence.md)
+  for delegated coverage and the limits of this static recognition.
 - Branch protection must reference the caller contexts
   (`"<caller-job-id> / <reusable job name>"`, e.g.
   `pytest-matrix / pytest-matrix-on-ubuntu-py3.12`); `apply` gates on this.
@@ -147,7 +151,7 @@ allowlist: bot*,<username>
 ## PyPI publish — OIDC trusted publisher only
 
 ```yaml
-# publish-pypi.yml
+# pypi-publish-and-github-release-on-tag.yml
 on:
   push:
     tags: ['v*']
@@ -176,7 +180,9 @@ Naming patterns:
 
 ## Weekly quality audit
 
-Every package inheriting from `scitex-minimal-template` carries `.github/workflows/scitex-quality.yml`. Runs `scitex-dev quality {audit-cli, audit-frontmatter, audit-docs, audit-lines, audit-scope}` on a Monday cron + on push/PR. Warn-only (`continue-on-error: true`) until the package is clean; flip individual steps to fail-the-build once green.
+The bundled caller delegates quality checks to its `quality-audit` reusable
+workflow job. Follow that pinned callee and the mandatory audit gate below;
+do not create a second legacy `scitex-quality.yml` or add warning-only waivers.
 
 ## Per-package audit: `scitex-dev ecosystem audit-all <pkg>` is mandatory
 
@@ -186,9 +192,9 @@ Every package inheriting from `scitex-minimal-template` carries `.github/workflo
 
 Before tagging `v*`:
 
-1. CI green on `main` (the test workflow + scitex-quality both passing).
+1. CI green on `main` (the test and quality checks both passing).
 2. `CHANGELOG.md` updated with the new version section.
 3. Version bumped in `pyproject.toml` AND any `__version__.py`.
 4. Local fresh-venv probe: `pip install -e . --group dev` then `pytest` — must mirror what CI sees.
 5. `pip install` from a sibling dir without scitex installed (dep-hygiene self-check).
-6. Tag pushed (`git push origin v0.1.0`) — triggers `publish-pypi.yml`.
+6. Tag pushed (`git push origin v0.1.0`) — triggers `pypi-publish-and-github-release-on-tag.yml`.

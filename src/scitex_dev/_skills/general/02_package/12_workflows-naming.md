@@ -1,10 +1,10 @@
 ---
 description: |
   [TOPIC] GitHub Actions workflow file naming + structure convention.
-  [DETAILS] One workflow file = one check. Descriptive kebab-case filenames
+  [DETAILS] The canonical thin caller or one handwritten workflow per check. Descriptive kebab-case filenames
   that name the target/runtime (e.g. `rtd-build-on-ubuntu-latest.yml`,
   `pytest-on-ubuntu-py3-11-3-12-3-13.yml`, `pypi-publish-on-release.yml`).
-  Multi-concern workflows must be split. The workflow `name:` field and each
+  Handwritten multi-concern workflows must be split. The workflow `name:` field and each
   `jobs.<id>.name` should match the file's purpose. Exempt: `cla.yml` (the
   CLA Assistant action hard-codes that filename). Audited by PS-164.
 tags: [scitex-general-package-workflows-naming]
@@ -12,9 +12,20 @@ tags: [scitex-general-package-workflows-naming]
 
 # GitHub Actions — Workflow Naming + Structure (SciTeX)
 
-## Rule: one workflow file = one check
+## Canonical thin caller
 
-A single file under `.github/workflows/` runs one logically-coherent check.
+Use the [owning CI template](07_github-actions.md) for generated CI. PS-164
+recognizes `ci.yml` only when its complete parsed configuration equals the
+bundled template; this is not a filename whitelist. The delegated job IDs remain
+separate check contexts. Changed/partial callers retain ordinary findings, and
+other workflow files are always checked independently. PS-165's corresponding
+coverage and source/tests are documented in
+[workflow presence](07b_workflow-presence.md). Recognition is static; execution,
+runner admission, branch protection and release qualification remain separate.
+
+## Rule for handwritten/legacy workflows: one file = one check
+
+A handwritten file under `.github/workflows/` runs one logically-coherent check.
 Multi-concern workflows (multiple jobs with unrelated purposes) MUST be split
 into separate files. This keeps the GitHub Actions UI scannable (each row is
 one named check), branch-protection rules unambiguous (gate on
@@ -102,7 +113,9 @@ row. Keep at least one substantive token shared between filename and
 3. Workflow `name:` field that obviously mismatches the filename
    (filename stem vs. `name:` slug Jaccard < 0.2).
 
-`cla.yml` is excluded from all three checks.
+`cla.yml` is excluded from all three checks. The exact recognized canonical
+caller follows the separate contract above; merely naming a file `ci.yml` does
+not exclude it.
 
 Warning-only during adoption. Promote to error once the ecosystem is
 clean.

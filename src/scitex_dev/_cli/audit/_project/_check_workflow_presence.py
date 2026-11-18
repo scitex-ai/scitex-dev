@@ -30,6 +30,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from ...._ecosystem.ci_template._canonical import canonical_caller_job_ids
+
 
 # The ONE publish-workflow filename the fleet may ship (PS-165).
 # (The middle of this name is routinely rendered as `...` by log
@@ -42,26 +44,30 @@ _CANONICAL_PYPI_PUBLISH_WORKFLOW = "pypi-publish-and-github-release-on-tag.yml"
 # ---------------------------------------------------------------------------
 
 # Each requirement is a regex matched against the basename (lower-case).
-# A workflow is considered "present" if at least one file matches.
+# CI checks can also be supplied by the exact owned thin caller.
+# A None caller job keeps CLA, publisher and sync filenames mandatory.
 #
 # Patterns are deliberately permissive of the matrix/runtime suffix
 # documented in PS-164 (e.g. `pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml`
 # OR `pytest-on-ubuntu-latest.yml`).
-_BASELINE_REQUIREMENTS: list[tuple[str, re.Pattern[str], str]] = [
+_BASELINE_REQUIREMENTS: list[tuple[str, re.Pattern[str], str, str | None]] = [
     (
         "cla",
         re.compile(r"^cla\.ya?ml$"),
         "CLA Assistant (`cla.yml`)",
+        None,
     ),
     (
         "pytest",
         re.compile(r"^pytest-.*\.ya?ml$"),
         "pytest matrix (`pytest-*-on-*.yml`)",
+        'pytest-matrix',
     ),
     (
         "import-smoke",
         re.compile(r"^import-smoke-.*\.ya?ml$"),
         "import smoke (`import-smoke-*-on-*.yml`)",
+        'import-smoke',
     ),
     # NOTE: exact filename, NOT a prefix glob. The name is load-bearing:
     # PyPI trusted publishing matches the OIDC `workflow_ref` claim
@@ -72,6 +78,7 @@ _BASELINE_REQUIREMENTS: list[tuple[str, re.Pattern[str], str]] = [
         "pypi-publish",
         re.compile(r"^" + re.escape(_CANONICAL_PYPI_PUBLISH_WORKFLOW) + r"$"),
         "PyPI publish on tag (`pypi-publish-and-github-release-on-tag.yml` — exact; OIDC load-bearing)",
+        None,
     ),
     # NEUTRAL NAME, NOT A PACKAGE NAME. The pattern used to demand
     # `scitex-dev-(quality-audit|audit-all)-*`, which NOTHING matched: a census
@@ -100,19 +107,22 @@ _BASELINE_REQUIREMENTS: list[tuple[str, re.Pattern[str], str]] = [
         "quality-audit",
         re.compile(r"^(quality-audit|audit-all)([-.].*)?\.ya?ml$"),
         "quality audit (`quality-audit-on-*.yml`)",
+        'quality-audit',
     ),
     (
         "sync-main",
         re.compile(r"^sync-main-.*\.ya?ml$"),
         "sync main → release tag (`sync-main-to-release-tag-on-push.yml`)",
+        None,
     ),
 ]
 
 # Only required if the repo ships docs/ (i.e. has Sphinx)
-_RTD_REQUIREMENT: tuple[str, re.Pattern[str], str] = (
+_RTD_REQUIREMENT: tuple[str, re.Pattern[str], str, str | None] = (
     "rtd-sphinx",
     re.compile(r"^rtd-(sphinx-)?build-.*\.ya?ml$"),
     "RTD Sphinx build (`rtd-sphinx-build-on-*.yml`)",
+    'rtd-sphinx-build',
 )
 
 def _workflow_filenames(repo: Path) -> list[str]:
@@ -165,7 +175,10 @@ def check_ps165_workflow_presence(
     if _has_docs_dir(repo):
         requirements.append(_RTD_REQUIREMENT)
 
-    for _key, pattern, label in requirements:
+    caller_jobs = canonical_caller_job_ids(repo)
+    for _key, pattern, label, caller_job in requirements:
+        if caller_job is not None and caller_job in caller_jobs:
+            continue
         if not any(pattern.match(name) for name in filenames):
             out.append(
                 violation_cls(

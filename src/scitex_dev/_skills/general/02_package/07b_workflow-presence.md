@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] GitHub Actions workflow presence.
-  [DETAILS] Required baseline of workflow files every SciTeX package must
+  [DETAILS] Required baseline of workflow checks every SciTeX package must
   ship. Audited by PS-165 (severity W during adoption). Companion to
   02_package/07_github-actions.md (canonical content) and
   02_package/12_workflows-naming.md (filename grammar).
@@ -9,6 +9,25 @@ tags: [scitex-general-package-workflow-presence]
 ---
 
 # Workflow Presence (SciTeX)
+
+## Canonical caller coverage
+
+The preferred generated `.github/workflows/ci.yml` delegates pytest, import
+smoke, quality audit and RTD Sphinx to the org reusable workflows. PS-165 counts
+those jobs only when the complete parsed caller configuration equals the
+owning bundled `ci.yml.tmpl`. Comments, layout and key order may differ. Changed
+pins, triggers, concurrency, inputs, secrets, extra jobs or missing jobs do not
+qualify. CLA, the exact OIDC publishing filename and release sync still require
+separate files. The filename patterns below remain supported for legacy checks.
+
+Recognition is owned by
+`src/scitex_dev/_ecosystem/ci_template/_canonical.py::canonical_caller_job_ids`;
+behavioral controls use the real renderer and auditors in
+`tests/scitex_dev/_cli/audit/_project/test__check_workflow_presence_canonical.py`.
+Duplicate keys, aliases, merges, symlinked workflow paths, invalid documents
+and callers over 64 KiB remain unrecognized. This is static coverage, not proof
+of runner admission, successful execution, branch protection, SIF/publisher
+qualification or installed/live adoption.
 
 ## Required baseline (every package)
 
@@ -18,7 +37,7 @@ tags: [scitex-general-package-workflow-presence]
 | pytest matrix                                          | `pytest-*-on-*.yml`                                | The unit-test gate.                       |
 | Import smoke                                           | `import-smoke-*-on-*.yml`                          | `pip install` + `python -c "import X"`.   |
 | PyPI publish on tag (EXACT filename — OIDC load-bearing) | `pypi-publish-and-github-release-on-tag.yml` | Trusted-publisher OIDC release; any rename breaks `invalid-publisher`. |
-| scitex-dev quality audit                               | `scitex-dev-quality-audit-on-*.yml`                | Ecosystem-wide audit-all gate.            |
+| scitex-dev quality audit                               | `quality-audit-on-*.yml`                | Ecosystem-wide audit-all gate.            |
 | Sync main → release tag                                | `sync-main-to-release-tag-on-push.yml`             | Branch-protection-friendly release shim.  |
 | RTD Sphinx build *(only when `docs/` ships)*           | `rtd-sphinx-build-on-*.yml`                        | RTD docs build sanity.                    |
 
@@ -47,8 +66,10 @@ field on the hardcoded `scitex_dev.ECOSYSTEM` registry (its own
 
 ## Audit (PS-165)
 
-`PS-165` (severity `W` during adoption) verifies every required filename
-pattern matches at least one file under `.github/workflows/`. Emits one
-violation per missing workflow.
+`PS-165` (severity `W` during adoption) verifies each requirement through a
+recognized delegated CI job or its existing filename pattern under
+`.github/workflows/`. It emits one violation per missing requirement. An
+unrecognized `ci.yml` supplies no delegated coverage; missing separate workflow
+files remain findings.
 
 Promote to E once the ecosystem has converged on the baseline.
