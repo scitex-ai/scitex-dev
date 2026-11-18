@@ -350,9 +350,13 @@ def _resolve_from_built(
 ) -> Any:
     """Try to resolve docs from a built docs directory.
 
-    Returns None if the directory doesn't exist or doesn't have the requested content.
+    JSON-only Sphinx builds do not require an HTML build. JSON indexes list
+    distinct regular page files recursively, excluding root control metadata.
+    Returns None if the directories lack the requested content.
     """
-    if not html_dir.exists():
+    if not html_dir.is_dir() and not (
+        format == "json" and json_dir is not None and json_dir.is_dir()
+    ):
         return None
 
     # If page requested but no format, default to html
@@ -387,7 +391,7 @@ def _resolve_from_built(
 
     # JSON format → try Sphinx JSON builder output or read HTML
     if format == "json":
-        target_dir = json_dir if json_dir and json_dir.exists() else html_dir
+        target_dir = json_dir if json_dir and json_dir.is_dir() else html_dir
         if page is not None:
             json_path = target_dir / f"{page}.fjson"
             if json_path.is_file():
@@ -400,14 +404,22 @@ def _resolve_from_built(
                     return json.load(f)
             return None
         # Return list of available pages
-        pages = []
+        pages = set()
         for ext in ("*.fjson", "*.json"):
-            for p in sorted(target_dir.glob(ext)):
-                pages.append(p.stem)
+            for p in target_dir.rglob(ext):
+                rel = p.relative_to(target_dir)
+                if p.is_file() and rel.as_posix() not in {
+                    "manifest.json", "globalcontext.json", "searchindex.json"
+                }:
+                    pages.add(rel.with_suffix("").as_posix())
         if pages:
-            return {"pages": pages}
+            return {"pages": sorted(pages)}
         # Fall back to listing HTML pages
-        html_pages = [p.stem for p in sorted(html_dir.glob("*.html"))]
+        html_pages = [
+            p.relative_to(html_dir).with_suffix("").as_posix()
+            for p in sorted(html_dir.rglob("*.html"))
+            if p.is_file()
+        ]
         if html_pages:
             return {"pages": html_pages, "note": "JSON not built, listing HTML pages"}
         return None
