@@ -289,3 +289,39 @@ def test_multiple_package_page_request_propagates_missing_page(tmp_path):
             _root_fn=lambda name: tmp_path,
             _sphinx_fn=lambda name: None,
         )
+
+
+@pytest.mark.parametrize("format,name", [
+    (None, "owned.html"), (None, "owned"), ("html", "owned.html"),
+    ("html", "owned"), ("json", "owned.fjson"), ("json", "owned.json"),
+])
+def test_directory_cannot_satisfy_named_page(tmp_path, format, name):
+    # Arrange
+    (tmp_path / "_sphinx_html" / name).mkdir(parents=True)
+    # Act
+    # Assert
+    with pytest.raises(FileNotFoundError, match="owned.*owned-docs"):
+        get_docs(
+            package="owned-docs", page="owned", format=format,
+            _discover_fn=lambda: {"owned-docs": "json"},
+            _root_fn=lambda name: tmp_path, _sphinx_fn=lambda name: None,
+        )
+
+
+@pytest.mark.parametrize("format,primary,fallback", [
+    ("html", "owned.html", "owned"), ("json", "owned.fjson", "owned.json"),
+])
+def test_directory_does_not_hide_regular_fallback_page(tmp_path, format, primary, fallback):
+    # Arrange
+    html = tmp_path / "_sphinx_html"
+    (html / primary).mkdir(parents=True)
+    (html / fallback).write_text(json.dumps({"body": "Real page body"}))
+    # Act
+    result = get_docs(
+        package="owned-docs", page="owned", format=format,
+        _discover_fn=lambda: {"owned-docs": "json"},
+        _root_fn=lambda name: tmp_path, _sphinx_fn=lambda name: None,
+    )
+    body = result.get("body") if isinstance(result, dict) else json.loads(result.read_text())["body"]
+    # Assert
+    assert body == "Real page body"

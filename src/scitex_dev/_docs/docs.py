@@ -376,9 +376,9 @@ def _resolve_from_built(
     if format == "html":
         if page is not None:
             page_path = html_dir / f"{page}.html"
-            if not page_path.exists():
+            if not page_path.is_file():
                 page_path = html_dir / page
-            if page_path.exists():
+            if page_path.is_file():
                 return page_path
             return None
         if (html_dir / "index.html").exists():
@@ -390,12 +390,12 @@ def _resolve_from_built(
         target_dir = json_dir if json_dir and json_dir.exists() else html_dir
         if page is not None:
             json_path = target_dir / f"{page}.fjson"
-            if json_path.exists():
+            if json_path.is_file():
                 with open(json_path, encoding="utf-8") as f:
                     return json.load(f)
             # Try .json extension
             json_path = target_dir / f"{page}.json"
-            if json_path.exists():
+            if json_path.is_file():
                 with open(json_path, encoding="utf-8") as f:
                     return json.load(f)
             return None
