@@ -13,6 +13,7 @@ import unittest
 from pathlib import Path
 
 import yaml
+from _dev_ci_callee_trace import traced_callee_source
 from _dev_ci_node_probe import run_node
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -137,7 +138,7 @@ console.log('all-four-events-three-minors-null-image-refused');
 """
 
         # Act
-        result = node(contract + invocation)
+        result = node(traced_callee_source(contract, invocation))
 
         # Assert
         self.assertEqual(result.returncode, 0, result.stderr)

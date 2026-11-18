@@ -9,6 +9,8 @@ import threading
 import time
 from pathlib import Path
 
+from _dev_ci_callee_trace import captured_callee_stages
+
 
 def _numeric_proc_snapshot(name, value):
     """Return only documented nonnegative counters, never arbitrary procfs text."""
@@ -226,6 +228,8 @@ def run_node(source, *, timeout=4):
                         "stdout_bytes": len(error.output or b""),
                         "stderr_bytes": len(error.stderr or b""),
                         "output_limit": "captured bytes only; zero does not prove no output was emitted",
+                        "callee_stages": captured_callee_stages(error.stderr),
+                        "callee_stage_limit": "known complete lines in first 512 captured bytes/chars only; absence is inconclusive; invocation-evaluated is not process success",
                         "sample": evidence.get("sample"),
                         "sample_limit": "scheduled before deadline; inspect timestamps; may be absent; no descendants",
                     },
