@@ -7,11 +7,49 @@ import time
 from pathlib import Path
 
 
+def _numeric_proc_snapshot(name, value):
+    """Return only documented nonnegative counters, never arbitrary procfs text."""
+    try:
+        if name == "schedstat":
+            names = ("runtime_ns", "runqueue_wait_ns", "timeslices")
+            values = value.split()
+            if len(values) != len(names):
+                raise ValueError
+            result = dict(zip(names, map(int, values)))
+        elif name == "io":
+            names = {
+                "rchar",
+                "wchar",
+                "syscr",
+                "syscw",
+                "read_bytes",
+                "write_bytes",
+                "cancelled_write_bytes",
+            }
+            result = {}
+            for line in value.splitlines():
+                key, separator, number = line.partition(":")
+                if separator and key in names:
+                    if key in result:
+                        raise ValueError
+                    result[key] = int(number)
+            if set(result) != names:
+                raise ValueError
+        else:
+            raise ValueError
+        if any(number < 0 for number in result.values()):
+            raise ValueError
+        return result
+    except ValueError:
+        # Do not copy malformed fields into a diagnostic exception.
+        raise ValueError("procfs counters unavailable") from None
+
+
 def _child_snapshot(pid):
     """Read bounded Linux process fields, never argv, environment or other PIDs."""
     root = Path("/proc") / str(pid)
     result = {"pid": pid, "scope": "direct child only; descendants not inspected"}
-    for name in ("stat", "wchan", "syscall"):
+    for name in ("stat", "wchan", "syscall", "schedstat", "io"):
         try:
             with (root / name).open() as stream:
                 value = stream.read(4096)
@@ -25,11 +63,17 @@ def _child_snapshot(pid):
                     threads=int(fields[17]),
                     start_ticks=int(fields[19]),
                 )
+            elif name in ("schedstat", "io"):
+                result[name] = _numeric_proc_snapshot(name, value)
             else:
                 # The syscall number suffices; do not log memory addresses.
                 result[name] = value.split()[0] if value.split() else ""
         except (OSError, IndexError, ValueError) as error:
             result[name + "_unavailable"] = type(error).__name__
+    result["counter_limit"] = (
+        "cumulative direct-child counters; reads are not atomic; "
+        "no baseline delta, descendants, paths or root-cause verdict"
+    )
     return result
 
 
