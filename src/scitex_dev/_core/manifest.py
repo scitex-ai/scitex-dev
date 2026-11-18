@@ -48,7 +48,11 @@ def read_manifest(docs_dir: Path) -> Optional[dict[str, Any]]:
         return None
     try:
         with open(manifest_path, encoding="utf-8") as f:
-            return json.load(f)
+            manifest = json.load(f)
+        if not isinstance(manifest, dict):
+            logger.warning("Invalid manifest at %s: expected a JSON object", manifest_path)
+            return None
+        return manifest
     except (json.JSONDecodeError, OSError) as e:
         logger.warning("Failed to read manifest at %s: %s", manifest_path, e)
         return None
