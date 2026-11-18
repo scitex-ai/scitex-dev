@@ -21,6 +21,46 @@ from click.testing import CliRunner
 from scitex_dev._cli._root import main
 
 
+@pytest.fixture
+def protected_cli_result(tmp_path):
+    target = tmp_path / "cli.py"
+    body = 'prog_name="scitex-business"\n'
+    target.write_text(body)
+    result = CliRunner().invoke(
+        main,
+        ["rename-symbols", "scitex-business", "scitex-affairs", "--root",
+         str(tmp_path), "--dry-run", "--quiet"],
+    )
+    return result, target, body
+
+
+def test_quiet_protected_only_exit_code(protected_cli_result):
+    # Arrange
+    result, _, _ = protected_cli_result
+    # Act
+    actual = result.exit_code
+    # Assert
+    assert actual == 0, result.output
+
+
+def test_quiet_reports_protected_only_count(protected_cli_result):
+    # Arrange
+    result, _, _ = protected_cli_result
+    # Act
+    actual = result.output.strip()
+    # Assert
+    assert actual == "would rename: 0 files / 0 matches / 0 collisions / 1 protected lines"
+
+
+def test_quiet_protected_only_preserves_file(protected_cli_result):
+    # Arrange
+    _, target, body = protected_cli_result
+    # Act
+    actual = target.read_text()
+    # Assert
+    assert actual == body
+
+
 def _git_init(repo: Path) -> None:
     subprocess.run(["git", "-C", str(repo), "init", "-q"], check=True)
     subprocess.run(["git", "-C", str(repo), "config", "user.email", "t@t"], check=True)
