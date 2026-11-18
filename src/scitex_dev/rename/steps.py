@@ -214,10 +214,10 @@ def _literal_replace_content(
         else:
             new_lines.append(line)
 
-    if matches == 0:
+    if matches == 0 and protected == 0:
         return None
 
-    if not config.dry_run and not skip_entire_file:
+    if matches and not config.dry_run and not skip_entire_file:
         _write_text(file_path, "\n".join(new_lines), config.use_sudo)
 
     entry: dict[str, Any] = {

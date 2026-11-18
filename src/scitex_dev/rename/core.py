@@ -357,7 +357,7 @@ def bulk_rename(config: RenameConfig, *, safety_check_fn=None) -> RenameResult:
     permission_errors = _check_perms(result_for_perms)
 
     summary: dict[str, Any] = {
-        "content_files": len(contents),
+        "content_files": sum(1 for c in contents if c.get("matches", 0) > 0),
         "content_matches": sum(c.get("matches", 0) for c in contents),
         "content_protected": sum(c.get("protected", 0) for c in contents),
         "protected_files": sum(1 for c in contents if c.get("protected", 0) > 0),
