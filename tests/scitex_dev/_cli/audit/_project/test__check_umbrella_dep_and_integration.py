@@ -395,3 +395,51 @@ def test_ps140_missing_gate_finding_names_a_runnable_verb(tmp_path):
 
 
 # EOF
+
+
+def test_relative_peer_named_modules_are_not_external_dependencies(tmp_path):
+    # Arrange: relative modules belong to the audited package, regardless of name.
+    from scitex_dev._cli.audit._project._check_umbrella_dep_and_integration import (
+        _collect_cross_package_imports,
+    )
+
+    _write(
+        tmp_path / "owned.py",
+        "from .scitex_static import versioned_static\n"
+        "from ..scitex_i18n import catalog\n"
+        "from ...scitex.external import local_symbol\n"
+        "from . import scitex_audio\n"
+        "from scitex_static import external_static\n"
+        "from scitex_dev.hooks import HookRule\n"
+        "import scitex_logging\n"
+        "from scitex.io import load\n"
+        "from scitex_sdk.ui import own_component\n",
+    )
+    # Act
+    imports = _collect_cross_package_imports(tmp_path, "scitex_sdk")
+    # Assert: genuine absolute imports still require a runtime gate.
+    assert imports == {
+        "scitex_static", "scitex_dev.hooks", "scitex_logging", "scitex.io"
+    }
+
+
+def test_relative_names_do_not_hide_a_real_missing_peer_gate_entry(tmp_path):
+    # Arrange: the hook import is external; the similarly named local helper is not.
+    _write(tmp_path / "pyproject.toml", '[project]\nname="scitex-owned"\n')
+    _write(
+        tmp_path / "src/scitex_owned/feature.py",
+        "from .scitex_i18n import catalog\nfrom scitex_dev.hooks import HookRule\n",
+    )
+    _write(
+        tmp_path / "tests/integration/test_cross_package_imports.py",
+        "CROSS_PACKAGE_IMPORTS = []\n",
+    )
+    findings = []
+    # Act
+    check_ps140_integration_gate(tmp_path, "scitex-owned", _StubViolation, findings)
+    # Assert: an incomplete real gate still fails, without fictitious local peers.
+    assert (
+        _codes(findings),
+        "scitex_dev.hooks" in findings[0].detail,
+        "scitex_i18n" in findings[0].detail,
+    ) == ({"PS-140"}, True, False)
