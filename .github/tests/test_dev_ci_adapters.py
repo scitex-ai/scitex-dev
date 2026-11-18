@@ -52,6 +52,16 @@ def bridge(job, values):
 
 
 class DevCIAdapters(unittest.TestCase):
+    def test_quality_push_covers_its_own_ci_control_sources_and_fixtures(self):
+        # Arrange
+        candidate = workflow(AUDIT)
+        events = candidate.get("on", candidate.get(True))
+        corpus = Path(__file__).parent.relative_to(ROOT).as_posix()
+        # Act
+        admitted_paths = events["push"]["paths"]
+        # Assert
+        self.assertIn(corpus + "/**", admitted_paths)
+
     def test_complete_public_source_fixture_has_exact_reviewed_pins(self):
         # Arrange
         fixture = public_sources()

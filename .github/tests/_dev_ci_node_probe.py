@@ -1,6 +1,7 @@
-"""Run the CI contract with its original deadline and child-only evidence."""
+"""Run CI with its original deadline, child evidence and host IO context."""
 
 import json
+import math
 import subprocess
 import threading
 import time
@@ -77,12 +78,71 @@ def _child_snapshot(pid):
     return result
 
 
+
+def _numeric_io_pressure(value):
+    """Parse only numeric IO PSI rows; averages are percent, totals microseconds.
+
+    Format: https://docs.kernel.org/accounting/psi.html
+    Unknown fields are never copied into diagnostic exceptions.
+    """
+    expected = {"avg10", "avg60", "avg300", "total"}
+    result = {}
+    try:
+        for line in value.splitlines():
+            fields = line.split()
+            if not fields or fields[0] not in {"some", "full"}:
+                continue
+            kind = fields[0]
+            if kind in result:
+                raise ValueError
+            row = {}
+            for field in fields[1:]:
+                key, separator, number = field.partition("=")
+                if key not in expected:
+                    continue
+                if not separator or key in row:
+                    raise ValueError
+                if key == "total":
+                    row[key] = int(number)
+                    if row[key] < 0:
+                        raise ValueError
+                else:
+                    row[key] = float(number)
+                    if not math.isfinite(row[key]) or not 0 <= row[key] <= 100:
+                        raise ValueError
+            if set(row) != expected:
+                raise ValueError
+            result[kind] = row
+        if set(result) != {"some", "full"}:
+            raise ValueError
+        return result
+    except ValueError:
+        raise ValueError("IO pressure counters unavailable") from None
+
+
+def _host_io_pressure_snapshot(path=Path("/proc/pressure/io")):
+    """Read bounded, host-wide pressure context, without causal attribution."""
+    result = {
+        "scope": "host-wide IO PSI; not per-child or a root-cause verdict",
+        "units": "avg10/avg60/avg300 percent; cumulative total microseconds",
+    }
+    try:
+        with path.open(encoding="ascii") as stream:
+            value = stream.read(4097)
+        if len(value) > 4096:
+            raise ValueError("pressure sample exceeds bound")
+        result["counters"] = _numeric_io_pressure(value)
+    except (OSError, ValueError) as error:
+        result["unavailable"] = type(error).__name__
+    return result
+
 def run_node(source, *, timeout=4):
     """Preserve Node results and TimeoutExpired; never retry or extend its budget.
 
     A daemon observer samples at three quarters of the deadline. The timeout
     path never waits for that observer or reads procfs: unavailable or incomplete
     evidence is explicit. Sampling is scheduled before the deadline; timestamps show any delay.
+    Host IO pressure is separate context, not per-child evidence or a cause.
     It is not a root-cause verdict.
     """
     command = ["node", "-"]
@@ -102,10 +162,12 @@ def run_node(source, *, timeout=4):
                 return
             sampled_at = time.monotonic() - started
             snapshot = _child_snapshot(child.pid)
+            host_io_pressure = _host_io_pressure_snapshot()
             evidence["sample"] = {
                 "elapsed_seconds": sampled_at,
                 "completed_elapsed_seconds": time.monotonic() - started,
                 **snapshot,
+                "host_io_pressure": host_io_pressure,
             }
 
         observer = threading.Thread(target=observe, daemon=True)
