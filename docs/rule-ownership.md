@@ -21,16 +21,24 @@ holds every effective rule and `owners` names the provider of each.
 | **a**: correct home | Already lives with its owner: a leaf rule in its leaf plugin, or an engine-mechanism rule in the engine |
 | **b**: move | Clearly about one leaf's API. Moved through the handover shim (below) |
 | **c**: cross-cutting | Not scoped to one leaf. Keep it in scitex-dev |
-| **?**: ambiguous | More than one plausible owner, or a move blocked by work in flight. Not moved; see [Open questions](#open-questions) |
+| **r**: retired | Never fired; id kept reserved (`_rules/_retired.py`) |
+| **?**: on hold / pending | A doctrine question, or a move waiting for in-flight work. See [Open questions](#open-questions) |
+
+The first audit listed 19 ambiguous rules. The decisions taken on 2026-11-19
+are recorded in [Decisions](#decisions-2026-11-19); the tables below show
+the result.
 
 ### Counts
 
-| Surface | a | b (moved) | c | ? | total |
-|---|---:|---:|---:|---:|---:|
-| Linter, engine-declared `STX-*` | 1 | 6 | 18 | 10 | 35 |
-| Linter, leaf-declared | 77 | 0 | 0 | 1 | 78 |
-| Audit (`PS/RP/PA/SK/DJ/SR/SP/SI/REL/FM-n`) | 6 | 0 | 230 | 8 | 244 |
-| **All** | **84** | **6** | **248** | **19** | **357** |
+| Surface | a | b (moved) | c | r | ? | total |
+|---|---:|---:|---:|---:|---:|---:|
+| Linter, engine-emitted `STX-*` (incl. P005) | 1 | 14 | 18 | 2 | 1 (S005, held) | 36 |
+| Linter, leaf-declared (excl. P005) | 77 | 0 | 0 | 0 | 0 | 77 |
+| Audit (`PS/RP/PA/SK/DJ/SR/SP/SI/REL/FM-n`) | 6 | 0 | 236 | 0 | 2 (PS-CLEW/AGENT, pending) | 244 |
+| **All** | **84** | **14** | **254** | **2** | **3** | **357** |
+
+STX-P005 is counted with the engine rules. figrecipe declared it, but the
+engine emitted it, and it now moves to scitex-session.
 
 ## Linter: engine-declared rules (`scitex_dev.linter._rules`)
 
@@ -53,16 +61,17 @@ holds every effective rule and `owners` names the provider of each.
 | STX-HPC001 | SSH multiplexing disabled on the HPC path | ecosystem SSH hygiene (any package that shells to ssh) | c |
 | STX-NM001–NM003 | mock imports, `mocker`/`monkeypatch` fixtures, mock symbols | ecosystem test doctrine | c (3) |
 | STX-TQ001–TQ007 | test-quality rules (assertions, AAA markers, names, fixtures) | ecosystem test doctrine | c (7) |
-| STX-I001 | `import matplotlib.pyplot` | `stx.plt`: figrecipe or scitex-plt | ? (Q1) |
-| STX-I009 | `import seaborn` | `stx.plt`: figrecipe or scitex-plt | ? (Q1) |
-| STX-I004 | pandas I/O instead of `stx.io` | scitex-io. **Declared but never emitted** | ? (Q2) |
-| STX-I005 | numpy save/load instead of `stx.io` | scitex-io. **Declared but never emitted** | ? (Q2) |
-| STX-I006 | `import random` (use the injected `rngg`) | scitex-session (injection) or scitex-repro (RNG) | ? (Q3) |
-| STX-I007 | `import logging` (use the injected `logger`) | scitex-session or scitex-logging | ? (Q4) |
-| STX-P010 | top-level `figrecipe` inside an `@stx.session` module | scitex-session (injection) or figrecipe (`P` namespace) | ? (Q5) |
-| STX-S005 | missing `import scitex as stx` | umbrella `scitex` | ? (Q7) |
-| STX-S007 | `load_configs()` result not UPPER_CASE | scitex-io (`load_configs`) or scitex-session (`CONFIG`) | ? (Q8) |
-| STX-S008 | hard-coded analysis parameter (should come from `CONFIG`) | scitex-session (`config/*.yaml` → `CONFIG`) | ? (Q9) |
+| STX-I001 | `import matplotlib.pyplot` | `stx.plt`: **figrecipe** | **b** → figrecipe |
+| STX-I009 | `import seaborn` | `stx.plt`: **figrecipe** | **b** → figrecipe |
+| STX-I004 | pandas I/O instead of `stx.io` | covered by scitex-io IO003/IO004 | **r** (never fired) |
+| STX-I005 | numpy save/load instead of `stx.io` | covered by scitex-io IO001/IO002 | **r** (never fired) |
+| STX-I006 | `import random` (use the injected `rngg`) | session injection: **scitex-session** | **b** → scitex-session |
+| STX-I007 | `import logging` (use the injected `logger`) | **scitex-logging** (with PS-220) | **b** → scitex-logging |
+| STX-P010 | top-level `figrecipe` inside an `@stx.session` module | session injection: **scitex-session** | **b** → scitex-session |
+| STX-P005 | `print()` once a session is seen (figrecipe declared it; the engine emitted it) | session injection: **scitex-session** | **b** → scitex-session |
+| STX-S005 | missing `import scitex as stx` | umbrella `scitex` | **?** held: doctrine question (Q7) |
+| STX-S007 | `load_configs()` result not UPPER_CASE | `load_configs`: **scitex-io** | **b** → scitex-io |
+| STX-S008 | hard-coded analysis parameter (should come from `CONFIG`) | `config/*.yaml` → `CONFIG`: **scitex-session** | **b** → scitex-session (detector ported verbatim) |
 
 ## Linter: leaf-declared rules
 
@@ -78,14 +87,14 @@ holds every effective rule and `owners` names the provider of each.
 | PS-220 (1) | output under `src/` must go through scitex-logging | scitex-logging (mandatory provider) | a |
 | STX-DB001 (1) | `SQLite3(...)` file is outside `stx.io` provenance | scitex-db | a |
 | STX-SAC001, SAC002, SAC004 (3) | A2A v0 AgentCard fields and method names | scitex-agent-container | a |
-| STX-P005 (1) | `print()` inside `@stx.session`. figrecipe declares it, but the **engine emits it** | figrecipe declares; output routing is a logging/session concern | ? (Q6) |
 
 scitex-clew registers a plugin with no rules yet (placeholder).
 
-**Residual (FM).** figrecipe owns FM001–FM009, but the checker that emits
-them (`scitex_dev.linter._fm_checker.FMChecker`) is still in scitex-dev and
-is passed through figrecipe's payload. That checker belongs in figrecipe and
-is the next candidate move (no ownership question, only the code location).
+**FM checker.** figrecipe owns FM001–FM009. The checker that emits them,
+formerly `scitex_dev.linter._fm_checker.FMChecker`, now ships in figrecipe
+(`figrecipe._quality._fm_checker`) as a verbatim port. figrecipe declares the
+`fm-checker` capability, and when it does, the engine skips its own copy.
+That copy stays as the compatibility shim for an older figrecipe.
 
 **Overlap kept on purpose** (the two rules work at different granularities):
 - I003 (import) and IO005 (calls)
@@ -105,13 +114,13 @@ the bar any audit-rule move has to clear.
 
 | Family | Ids | Command | Verdict |
 |---|---|---|---|
-| PS §1 layout/README/docs/community | 85 ids: PS-101–119 (+108b, 110b), 121–139 (+138b), 141–147, 150–164, 166–169, 173, 180–183, 218, 219, 224–229, 231, 232, HOOK-001, PATH-001/002 | audit-project | c, except PS-182, PATH-001, PATH-002 (?) |
+| PS §1 layout/README/docs/community | 85 ids: PS-101–119 (+108b, 110b), 121–139 (+138b), 141–147, 150–164, 166–169, 173, 180–183, 218, 219, 224–229, 231, 232, HOOK-001, PATH-001/002 | audit-project | c (PS-182 and PATH-001/002 included, by decision) |
 | PS §2 src/tests | 16 ids: PS-140, 165, 201–207 (+206b), 210–212, 220, 223, 230 | audit-project | c, except PS-220 (a, scitex-logging) |
-| PS §3 deps/tests/examples/workflows | 17 ids: PS-148, 149, 213 (+213i), 214–217, 221, 233, 235, 236, 301–303, CLEW-001, AGENT-001 | audit-project | c, except CLEW-001, AGENT-001 (?) |
-| PS §4/§5/§13 | 15 ids: PS-401, 402, 222, 234, 501–508, HOOK-010–012 | audit-project | c, except PS-234 (a, scitex-dev's own plugin), PS-501, PS-503 (?) |
+| PS §3 deps/tests/examples/workflows | 17 ids: PS-148, 149, 213 (+213i), 214–217, 221, 233, 235, 236, 301–303, CLEW-001, AGENT-001 | audit-project | c, except CLEW-001, AGENT-001 (?, move pending) |
+| PS §4/§5/§13 | 15 ids: PS-401, 402, 222, 234, 501–508, HOOK-010–012 | audit-project | c, except PS-234 (a, scitex-dev's own plugin). PS-501/503 are c by decision |
 | PS-SDK-HEADER/FILTER/SHELL/WEB | 4 | audit-project (scitex-sdk plugin) | a |
 | RP-201, 202, 204, 205 | 4 | audit-project (research projects) | c |
-| PA-101–104, 201–203, 301, 304–307, 501 | 13 | audit-api | c, except PA-305 (?) |
+| PA-101–104, 201–203, 301, 304–307, 501 | 13 | audit-api | c (PA-305 included, see Decisions) |
 | SK-101–111, 201–203, 210, 211, 301, 302, 401, 601, 701–711 | 31 | audit-skills | c (scitex-dev owns the skills convention) |
 | DJ-101–110, 201–204, 301, 302, 401, 402, 501–503 | 21 | audit-django | c (Django layout for any app; scitex-hub is the reference, not the owner) |
 | SR-101–105, SP-101–102/201–202/301–302/401–404, SI-100–103/200–203 | 23 | skills install / projection | c |
@@ -120,121 +129,143 @@ the bar any audit-rule move has to clear.
 
 ## Moved in this change: the handover shim
 
-Six engine rules moved to their owners. Ids, severities, categories,
-messages, suggestions, `requires` gates and scopes are all unchanged:
+Fourteen rules moved to their owners. Ids, severities, categories, messages,
+suggestions, `requires` gates and scopes are all unchanged:
 
 | Rule(s) | Now emitted by |
 |---|---|
-| STX-S001, S003, S004, S006 | `scitex_session._linter_plugin` (new `session` entry point) |
+| STX-S001, S003, S004, S006, S008 | `scitex_session._linter_plugin` (new `session` entry point; the S008 detector is ported verbatim into `_linter_s008/`) |
+| STX-I006, P010, P005 | `scitex_session._linter_injection` |
+| STX-I001, I009 | `figrecipe._quality._import_checker` |
 | STX-I002 | `scitex_stats._linter_plugin` |
-| STX-I003 | `scitex_io._linter.import_checker` |
+| STX-I003, S007 | `scitex_io._linter.import_checker`, `scitex_io._linter.config_naming` |
+| STX-I007 | `scitex_logging._linter_plugin` |
+| FM001–FM009 (checker code only) | `figrecipe._quality._fm_checker` (`fm-checker` capability) |
 
-How it works ([`_rules/_handover.py`](../src/scitex_dev/linter/_rules/_handover.py)):
+Retired: **STX-I004 / STX-I005**. Neither has had an emitter since the
+per-package migration, and scitex-io's IO001–IO004 cover what they
+described. Both ids stay **reserved** (`_rules/_retired.py`):
+- a plugin that declares either id fails to load;
+- `from scitex_dev.linter.rules import I004` still works;
+- a config that still names either id gets a `DeprecationWarning` naming the
+  successor rules.
 
-1. `HANDOVER` maps each moved id to the **one** distribution allowed to take
-   it over. The loader accepts that provider's declaration instead of raising
-   it as an engine collision. `SciTeXChecker` then stops emitting the id, and
-   the leaf's checker emits it. Any other provider that declares the id still
-   fails as a collision.
-2. Both sides emit through the same gate, `spi.add_issue`: `requires`,
-   `disable`, `# stx-allow`, the per-rule severity pin, and the category
-   floor (research projects). Severities per project type are therefore
-   identical by construction.
-3. **Compatibility shim.** When the owner is not installed, or is an older
-   release without the plugin, the engine copy keeps emitting the rule
-   exactly as before.
-4. **Removal (follow-up).** Once the leaf releases are on PyPI and pinned
+How the handover works ([`_rules/_handover.py`](../src/scitex_dev/linter/_rules/_handover.py)):
+
+1. **One named owner.** `HANDOVER` maps each moved id to the **one**
+   distribution allowed to take it over. The loader accepts that provider's
+   declaration instead of raising an engine collision. `SciTeXChecker` then
+   stops emitting the id, and the leaf's checker emits it. Any other provider
+   that declares the id still fails as a collision.
+2. **Plugin-to-plugin moves (STX-P005).** When the predecessor plugin
+   (figrecipe) and the owner (scitex-session) both declare the id, the
+   owner's declaration wins whichever loads first, and the predecessor's is
+   recorded under `superseded`. The predecessor therefore keeps declaring the
+   id until the owner's release is pinned, and no mixed-version install loses
+   the rule.
+3. **Same emission gate.** Both sides emit through `spi.add_issue`, which
+   applies `requires`, `disable`, `# stx-allow`, the per-rule severity pin
+   and the category floor. Severities per project type are identical by
+   construction. The research `error` pins for I001/I002/I009 and the
+   `warning` pin for S008 still apply.
+4. **Feature detection where there is no pin.** scitex-logging does not
+   depend on scitex-dev, and figrecipe pins an older one. Both declare their
+   new ids only when the installed scitex-dev's `HANDOVER` names them as the
+   owner. On an older engine they declare nothing new, and the engine keeps
+   emitting its own copy.
+5. **Compatibility shim.** When the owner is not installed, or is an older
+   release, the engine copy keeps emitting the rule exactly as before.
+6. **Removal (follow-up).** Once the leaf releases are on PyPI and pinned
    where these rules must fire, delete the engine definitions, their emission
-   sites and the `HANDOVER` rows. The leaf tests that assert "metadata ==
-   engine copy" go with them.
+   sites, `_fm_checker.py`, `_magic_numbers*.py` and the `HANDOVER` rows. At
+   the same time:
+   - figrecipe drops its P005 declaration;
+   - the leaf tests that assert "metadata == engine copy" go too.
+
+Caveat for STX-P005. Before, the rule needed figrecipe installed, because
+figrecipe declared it. Now it needs scitex-session, which declares it. In
+practice the two are installed together (scitex-session pulls in scitex-plt,
+which pulls in figrecipe), so no corpus here shows a difference.
 
 **Equivalence evidence** (`scitex-dev linter fingerprint`). The fingerprint
 covers every effective rule's metadata, every finding as `[file, line, col,
-id, severity, category, message]`, and the corpus file hashes. It was taken
-on a fixed corpus before the move (all `develop`) and after it (the three
-leaf branches installed and `handed_over` active for all six ids).
+id, severity, category, message]`, and the corpus file hashes.
+- **Before:** all `develop` on 2026-11-19 (scitex-dev 3cce4fd2, which
+  includes both merged S008 PRs).
+- **After:** the five leaf branches installed and `handed_over` active for
+  all 14 ids, with P005 superseded and `fm-checker` declared.
 
-| Corpus | Files | Rules | Findings | Diff |
-|---|---:|---:|---:|---|
-| `examples/` of scitex (umbrella), scitex-session, scitex-io, scitex-stats, figrecipe, scitex-clew, scitex-writer, and `scripts/` of paper-scitex-clew | 1172 | 109 | 5375 | identical |
-| Targeted corpus: plain and `project-type: research` trees with per-rule pins, `disable`, `# stx-allow`, async and kw-only signatures | 3 | 109 | 18 | identical |
+| Corpus | Files | Findings | Diff |
+|---|---:|---:|---|
+| `examples/` of scitex (umbrella), scitex-session, scitex-io, scitex-stats, figrecipe, scitex-clew and scitex-writer, plus `scripts/` of paper-scitex-clew | 1172 | 5375 | identical findings |
+| Targeted corpus 1: plain/research trees, per-rule pins, `disable`, `# stx-allow`, async and kw-only signatures | 3 | 18 | identical findings |
+| Targeted corpus 2: I001/I009/I006/I007/P010/P005/S007/FM001–FM009 shapes, P005 order-dependence, `src/` exemption, research promotions | 3 | 41 | identical findings |
 
-The moved rules account for these findings in the first corpus:
-S001 = 88, S003 = 10, S004 = 21, S006 = 112, I002 = 16. I003 has no hits
-there, so the targeted corpus covers it (6 findings).
+The rule set differs in exactly one way: STX-I004 and STX-I005 are absent,
+which is the intended retirement (109 → 107 rules). Hits for the moved rules
+in the first corpus:
+
+| Rule | Hits | Rule | Hits |
+|---|---:|---|---:|
+| S001 | 88 | I006 | 17 |
+| S003 | 10 | I007 | 5 |
+| S004 | 21 | I009 | 3 |
+| S006 | 112 | P010 | 139 |
+| S008 | 666 | P005 | 262 |
+| I001 | 81 | S007 | 1 |
+| I002 | 16 | FM001 / FM002 / FM006 | 112 / 97 / 92 |
+
+The shim path also gives identical findings: the new engine with every leaf
+on develop, so nothing is handed over. So does the reverse mix: the
+**develop** engine with the new figrecipe and scitex-logging. The fingerprint
+is fully identical there, including the rule set, because both leaves'
+feature detection leaves the rules to the old engine.
 
 One known non-difference: issues on the **same line with the same severity**
 can be listed in a different order, because plugin findings are appended
 after engine findings. The fingerprint compares the sorted set, and the set
 is identical.
 
+## Decisions (2026-11-19)
+
+| Rule(s) | Decision |
+|---|---|
+| I001, I009 | → figrecipe |
+| I004, I005 | retired, ids reserved |
+| I006, P010, P005 | → scitex-session |
+| I007 | → scitex-logging |
+| S007 | → scitex-io |
+| S008 | → scitex-session; both open S008 PRs (#1065, #1072) had landed |
+| FM001–FM009 checker | → figrecipe |
+| PS-501/503, PS-182, PS-PATH-001/002 | stay in scitex-dev (cross-cutting conventions) |
+| PS-CLEW-001, PS-AGENT-001 | → scitex-clew audit plugin **after** the in-flight clew work (#227, #228) lands; not moved yet |
+| PA-305 | **kept in scitex-dev** (see below) |
+| S005 | **on hold**: doctrine question taken to the user |
+
+Why PA-305 stays. Its natural concept owner is scitex-browser, since it
+checks for `capture_debug_artifacts_async`. Moving it is not possible yet,
+and retiring it is not justified:
+- **No home for the rule.** PA-305 runs in `audit-api`, which has no plugin
+  group, so scitex-browser has nowhere to put it. A move would mean building
+  that plugin group and making scitex-browser a mandatory provider wherever
+  audits run.
+- **The rule is live.** It is enforced on every package that drives
+  Playwright. Its doctrine lives in scitex-dev's own skill
+  `02_package/09_browser-automation-debugging.md`, so retiring it would drop
+  live coverage.
+
+So it stays as a cross-cutting dev convention (c). If `audit-api` grows a
+plugin group, revisit.
+
 ## Open questions
 
-Ambiguous rules were **not** moved. Each question has options and a
-recommendation.
-
-- **Q1, STX-I001 / I009** (`matplotlib.pyplot` / `seaborn` imports → `stx.plt`).
-  Candidate owners are (A) figrecipe, which already owns P*/FM*/FIG001 and
-  the raw-matplotlib checker, or (B) scitex-plt, the `stx.plt` wrapper.
-  **Recommend A**, through the same handover. The research `error` pins for
-  I001/I009 survive because `add_issue` applies them.
-- **Q2, STX-I004 / I005.** These are declared but no code emits them. They
-  were superseded by scitex-io IO003/IO004 and IO001/IO002. Options:
-  (A) retire them (delete, with a CHANGELOG note) or (B) move the dead
-  metadata into scitex-io. **Recommend A.** They currently show up in
-  `list-rules` as if they were active.
-- **Q3, STX-I006** (`import random` → injected `rngg`). Candidates are
-  (A) scitex-session, which injects `rngg`, or (B) scitex-repro, which
-  implements it. **Recommend A**, because the rule's message is about the
-  injection.
-- **Q4, STX-I007** (`import logging` → injected `logger`). It fires in every
-  file, not only in sessions. Candidates are (A) scitex-logging, alongside
-  PS-220, or (B) scitex-session. **Recommend A**, so that one package owns
-  "use scitex-logging".
-- **Q5, STX-P010** (top-level `figrecipe` inside a session → injected
-  `plt`). Candidates are (A) scitex-session, which owns the injection
-  contract (the engine's own docstring says so), or (B) figrecipe, which owns
-  the `P` id namespace. **Recommend A**, keeping the id.
-- **Q6, STX-P005** (`print()` in a session). figrecipe declares it, but the
-  engine emits it. Options: (A) move the emission into figrecipe (a code
-  move only); (B) re-home the rule to scitex-session, since it fires only
-  inside `@stx.session`; (C) re-home it to scitex-logging and fold it into
-  PS-220. **Recommend B.** It is about the injected logger, not plotting.
-- **Q7, STX-S005** (`import scitex as stx`). The concept is the umbrella
-  import. That conflicts with SK-601, PA-304 and PS-139, which discourage
-  the umbrella in leaves and skills. **Recommend** keeping it in scitex-dev
-  (c) until the umbrella-vs-leaf import doctrine is settled. The rules
-  currently give opposite advice.
-- **Q8, STX-S007** (`CONFIG = load_configs()` naming). Candidates are
-  (A) scitex-io, which defines `load_configs`, or (B) scitex-session, which
-  injects `CONFIG`. **Recommend A**, because the rule matches calls to
-  scitex-io's function.
-- **Q9, STX-S008** (magic numbers → `config/*.yaml` → `CONFIG`). By "where
-  `CONFIG` lives", the owner is scitex-session: its `_lifecycle` loads
-  `config/*.yaml` into the injected `CONFIG`. There is no scitex-config
-  `CONFIG` API. But the rule is under active change: 0.64.x, plus open
-  branches `fix/s008-fewer-false-positives-1119` and
-  `feat/s008-analysis-params-1119`. It also fires on non-session scripts and
-  carries a ~780-line heuristics module. **Recommend** deferring, then moving
-  it to scitex-session through the handover once the S008 branches land.
-- **Q10, PS-501 / PS-503** (examples use `@stx.session` and have committed
-  `FINISHED_SUCCESS`). The concept is scitex-session, but these enforce the
-  ecosystem's examples convention on every package, and scitex-session is
-  not installed everywhere audits run. **Recommend** keeping them (c).
-- **Q11, PS-PATH-001 / 002** (`config/PATH.yaml` shape for `CONFIG.PATH`).
-  The concept is scitex-session. **Recommend** moving them only together
-  with making scitex-session a *mandatory* audit-project provider for
-  research projects (as PS-220 is for logging). Otherwise keep them.
-- **Q12, PS-CLEW-001 / PS-AGENT-001** (`add_claim` without verification or a
-  `claims.json` write). The concept is scitex-clew. **Recommend** moving
-  them to a scitex-clew audit plugin after the in-flight claim-metadata and
-  F15 work lands, with the same mandatory-provider caveat as Q11.
-- **Q13, PS-182** (hand-rolled local-state resolver → `scitex_config`).
-  **Recommend** keeping it (c). It polices every package, and the remedy only
-  happens to live in scitex-config.
-- **Q14, PA-305** (playwright module lacks `capture_debug_artifacts_async`
-  from scitex-browser). **Recommend** moving it to a scitex-browser audit
-  plugin, or retiring it if the requirement is obsolete.
+- **Q7, STX-S005** (`import scitex as stx`): on hold. The rule conflicts with
+  SK-601, PA-304 and PS-139, which discourage the umbrella import in leaves
+  and skills. The user decides the doctrine first.
+- **Q12, PS-CLEW-001 / PS-AGENT-001:** move to a scitex-clew audit plugin
+  (`scitex_dev.audit.project` group) once scitex-clew #227 and #228 land.
+  Same zero-change method, with the provider made mandatory for research
+  projects so coverage cannot silently drop.
 
 ## How to move a rule
 

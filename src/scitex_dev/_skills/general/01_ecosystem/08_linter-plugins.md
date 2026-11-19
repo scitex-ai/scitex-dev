@@ -176,8 +176,24 @@ behaviour change (scitex-dev >= 0.65.0):
    must print `identical` (rule metadata, every finding, corpus hashes).
 5. Remove the engine copy once the owner release is on PyPI and pinned.
 
-Moved so far: `STX-S001/S003/S004/S006` -> scitex-session,
-`STX-I002` -> scitex-stats, `STX-I003` -> scitex-io.
+Moved so far:
+
+| Rule(s) | Now owned by |
+|---|---|
+| `STX-S001/S003/S004/S006/S008`, `I006`, `P010`, `P005` | scitex-session |
+| `STX-I001/I009`, plus the FM001–FM009 checker code (capability `fm-checker`) | figrecipe |
+| `STX-I002` | scitex-stats |
+| `STX-I003/S007` | scitex-io |
+| `STX-I007` | scitex-logging |
+
+`STX-I004/I005` are retired. Their ids stay reserved in
+`_rules/_retired.py`, and a plugin that declares one fails to load.
+
+An id can also move between two plugins (P005: figrecipe to session). The
+owner's declaration supersedes the predecessor's instead of colliding.
+
+A leaf that cannot pin `scitex-dev>=0.65.0` declares a moved id only when
+`spi.HANDOVER` names it as the owner (feature detection).
 
 ## Migration status (2026-Q2)
 

@@ -16,6 +16,9 @@ LOGGING = EntryPoint(
     name="scitex-logging", value="scitex_logging._linter_plugin:get_plugin", group=GROUP
 )
 IDS = tuple(f"STX-UI{number}" for number in range(101, 108))
+# Everything the installed logging provider declares: PS-220, plus any
+# engine rule handed over to it (STX-I007 with scitex-dev >= 0.65.0).
+LOGGING_IDS = frozenset(rule.id for rule in LOGGING.load()()["rules"])
 OLD_VALUE = "scitex_ui._linter_plugin:get_plugin"
 NEW_VALUE = "scitex_sdk.ui._linter_plugin:get_plugin"
 
@@ -101,7 +104,7 @@ def test_exact_transition_covers_successor_and_logging_rules(reverse):
     # Act
     result = discover(*_ordered(old, new, reverse))
     # Assert
-    assert set(result["rules"]) == {*IDS, "PS-220"}
+    assert set(result["rules"]) == {*IDS, *LOGGING_IDS}
 
 
 @pytest.mark.parametrize("reverse", [False, True])
@@ -174,7 +177,7 @@ def test_successor_declaration_is_dormant_when_predecessor_has_no_advertised_pro
     new = successor()
     result = discover(new)
     # Assert
-    assert set(result["rules"]) == {*IDS, "PS-220"}
+    assert set(result["rules"]) == {*IDS, *LOGGING_IDS}
 
 
 def test_dormant_successor_declaration_records_no_replacement():

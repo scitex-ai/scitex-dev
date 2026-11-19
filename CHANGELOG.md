@@ -25,8 +25,19 @@ versions follow [Semantic Versioning](https://semver.org/).
 - Linter rule ownership: `docs/rule-ownership.md` gives every lint and audit
   rule (357) a verdict: correct home, move, cross-cutting, or ambiguous.
   Ambiguous rules come with options and a recommendation.
-- Linter handover (no behaviour change): `STX-S001/S003/S004/S006` move to
-  scitex-session, `STX-I002` to scitex-stats and `STX-I003` to scitex-io.
+- Linter handover (no behaviour change). These rules move to their owners:
+  - scitex-session: `STX-S001/S003/S004/S006/S008`, `I006`, `P010`, `P005`
+  - figrecipe: `STX-I001/I009`
+  - scitex-stats: `STX-I002`
+  - scitex-io: `STX-I003/S007`
+  - scitex-logging: `STX-I007`
+
+  figrecipe now ships the FM001–FM009 checker and declares the `fm-checker`
+  capability; the engine skips its own copy when that capability is present.
+  `STX-P005` moves between two plugins: the owner's declaration supersedes
+  figrecipe's (`superseded` in the loader payload) instead of colliding.
+  `STX-I004/I005` are retired (they never fired). Their ids stay reserved,
+  and a config that still names them gets a `DeprecationWarning`.
   `_rules/_handover.py` (`spi.HANDOVER`) names the one distribution allowed
   to declare each id. When that owner's plugin is installed, the loader
   accepts its declaration and the engine stops emitting the id. Without the

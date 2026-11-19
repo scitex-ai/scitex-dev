@@ -418,17 +418,23 @@ def lint_source(
     lines = source.splitlines()
     checker = SciTeXChecker(lines, filepath=filepath, config=config)
     checker.visit(tree)
-    if config and "FM" in config.enable:
+    # Plugin-contributed checkers (respect opt-in gating)
+    from ._plugin_loader import load_plugins
+
+    payload = load_plugins()
+    # FM001-FM009: figrecipe owns this checker and declares the `fm-checker`
+    # capability when it ships its own. The engine copy below is the
+    # compatibility shim for an older figrecipe and runs only without it.
+    if (
+        config
+        and "FM" in config.enable
+        and "fm-checker" not in payload.get("capabilities", {})
+    ):
         from ._fm_checker import FMChecker
 
         fm = FMChecker(lines, config)
         fm.visit(tree)
         checker.issues.extend(fm.issues)
-
-    # Plugin-contributed checkers (respect opt-in gating)
-    from ._plugin_loader import load_plugins
-
-    payload = load_plugins()
     plugin_checkers = list(payload["checkers"])
     if plugins is not None:
         # The injection seam may select optional checkers, but cannot remove

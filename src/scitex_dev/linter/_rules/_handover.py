@@ -20,6 +20,13 @@ the engine moves WITHOUT a behaviour change in two steps:
 Only the provider distribution NAMED here may take an id over; any other
 plugin declaring an engine id still fails loading as a collision, so a
 handover can never be claimed by accident.
+
+The same table moves an id between two PLUGINS (``STX-P005``: declared by
+figrecipe, emitted by the engine, owned by scitex-session). While both
+declare it, the named owner's declaration wins and the other is dropped
+instead of failing as a duplicate, so the predecessor can keep declaring the
+id until the owner's release is pinned — no mixed-version install ever loses
+the rule.
 """
 
 from __future__ import annotations
@@ -36,9 +43,20 @@ HANDOVER = MappingProxyType(
         "STX-S003": "scitex-session",  # argparse in a session script
         "STX-S004": "scitex-session",  # session function must return an int
         "STX-S006": "scitex-session",  # INJECTED parameters undeclared
+        # config/*.yaml -> injected CONFIG (detector ported verbatim).
+        "STX-S008": "scitex-session",  # hard-coded analysis parameter
+        # Session injection contract — what @stx.session hands the function.
+        "STX-I006": "scitex-session",  # `import random` -> injected rngg
+        "STX-P010": "scitex-session",  # top-level figrecipe -> injected plt
+        "STX-P005": "scitex-session",  # print() in a session -> logger
         # Raw library import where the owning SciTeX package is the API.
+        "STX-I001": "figrecipe",  # matplotlib.pyplot -> stx.plt
+        "STX-I009": "figrecipe",  # seaborn -> stx.plt
         "STX-I002": "scitex-stats",  # scipy.stats -> stx.stats
         "STX-I003": "scitex-io",  # pickle -> stx.io
+        "STX-I007": "scitex-logging",  # stdlib logging -> scitex-logging
+        # scitex-io's load_configs() API.
+        "STX-S007": "scitex-io",  # load_configs() result not UPPER_CASE
     }
 )
 

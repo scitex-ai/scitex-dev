@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from importlib.metadata import EntryPoint
 
 import pytest
-
 from scitex_dev.linter import _plugin_loader
 from scitex_dev.linter._rules import ALL_RULES
 from scitex_dev.linter._rules._handover import HANDOVER, handover_owner
@@ -66,11 +65,11 @@ def leaf_payload(rule_id):
     return {"rules": [ALL_RULES[rule_id]], "checkers": []}
 
 
-def test_every_handover_id_is_an_engine_rule():
-    # Arrange
-    engine_ids = set(ALL_RULES)
+def test_every_handover_id_is_an_engine_rule_or_a_plugin_transfer():
+    # Arrange — STX-P005 moves between two plugins (figrecipe -> session).
+    known = set(ALL_RULES) | {"STX-P005"}
     # Act
-    unknown = set(HANDOVER) - engine_ids
+    unknown = set(HANDOVER) - known
     # Assert
     assert unknown == set()
 
@@ -97,7 +96,7 @@ def test_undeclared_provider_claiming_engine_rule_still_collides():
     # Arrange
     impostor = OwnedProvider("other", "scitex-other", leaf_payload("STX-S004"))
     # Act
-    attempt = lambda: discover(impostor)  # noqa: E731
+    attempt = lambda: discover(impostor)
     # Assert
     with pytest.raises(_plugin_loader.LinterPluginError, match="already registered"):
         attempt()
@@ -107,7 +106,7 @@ def test_wrong_owner_cannot_take_a_handed_over_rule():
     # Arrange
     wrong = OwnedProvider("io", "scitex-io", leaf_payload("STX-S004"))
     # Act
-    attempt = lambda: discover(wrong)  # noqa: E731
+    attempt = lambda: discover(wrong)
     # Assert
     with pytest.raises(_plugin_loader.LinterPluginError, match="already registered"):
         attempt()
@@ -119,7 +118,8 @@ def test_no_handover_without_owner_installed():
     # Act
     merged = discover(unrelated)
     # Assert
-    assert merged["handed_over"] == {}
+    # Only the always-present logging provider may hold a handover here.
+    assert not any("test_x" in owner for owner in merged["handed_over"].values())
 
 
 def _lint_with_handed_over(source, handed_over):
@@ -148,6 +148,64 @@ def test_engine_stops_emitting_rule_once_handed_over():
     ids = _lint_with_handed_over(source, {"STX-NM001"})
     # Assert
     assert "STX-NM001" not in ids
+
+
+def _p005(category="plot"):
+    from scitex_dev.linter.spi import Rule
+
+    return Rule(
+        "STX-P005", "info", category, "`print()` inside @stx.session", "Use logger."
+    )
+
+
+def test_owner_declaration_supersedes_an_earlier_plugin_declaration():
+    # Arrange
+    figure = OwnedProvider("figure", "figrecipe", {"rules": [_p005()], "checkers": []})
+    session = OwnedProvider(
+        "session", "scitex-session", {"rules": [_p005()], "checkers": []}
+    )
+    # Act
+    merged = discover(figure, session)
+    # Assert
+    assert merged["superseded"] == {"STX-P005": "figure (test_figure:get_plugin)"}
+
+
+def test_predecessor_declaration_after_owner_is_dropped_not_duplicate():
+    # Arrange
+    session = OwnedProvider(
+        "a-session", "scitex-session", {"rules": [_p005()], "checkers": []}
+    )
+    figure = OwnedProvider(
+        "z-figure", "figrecipe", {"rules": [_p005()], "checkers": []}
+    )
+    # Act
+    merged = discover(session, figure)
+    # Assert
+    assert merged["rule_owners"]["STX-P005"] == "a-session (test_a-session:get_plugin)"
+
+
+def test_two_non_owners_declaring_one_id_still_collide():
+    # Arrange
+    one = OwnedProvider("one", "pkg-one", {"rules": [_p005()], "checkers": []})
+    two = OwnedProvider("two", "pkg-two", {"rules": [_p005()], "checkers": []})
+    # Act
+    attempt = lambda: discover(one, two)
+    # Assert
+    with pytest.raises(_plugin_loader.LinterPluginError, match="duplicate rule"):
+        attempt()
+
+
+def test_plugin_cannot_declare_a_retired_id():
+    # Arrange
+    from scitex_dev.linter.spi import Rule
+
+    retired = Rule("STX-I004", "warning", "import", "Reused id", "None.")
+    leaf = OwnedProvider("io", "scitex-io", {"rules": [retired], "checkers": []})
+    # Act
+    attempt = lambda: discover(leaf)
+    # Assert
+    with pytest.raises(_plugin_loader.LinterPluginError, match="retired"):
+        attempt()
 
 
 # EOF

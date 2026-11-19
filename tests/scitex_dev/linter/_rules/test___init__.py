@@ -14,7 +14,8 @@ import pytest
 
 from scitex_dev.linter._rules import ALL_RULES, lookup, reset_lookup_cache
 
-ABSORBED_IDS = [f"STX-I00{i}" for i in range(1, 8)] + [
+# STX-I004 / STX-I005 are retired (reserved, never fired): see _retired.py.
+ABSORBED_IDS = [f"STX-I00{i}" for i in (1, 2, 3, 6, 7)] + [
     f"STX-S00{i}" for i in range(1, 9)
 ]
 
@@ -23,8 +24,6 @@ SCITEX_GATED = {
     "STX-I001",
     "STX-I002",
     "STX-I003",
-    "STX-I004",
-    "STX-I005",
     "STX-I006",
     "STX-I007",
     "STX-S001",
@@ -35,8 +34,8 @@ SCITEX_GATED = {
 }
 
 
-def test_all_fifteen_absorbed_ids_in_engine_registry():
-    """All 15 ids live in the engine's ALL_RULES dict — no plugin needed."""
+def test_all_active_absorbed_ids_in_engine_registry():
+    """All 13 active ids live in the engine's ALL_RULES dict — no plugin needed."""
     # Arrange
     # Act
     missing = [rid for rid in ABSORBED_IDS if rid not in ALL_RULES]
@@ -84,10 +83,21 @@ def test_lookup_resolves_all_absorbed_ids():
         reset_lookup_cache()
 
 
-def test_no_id_drift_exactly_fifteen_absorbed():
+def test_no_id_drift_exactly_thirteen_active_absorbed():
     """Guard against a typo silently dropping a rule id."""
     # Arrange
     # Act
     present = [rid for rid in ABSORBED_IDS if rid in ALL_RULES]
     # Assert
-    assert len(present) == 15
+    assert len(present) == 13
+
+
+def test_retired_ids_are_not_active_rules():
+    """STX-I004/I005 are retired: reserved, but absent from ALL_RULES."""
+    # Arrange
+    from scitex_dev.linter._rules._retired import RETIRED
+
+    # Act
+    active = set(RETIRED) & set(ALL_RULES)
+    # Assert
+    assert active == set()
