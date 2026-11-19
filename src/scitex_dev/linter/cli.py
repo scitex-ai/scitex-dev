@@ -187,7 +187,7 @@ from ._cmds._run import register as _register_run  # noqa: E402
 
 format_files = _register_format(main_group)
 run_python = _register_run(main_group)
-list_rules_cmd, list_rules_all = _register_rules(main_group)
+list_rules_cmd, list_rules_all, fingerprint_cmd = _register_rules(main_group)
 list_python_apis = _register_apis(main_group)
 
 

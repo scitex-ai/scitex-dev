@@ -15,9 +15,11 @@ from scitex_dev.linter._rules import _import_hygiene as ih
 
 I_RULES = [ih.I001, ih.I002, ih.I003, ih.I004, ih.I005, ih.I006, ih.I007]
 I_IDS = [f"STX-I00{i}" for i in range(1, 8)]
+# STX-I004 / STX-I005 are retired (reserved, never fired): see _retired.py.
+ACTIVE_I_IDS = [rid for rid in I_IDS if rid not in ("STX-I004", "STX-I005")]
 
 
-@pytest.mark.parametrize("rule_id", I_IDS)
+@pytest.mark.parametrize("rule_id", ACTIVE_I_IDS)
 def test_import_rule_is_registered_in_all_rules(rule_id):
     # Arrange
     # Act
@@ -26,7 +28,7 @@ def test_import_rule_is_registered_in_all_rules(rule_id):
     assert rule is not None, f"{rule_id} not in engine ALL_RULES"
 
 
-@pytest.mark.parametrize("rule_id", I_IDS)
+@pytest.mark.parametrize("rule_id", ACTIVE_I_IDS)
 def test_import_rule_requires_scitex(rule_id):
     """All STX-I00x rules gate on scitex being installed."""
     # Arrange

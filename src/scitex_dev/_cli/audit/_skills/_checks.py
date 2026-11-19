@@ -196,17 +196,45 @@ def _check_index_links(skill_md: Path, skills_dir: Path, out: list[Violation]) -
         )
 
 
+# SK-601 scope (user decision 2026-11-19): USER code — scripts, notebooks,
+# research code, and the usage examples skills teach — writes
+# `import scitex as stx`. PACKAGE-INTERNAL code imports its peer leaves
+# directly. So the rule only inspects code blocks a skill presents as
+# package source: a fenced Python block whose first line is a path comment
+# under `src/` (e.g. `# src/<pkg>/_linter_plugin.py`). Same boundary as
+# PA-304 (umbrella import in package source) and PS-139 (umbrella in a
+# package's dependencies).
+_FENCED_PY_RE = re.compile(r"^```(?:python|py)\s*\n(.*?)^```", re.DOTALL | re.MULTILINE)
+_SRC_PATH_HEADER_RE = re.compile(r"^\s*#\s*(?:File:\s*)?\S*\bsrc/\S+\.py\b")
+# The rule's own pattern, unchanged — only WHERE it applies narrowed. (A
+# bare `import scitex` in package source is PA-304's concern on real code;
+# skills show it deliberately as the counter-example.)
+_UMBRELLA_IMPORT_RE = re.compile(r"\bimport\s+scitex\s+as\s+stx\b")
+
+
 def _check_import_alias(path: Path, out: list[Violation]) -> None:
-    """SK-601 — skill text must not say `import scitex as stx`."""
+    """SK-601 — package-internal code shown in a skill imports leaves directly.
+
+    Only fenced Python blocks headed by a ``src/`` path comment are package
+    source; everything else in a skill is user-facing usage, where
+    ``import scitex as stx`` is the documented form.
+    """
     text = path.read_text()
-    if re.search(r"\bimport\s+scitex\s+as\s+stx\b", text):
-        out.append(
-            Violation(
-                "SK-601",
-                str(path),
-                "use bare `import scitex` (per general/01_ecosystem rule)",
+    for block in _FENCED_PY_RE.findall(text):
+        lines = block.lstrip("\n").splitlines()
+        if not lines or not _SRC_PATH_HEADER_RE.match(lines[0]):
+            continue
+        if _UMBRELLA_IMPORT_RE.search(block):
+            out.append(
+                Violation(
+                    "SK-601",
+                    str(path),
+                    "package source (src/) shown here uses `import scitex as "
+                    "stx`; packages import their peer leaves directly (user "
+                    "code keeps `import scitex as stx`)",
+                )
             )
-        )
+            return
 
 
 __all__ = [
