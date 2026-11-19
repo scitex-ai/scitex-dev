@@ -12,9 +12,6 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [0.65.0] - 2026-11-19
 
-- audit-cli §1d: the bundled catalog knows `a2a` (the agent-to-agent
-  protocol, mounted as `agent-container a2a`), which the umbrella's CI audit
-  reported as an unknown word.
 - Linter rule ownership: `docs/rule-ownership.md` gives every lint and audit
   rule (357) a verdict: correct home, move, cross-cutting, or ambiguous.
   Ambiguous rules come with options and a recommendation.
@@ -53,6 +50,13 @@ versions follow [Semantic Versioning](https://semver.org/).
   a skill (a ```python block headed by a `src/` path). This is an intentional
   change: 21 findings disappear on the ecosystem's 851 skill files and none
   appear (listed in `docs/rule-ownership.md`).
+
+## [0.64.3] - 2026-11-19
+
+- audit-cli §1d: the bundled catalog knows `a2a` (the agent-to-agent
+  protocol, mounted as `agent-container a2a`), which the umbrella's CI audit
+  reported as an unknown word (#1081).
+- 0.64.2 was tagged but never uploaded to PyPI; 0.64.3 carries its changes.
 
 ## [0.64.2] - 2026-11-19
 
