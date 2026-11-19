@@ -6,6 +6,8 @@ import threading
 import time
 from pathlib import Path
 
+from ._release_device_observation import observe_fixture_device
+
 
 def _unknown(reason):
     return {"state": "unknown", "reason": reason}
@@ -22,8 +24,9 @@ def _read(path, limit=8192):
 class OwnedChildObservation:
     """Samples are fixture-scoped observations, not a diagnosis of the delay."""
 
-    def __init__(self, root, proc_root=Path("/proc")):
+    def __init__(self, root, proc_root=Path("/proc"), sys_block_root=Path("/sys/dev/block")):
         self._proc = proc_root
+        self._sys_block_root = sys_block_root
         self._stop = threading.Event()
         self._thread = None
         self._started = False
@@ -94,12 +97,14 @@ class OwnedChildObservation:
             if (before.st_dev, before.st_ino) != self._fixture:
                 return _unknown("fixture directory identity changed")
             space = os.statvfs(directory)
+            device_io = observe_fixture_device(before.st_dev, self._sys_block_root)
             after = directory.stat()
             if (after.st_dev, after.st_ino) != self._fixture:
                 return _unknown("fixture directory identity changed")
             return {
                 "state": "observed",
                 "device": before.st_dev,
+                "device_io": device_io,
                 "capacity_bytes": space.f_blocks * space.f_frsize,
                 "available_bytes": space.f_bavail * space.f_frsize,
                 "free_bytes": space.f_bfree * space.f_frsize,
