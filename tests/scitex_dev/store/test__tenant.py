@@ -31,8 +31,7 @@ def tenants(card_schema):
     owner = f"tenant_test_owner_{uuid4().hex[:12]}"
     passwords = {scope.principal: secrets.token_urlsafe(32) for scope in scopes}
     with psycopg.connect(BASE_DSN, autocommit=True) as admin, ExitStack() as cleanup:
-        params = admin.info.get_parameters()
-        port = int(params["port"])
+        port = admin.info.port
         if port in {55432, 55433}:
             pytest.fail("These synthetic experiments refuse the managed store ports.")
         admin.execute(
@@ -72,7 +71,7 @@ def tenants(card_schema):
             # Preserve the selected socket/port; native CI is socket-only.
             selected = conninfo_to_dict(BASE_DSN)
             selected.update(user=scope.principal, password=passwords[scope.principal])
-            database = selected.pop("dbname", params["dbname"])
+            database = selected.pop("dbname", admin.info.dbname)
             dsn = f"postgresql:///{quote(database, safe='')}?{urlencode(selected)}"
             return StoreTarget.postgres(dsn, pkg="tenant_test")
 
