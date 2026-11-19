@@ -32,10 +32,10 @@ the result.
 
 | Surface | a | b (moved) | c | r | ? | total |
 |---|---:|---:|---:|---:|---:|---:|
-| Linter, engine-emitted `STX-*` (incl. P005) | 1 | 14 | 18 | 2 | 1 (S005, held) | 36 |
+| Linter, engine-emitted `STX-*` (incl. P005) | 1 | 14 | 19 | 2 | 0 | 36 |
 | Linter, leaf-declared (excl. P005) | 77 | 0 | 0 | 0 | 0 | 77 |
 | Audit (`PS/RP/PA/SK/DJ/SR/SP/SI/REL/FM-n`) | 6 | 0 | 236 | 0 | 2 (PS-CLEW/AGENT, pending) | 244 |
-| **All** | **84** | **14** | **254** | **2** | **3** | **357** |
+| **All** | **84** | **14** | **255** | **2** | **2** | **357** |
 
 STX-P005 is counted with the engine rules. figrecipe declared it, but the
 engine emitted it, and it now moves to scitex-session.
@@ -69,7 +69,7 @@ engine emitted it, and it now moves to scitex-session.
 | STX-I007 | `import logging` (use the injected `logger`) | **scitex-logging** (with PS-220) | **b** → scitex-logging |
 | STX-P010 | top-level `figrecipe` inside an `@stx.session` module | session injection: **scitex-session** | **b** → scitex-session |
 | STX-P005 | `print()` once a session is seen (figrecipe declared it; the engine emitted it) | session injection: **scitex-session** | **b** → scitex-session |
-| STX-S005 | missing `import scitex as stx` | umbrella `scitex` | **?** held: doctrine question (Q7) |
+| STX-S005 | missing `import scitex as stx` | user code (scripts) | c: kept in scitex-dev (user decision, see below) |
 | STX-S007 | `load_configs()` result not UPPER_CASE | `load_configs`: **scitex-io** | **b** → scitex-io |
 | STX-S008 | hard-coded analysis parameter (should come from `CONFIG`) | `config/*.yaml` → `CONFIG`: **scitex-session** | **b** → scitex-session (detector ported verbatim) |
 
@@ -240,7 +240,8 @@ is identical.
 | PS-501/503, PS-182, PS-PATH-001/002 | stay in scitex-dev (cross-cutting conventions) |
 | PS-CLEW-001, PS-AGENT-001 | → scitex-clew audit plugin **after** the in-flight clew work (#227, #228) lands; not moved yet |
 | PA-305 | **kept in scitex-dev** (see below) |
-| S005 | **on hold**: doctrine question taken to the user |
+| S005 | **kept**; user code writes `import scitex as stx` (user decision) |
+| SK-601 / PA-304 / PS-139 | scoped to package-internal code (user decision): SK-601 narrowed, PA-304 / PS-139 already were |
 
 Why PA-305 stays. Its natural concept owner is scitex-browser, since it
 checks for `capture_debug_artifacts_async`. Moving it is not possible yet,
@@ -257,11 +258,60 @@ and retiring it is not justified:
 So it stays as a cross-cutting dev convention (c). If `audit-api` grows a
 plugin group, revisit.
 
+## Umbrella import doctrine (user decision, 2026-11-19)
+
+**User code** writes `import scitex as stx`: scripts, notebooks, research
+projects, and the usage examples in skills and READMEs. **Package-internal
+code** imports its peer leaves directly.
+
+| Rule | Scope after the decision | Change |
+|---|---|---|
+| STX-S005 (`import scitex as stx` expected) | user scripts, never `src/`, `tests/` or library dirs | none; it already had this scope, so it is kept as is |
+| PA-304 (umbrella import in package source) | `src/<pkg>/` of non-umbrella packages | none; it was already package-internal |
+| PS-139 (umbrella in a package's dependencies) | `pyproject.toml` of pip packages | none; it was already package-internal |
+| SK-601 (skills) | **narrowed**: only package source shown in a skill, i.e. a ```python block whose first line is a `src/` path comment | intentional; see below |
+
+SK-601 before and after, measured on all 851 skill files in the local
+ecosystem checkouts:
+
+- **21 findings disappear.** Every one is a user-facing example that
+  now correctly writes `import scitex as stx`.
+- **0 findings appear.** The rule's own pattern is unchanged; only
+  where it applies was narrowed.
+
+Files that no longer report SK-601:
+
+- `scitex-dev/src/scitex_dev/_skills/general/02_package/05_project-structure-examples.md`
+- `scitex-dev/src/scitex_dev/_skills/general/02_package/08_quality.md`
+- `scitex-dev/src/scitex_dev/_skills/general/03_interface/01_python-api/11_import-conventions.md`
+- `scitex-dev/src/scitex_dev/_skills/general/03_interface/04_skills/12_quality-checklist.md`
+- `scitex-dev/src/scitex_dev/_skills/general/04_docs/01_readme.md`
+- `scitex-dev/src/scitex_dev/_skills/general/04_docs/01_readme_template.md`
+- `scitex-dev/src/scitex_dev/_skills/general/04_docs/06_readme-section-order.md`
+- `scitex-dev/src/scitex_dev/_skills/general/04_docs/09_readme-examples-header.md`
+- `scitex-dev/src/scitex_dev/_skills/general/04_docs/10_readme-examples-quickstart.md`
+- `scitex-dev/src/scitex_dev/_skills/general/05_development/07_demo-smoke-tests.md`
+- `scitex-dev/src/scitex_dev/_skills/general/05_development/08_coverage-push-playbook.md`
+- `scitex-dev/src/scitex_dev/_skills/scientific/02_research-project_02_project-structure-scripts.md`
+- `scitex-dev/src/scitex_dev/_skills/scientific/02_research-project_07_config-and-parameters.md`
+- `scitex-dev/src/scitex_dev/_skills/scientific/02_research-project_11_config-fstring-paths.md`
+- `scitex-dev/src/scitex_dev/_skills/scientific/06_scitexification/01_io-patterns.md`
+- `scitex-dev/src/scitex_dev/_skills/scientific/06_scitexification/02_session-config.md`
+- `scitex-hub/src/scitex_hub/_skills/scitex-hub-cloud/01_availability.md`
+- `scitex-hub/src/scitex_hub/_skills/scitex-hub-cloud/02_health-and-version.md`
+- `scitex-hub/src/scitex_hub/_skills/scitex-hub-cloud/03_context.md`
+- `scitex-hub/src/scitex_hub/_skills/scitex-hub-cloud/04_browser-control.md`
+- `scitex-hub/src/scitex_hub/_skills/scitex-hub-project/01_mcp-file-ops.md`
+
+The `general/03_interface/01_python-api/11_import-conventions.md` skill now
+documents the two scopes.
+
+Gap left as is: STX-S001 and S005 do not run on research scripts under
+`scripts/`, because `is_script` excludes script directories. Widening them
+would add findings, so that is a separate decision.
+
 ## Open questions
 
-- **Q7, STX-S005** (`import scitex as stx`): on hold. The rule conflicts with
-  SK-601, PA-304 and PS-139, which discourage the umbrella import in leaves
-  and skills. The user decides the doctrine first.
 - **Q12, PS-CLEW-001 / PS-AGENT-001:** move to a scitex-clew audit plugin
   (`scitex_dev.audit.project` group) once scitex-clew #227 and #228 land.
   Same zero-change method, with the provider made mandatory for research

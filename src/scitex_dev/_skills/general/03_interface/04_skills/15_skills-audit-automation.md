@@ -29,7 +29,7 @@ mirrors `audit-cli`, `audit-mcp-tools`, `audit-python-apis`. Rule codes
 | SK-301 | §3 | `SKILL.md` ≤ 4 KB / 80 lines |
 | SK-302 | §3 | every sibling leaf is referenced from `SKILL.md` (no orphans) |
 | SK-401 | §4 | no leaf exceeds 10 KB / 200 lines |
-| SK-601 | §6 | skill text uses bare `import scitex` (not `as stx`) |
+| SK-601 | §6 | package source shown in a skill (a ```python block headed by a `src/` path) does not use `import scitex as stx`; user-facing examples do use it |
 | SK-105 | §1 | `01_installation.md` present (mandatory) |
 | SK-106 | §1 | `02_quick-start.md` present (mandatory) |
 | SK-107 | §1 | `03_python-api.md` present iff package exposes any public Python API |
