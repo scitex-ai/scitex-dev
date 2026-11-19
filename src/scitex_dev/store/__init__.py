@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """``scitex_dev.store`` — the backend-agnostic store primitive.
 
 Every leaf package that stores anything builds on this instead of rolling
@@ -174,6 +173,13 @@ from ._row import Row
 from ._schema_evolution import SchemaEvolutionResult
 from ._store import PutResult, Store
 from ._target import Backend, StoreTarget
+from ._tenant import (
+    TenantScope,
+    TenantStoreStatus,
+    inspect_tenant_store,
+    open_tenant_store,
+)
+from ._tenant_provision import provision_tenant_store
 from .federation import (
     ENTRY_POINT_GROUP,
     StorePlugin,
@@ -244,6 +250,8 @@ __all__ = [  # noqa: RUF022 - repository test requires Python's sorted() order
     "StoreTarget",
     "StoreTargetError",
     "SupersededFenceError",
+    "TenantScope",
+    "TenantStoreStatus",
     "Transport",
     "TransportError",
     "UNKNOWN_SYSTEM",
@@ -270,6 +278,7 @@ __all__ = [  # noqa: RUF022 - repository test requires Python's sorted() order
     "gte",
     "host_store",
     "inspect_store_acl",
+    "inspect_tenant_store",
     "install_genesis",
     "is_in",
     "is_null",
@@ -278,9 +287,11 @@ __all__ = [  # noqa: RUF022 - repository test requires Python's sorted() order
     "merge_field",
     "ne",
     "nonempty",
+    "open_tenant_store",
     "outstanding",
     "plugin_for",
     "provision_store_acl",
+    "provision_tenant_store",
     "pull",
     "replay",
     "resolve_target",
