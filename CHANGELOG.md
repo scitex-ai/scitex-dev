@@ -10,6 +10,11 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Add explicit tenant-store provisioning and catalogue validation for hosted
+  consumers. Separate UUID-derived logins and namespaces use forced restrictive
+  row security across every Store table. Shared credentials, unsafe grants and
+  existing unprotected tables are refused; existing store defaults are unchanged.
+
 - Correction to the 0.64.3 notes: 0.64.2 did reach PyPI (07:06 UTC). Its
   publication run was cancelled after the upload step had already started,
   so it has no GitHub release. It lacks the `a2a` catalog entry; use 0.64.3.

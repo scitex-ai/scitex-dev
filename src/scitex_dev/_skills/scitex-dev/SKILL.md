@@ -77,6 +77,7 @@ interfaces:
 - [42_context-discovery.md](42_context-discovery.md) — Upstream selective MCP discovery and metadata-only context accounting
 - [43_hpc-test-runner.md](43_hpc-test-runner.md) — Legacy Slurm sync, submission, polling and results
 - [44 Hierarchy](44_hierarchy.md)
+- [Tenant stores](45_cloud-tenant-store.md)
 
 ## Quick Reference
 
@@ -94,8 +95,3 @@ dev.check_versions()
 dev.fix_mismatches(confirm=False)
 dev.preview_rename(pattern="old", replacement="new", directory=".")
 ```
-
-
-## Environment
-
-- [20_env-vars.md](20_env-vars.md) — `SCITEX_DEV_*` env vars read by scitex-dev at runtime
