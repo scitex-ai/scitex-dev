@@ -171,6 +171,9 @@ CATALOG: dict[str, set[str]] = {
             "cron",
             "pytest",
             "worktree",
+            # The A2A (agent-to-agent) protocol, mounted as
+            # `agent-container a2a`.
+            "a2a",
         ]
     },
     # Transitive verbs — need an object
