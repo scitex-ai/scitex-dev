@@ -10,6 +10,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- audit-cli §1d: the bundled catalog knows `a2a` (the agent-to-agent
+  protocol, mounted as `agent-container a2a`), which the umbrella's CI audit
+  reported as an unknown word.
+
 - audit-cli §1d: the bundled catalog now knows the ecosystem mount names
   `msword`, `newb`, `plt` and `ssh` (published package names mounted as
   `scitex <name>`), the tool nouns `cron`, `pytest` and `worktree`
