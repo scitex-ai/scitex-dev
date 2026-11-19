@@ -10,6 +10,18 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- audit-cli §1d: the bundled catalog now knows the ecosystem mount names
+  `msword`, `newb`, `plt` and `ssh` (published package names mounted as
+  `scitex <name>`), the tool nouns `cron`, `pytest` and `worktree`
+  (`agent-container` groups), and `whoami` as a show-me leaf like `status`.
+  They were reported as unknown words in the umbrella's CLI audit.
+- audit-cli §5: an error-phase alias's display reference (for example
+  `ecosystem audit-skills`) is resolved from every group on the alias's own
+  path, not only from the audited root. A program mounted under another
+  CLI (`scitex dev quality audit-frontmatter`) no longer reports its valid
+  reference as unresolved; a reference that exists on no enclosing group is
+  still reported.
+
 - Linter STX-S008: fewer false positives (research-script spot check 26% ->
   10% non-parameters on a fresh random 50). Not reported any more: names or
   keywords with a layout / display / identity / tolerance / infrastructure
