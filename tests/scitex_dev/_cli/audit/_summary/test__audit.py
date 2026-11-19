@@ -138,7 +138,8 @@ class TestClassify:
         assert "verb-t" in labels or "verb" in labels
 
     @pytest.mark.parametrize(
-        "name", ["msword", "newb", "plt", "ssh", "cron", "pytest", "worktree"]
+        "name",
+        ["msword", "newb", "plt", "ssh", "cron", "pytest", "worktree", "a2a"],
     )
     def test_ecosystem_mount_and_tool_names_are_catalog_nouns(self, name):
         # Real package / tool names mounted as noun groups must not be
