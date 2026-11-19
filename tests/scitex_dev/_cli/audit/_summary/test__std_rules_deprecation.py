@@ -82,6 +82,79 @@ class TestDeprecatedAliasStaticMetadata:
         # Assert
         assert out == []
 
+    def test_error_alias_reference_resolves_from_mounting_program_root(self):
+        # Arrange — a program whose error-phase alias names a sibling path
+        # relative to ITS root ("ecosystem audit-skills"), mounted under an
+        # umbrella as `umbrella dev ...` (scitex mounts scitex-dev so).
+        @click.group()
+        def program():
+            pass
+
+        @program.group("ecosystem")
+        def ecosystem():
+            pass
+
+        @ecosystem.command("audit-skills")
+        def audit_skills():
+            pass
+
+        @program.group("quality")
+        def quality():
+            pass
+
+        deprecated_alias(
+            quality,
+            "audit-frontmatter",
+            target="audit-skills",
+            target_name="ecosystem audit-skills",
+            remove_in="0.11",
+            phase="error",
+        )
+
+        @click.group()
+        def umbrella():
+            pass
+
+        umbrella.add_command(program, "dev")
+        out: list[Violation] = []
+        # Act
+        check_deprecated_alias_metadata(umbrella, "umbrella", out)
+        # Assert
+        assert out == []
+
+    def test_mounted_error_alias_with_absent_reference_is_still_flagged(self):
+        # Arrange — the same mount, but the named path exists nowhere on
+        # the alias's ancestor chain.
+        @click.group()
+        def program():
+            pass
+
+        @program.group("quality")
+        def quality():
+            pass
+
+        deprecated_alias(
+            quality,
+            "audit-frontmatter",
+            target="audit-skills",
+            target_name="ecosystem audit-skills",
+            remove_in="0.11",
+            phase="error",
+        )
+
+        @click.group()
+        def umbrella():
+            pass
+
+        umbrella.add_command(program, "dev")
+        out: list[Violation] = []
+        # Act
+        check_deprecated_alias_metadata(umbrella, "umbrella", out)
+        # Assert
+        assert any(
+            v.rule == "§5" and "unresolved or unverifiable" in v.message for v in out
+        )
+
     def test_alias_with_missing_target_is_flagged(self):
         # Arrange — string target never registered anywhere in the tree.
         @click.group()
@@ -96,7 +169,9 @@ class TestDeprecatedAliasStaticMetadata:
         check_deprecated_alias_metadata(root, "demo", out)
         # Assert
         assert any(
-            v.rule == "§5" and "unresolved or unverifiable" in v.message and "old-thing" in v.command
+            v.rule == "§5"
+            and "unresolved or unverifiable" in v.message
+            and "old-thing" in v.command
             for v in out
         )
 
@@ -155,7 +230,9 @@ class TestAssessHiddenLeafWarnPhase:
         # Arrange — forwards fine but stays silent.
         silent_stderr = ""
         # Act
-        findings = assess_hidden_leaf("demo show-status", 0, silent_stderr, _warn_meta())
+        findings = assess_hidden_leaf(
+            "demo show-status", 0, silent_stderr, _warn_meta()
+        )
         # Assert
         assert any("'deprecated'" in f.message for f in findings)
 
@@ -163,7 +240,9 @@ class TestAssessHiddenLeafWarnPhase:
         # Arrange — rc == -1 is "binary unrunnable", not ladder evidence.
         unrunnable_rc = -1
         # Act
-        findings = assess_hidden_leaf("demo show-status", unrunnable_rc, "", _warn_meta())
+        findings = assess_hidden_leaf(
+            "demo show-status", unrunnable_rc, "", _warn_meta()
+        )
         # Assert
         assert findings == []
 
@@ -181,7 +260,9 @@ class TestAssessHiddenLeafErrorPhase:
         # Arrange — an error-phase alias must NOT succeed.
         succeeded_rc = 0
         # Act
-        findings = assess_hidden_leaf("demo show-status", succeeded_rc, "", _error_meta())
+        findings = assess_hidden_leaf(
+            "demo show-status", succeeded_rc, "", _error_meta()
+        )
         # Assert
         assert any("expected 2" in f.message for f in findings)
 

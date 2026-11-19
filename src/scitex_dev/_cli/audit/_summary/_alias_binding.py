@@ -224,13 +224,24 @@ def effective_flags(root, command, parent):
     return flags
 
 
-def reference_exists(root, parent, target):
-    """Check legacy redirect reference syntax, not callback equivalence."""
+def reference_exists(root, parent, target, ancestors=()):
+    """Check legacy redirect reference syntax, not callback equivalence.
+
+    A display reference is written relative to the OWNING program's root
+    (``ecosystem audit-skills`` in scitex-dev). When that program is
+    mounted under another CLI (``scitex dev ...``) its root is an
+    intermediate group, not the audited root, so every enclosing group on
+    the alias's own path (``ancestors``, nearest last) is a valid start.
+    Starts are still exact command paths; nothing is searched by name.
+    """
     try:
         parts = shlex.split(target)
         if not parts or len(parts) > 64:
             return False
-        starts = [parent, root] if parent is not None else [root]
+        starts = [parent] if parent is not None else []
+        starts += [group for group in reversed(ancestors) if group is not parent]
+        if root not in starts:
+            starts.append(root)
         if any(_path(start, parts) is not None for start in starts):
             return True
         # Preserve the old single-name legacy reference contract. Structured

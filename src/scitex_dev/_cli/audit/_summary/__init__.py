@@ -158,6 +158,19 @@ CATALOG: dict[str, set[str]] = {
             "python-api",
             "python-apis",
             "tools",
+            # Ecosystem package mount names: each is the published name of
+            # a real distribution or the tool it wraps, mounted verbatim as
+            # `scitex <name>` (scitex-msword, newb, scitex-plt, scitex-ssh).
+            "msword",
+            "newb",
+            "plt",
+            "ssh",
+            # Developer-tool nouns used as group names by ecosystem CLIs
+            # (`agent-container dev cron`, `agent-container pytest`,
+            # `agent-container worktree`).
+            "cron",
+            "pytest",
+            "worktree",
         ]
     },
     # Transitive verbs — need an object
@@ -276,6 +289,9 @@ CATALOG: dict[str, set[str]] = {
             "health",
             "summary",
             "report",
+            # The POSIX `whoami` utility name; `<cli> account whoami` shows
+            # the signed-in identity (scitex-hub).
+            "whoami",
         ]
     },
     # Allowed flat-keeper exceptions
