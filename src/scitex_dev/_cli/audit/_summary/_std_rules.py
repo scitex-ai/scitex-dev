@@ -327,7 +327,7 @@ def check_deprecated_alias_metadata(
     """
     from ._audit import Violation
 
-    def _walk_aliases(cmd: click.BaseCommand, path: list[str], parent) -> None:
+    def _walk_aliases(cmd: click.BaseCommand, path: list[str], parent, ancestors=()) -> None:
         meta = getattr(cmd, "_deprecated_alias", None)
         if meta is not None:
             full = " ".join([package, *path]) if path else package
@@ -349,7 +349,7 @@ def check_deprecated_alias_metadata(
                         "deprecated alias metadata lacks `target`",
                     )
                 )
-            elif not _alias_reference_exists(root, parent, cmd, target):
+            elif not _alias_reference_exists(root, parent, cmd, target, ancestors):
                 out.append(
                     Violation(
                         full,
@@ -361,12 +361,12 @@ def check_deprecated_alias_metadata(
                 )
         if isinstance(cmd, click.Group):
             for name, sub in cmd.commands.items():
-                _walk_aliases(sub, path + [name], cmd)
+                _walk_aliases(sub, path + [name], cmd, (*ancestors, cmd))
 
     _walk_aliases(root, [], None)
 
 
-def _alias_reference_exists(root, parent, command, target):
+def _alias_reference_exists(root, parent, command, target, ancestors=()):
     """Helper routes prove forwarding; other metadata only names a reference."""
     from ._alias_binding import helper_binding, resolve_binding
 
@@ -377,12 +377,12 @@ def _alias_reference_exists(root, parent, command, target):
     if binding is not None and binding.phase == "error":
         # Error-phase helpers redirect; their display is a reference, not
         # forwarding input (the legacy helper need not have a live route).
-        return _target_exists(root, parent, target)
+        return _target_exists(root, parent, target, ancestors)
     if binding is not None:
         return resolve_binding(
             root, command, parent, require_warn=False
         ) is not None
-    return _target_exists(root, parent, target)
+    return _target_exists(root, parent, target, ancestors)
 
 
 def _resolve_path(start: click.BaseCommand | None, parts: list[str]) -> bool:
@@ -411,10 +411,11 @@ def _target_exists(
     root: click.BaseCommand,
     parent: click.BaseCommand | None,
     target: str,
+    ancestors: tuple = (),
 ) -> bool:
     from ._alias_binding import reference_exists
 
-    return reference_exists(root, parent, target)
+    return reference_exists(root, parent, target, ancestors)
 
 
 

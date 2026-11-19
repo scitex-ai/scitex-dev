@@ -137,6 +137,25 @@ class TestClassify:
         labels = _classify("start-dashboard")
         assert "verb-t" in labels or "verb" in labels
 
+    @pytest.mark.parametrize(
+        "name", ["msword", "newb", "plt", "ssh", "cron", "pytest", "worktree"]
+    )
+    def test_ecosystem_mount_and_tool_names_are_catalog_nouns(self, name):
+        # Real package / tool names mounted as noun groups must not be
+        # §1d unknowns ("not in catalog, custom dict, or Moby POS").
+        # Arrange
+        # Act
+        labels = _classify(name)
+        # Assert
+        assert labels == {"noun"}
+
+    def test_whoami_is_a_polysemous_show_me_leaf(self):
+        # Arrange
+        # Act
+        labels = _classify("whoami")
+        # Assert
+        assert labels == {"noun", "verb-i"}
+
     def test_unknown_token_returns_unknown_label(self):
         # A nonsense token should fall through to {"unknown"}
         # Arrange
