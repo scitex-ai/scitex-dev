@@ -26,6 +26,12 @@ about the `@stx.session` injection contract — "use the injected `plt`,
 not top-level `figrecipe`" — the same cross-cutting surface as S001-S008
 and I009. See `_session_figure.py`.
 
+Handover (compatibility shim): `S001/S003/S004/S006` (scitex-session),
+`I002` (scitex-stats) and `I003` (scitex-io) are still declared here, but
+their owners now declare and emit them; when the owner is installed the
+engine yields (see `_handover.py` and `docs/rule-ownership.md`, which also
+records the verdict for every remaining engine rule).
+
 `lookup(rule_id)` returns the merged engine + plugin rule for any id.
 Plugin entries win on collision so leaf packages can override engine
 defaults if needed.
@@ -63,8 +69,6 @@ ALL_RULES = {
     I001.id: I001,
     I002.id: I002,
     I003.id: I003,
-    I004.id: I004,
-    I005.id: I005,
     I006.id: I006,
     I007.id: I007,
     I008.id: I008,
@@ -93,6 +97,9 @@ ALL_RULES = {
     TQ006.id: TQ006,
     TQ007.id: TQ007,
 }
+
+# STX-I004 / STX-I005 are RETIRED (reserved, never fired) — see _retired.py.
+# Their Rule objects stay importable above for back-compat.
 
 SEVERITY_ORDER = {"error": 2, "warning": 1, "info": 0}
 

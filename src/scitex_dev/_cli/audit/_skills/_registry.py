@@ -87,8 +87,9 @@ RULES: dict[str, Rule] = {
         Rule(
             "SK-601",
             "§6",
-            "skill text uses `import scitex as stx`; ecosystem rule is bare "
-            "`import scitex`",
+            "package source shown in a skill (a ```python block headed by a "
+            "`src/` path) uses `import scitex as stx`; packages import "
+            "leaves directly, user code keeps `import scitex as stx`",
         ),
     ]
 }

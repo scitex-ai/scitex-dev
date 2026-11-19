@@ -10,6 +10,50 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.65.0] - 2026-11-19
+
+- audit-cli §1d: the bundled catalog knows `a2a` (the agent-to-agent
+  protocol, mounted as `agent-container a2a`), which the umbrella's CI audit
+  reported as an unknown word.
+- Linter rule ownership: `docs/rule-ownership.md` gives every lint and audit
+  rule (357) a verdict: correct home, move, cross-cutting, or ambiguous.
+  Ambiguous rules come with options and a recommendation.
+- Linter handover (no behaviour change). These rules move to their owners:
+  - scitex-session: `STX-S001/S003/S004/S006/S008`, `I006`, `P010`, `P005`
+  - figrecipe: `STX-I001/I009`
+  - scitex-stats: `STX-I002`
+  - scitex-io: `STX-I003/S007`
+  - scitex-logging: `STX-I007`
+
+  figrecipe now ships the FM001–FM009 checker and declares the `fm-checker`
+  capability; the engine skips its own copy when that capability is present.
+  `STX-P005` moves between two plugins: the owner's declaration supersedes
+  figrecipe's (`superseded` in the loader payload) instead of colliding.
+  `STX-I004/I005` are retired (they never fired). Their ids stay reserved,
+  and a config that still names them gets a `DeprecationWarning`.
+  `_rules/_handover.py` (`spi.HANDOVER`) names the one distribution allowed
+  to declare each id. When that owner's plugin is installed, the loader
+  accepts its declaration and the engine stops emitting the id. Without the
+  owner, the engine copy still fires, so the shim stays until the leaf
+  releases are pinned. Any other provider declaring an engine id still
+  collides.
+- `spi.add_issue` exposes the engine's emission gate (`requires`, `disable`,
+  `# stx-allow`, per-rule pin, category floor) and `SciTeXChecker._add` now
+  uses it, so a moved rule behaves the same whichever package emits it.
+  `spi.is_script` is exported as well.
+- New `scitex-dev linter fingerprint PATHS [--out F] [--against F]`. It
+  fingerprints the effective rule set, every finding and the corpus hashes,
+  and exits 1 on any difference. The fingerprint was identical before and
+  after the handover on 1172 SciTeX example and paper scripts (5375
+  findings).
+- Umbrella import doctrine (user decision 2026-11-19). User code writes
+  `import scitex as stx`, and STX-S005 is kept for user scripts.
+  Package-internal code imports peer leaves directly; PA-304 and PS-139 were
+  already scoped that way. SK-601 now applies only to package source shown in
+  a skill (a ```python block headed by a `src/` path). This is an intentional
+  change: 21 findings disappear on the ecosystem's 851 skill files and none
+  appear (listed in `docs/rule-ownership.md`).
+
 ## [0.64.2] - 2026-11-19
 
 - audit-cli §1d: the bundled catalog now knows the ecosystem mount names

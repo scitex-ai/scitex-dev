@@ -244,7 +244,11 @@ def load_config(start_path: str | None = None) -> LinterConfig:
             config_dict["enable"] = [*_existing_enable, "FM"]
 
     # Build LinterConfig with merged values
-    return LinterConfig(**config_dict)
+    config = LinterConfig(**config_dict)
+    from ._rules._retired import warn_retired_config
+
+    warn_retired_config(config)
+    return config
 
 
 def _load_pyproject(start_dir: Path) -> dict:

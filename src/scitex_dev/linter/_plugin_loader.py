@@ -198,6 +198,27 @@ def _validate_payload(plugin, name):
         seen_checkers.add(id(checker))
 
 
+def _takes_over(rule_id, ep, is_logging=False) -> bool:
+    """True when *ep*'s distribution is the declared owner of engine *rule_id*.
+
+    Only the distribution named in ``_rules._handover.HANDOVER`` may take an
+    engine id over; anything else declaring it remains a collision.
+    """
+    from ._provider_replacements import _distribution
+    from ._rules._handover import handover_owner
+
+    owner = handover_owner(rule_id)
+    # Same distribution reading as declared provider replacements: the
+    # entry point's own `dist` record, never a lookup of other metadata.
+    if owner is None:
+        return False
+    # The mandatory logging provider is identified by its exact entry
+    # point (name + value) everywhere in this loader, not by metadata.
+    if owner == "scitex-logging" and is_logging:
+        return True
+    return _distribution(ep) == owner
+
+
 def load_plugins(*, entry_points_iter=None):
     """Load rule providers, requiring the installed logging owner.
 
@@ -219,6 +240,13 @@ def load_plugins(*, entry_points_iter=None):
         "provider_replacements": (),
         # capability name -> declaring provider; see _research_scope.py
         "capabilities": {},
+        # engine rule id -> owning provider that took it over; see
+        # _rules/_handover.py. The engine stops emitting these ids.
+        "handed_over": {},
+        # every plugin-declared rule id -> declaring provider (diagnostics)
+        "rule_owners": {},
+        # rule id -> predecessor provider whose declaration the owner replaced
+        "superseded": {},
     }
     owners = {"rules": {}, "call_rules": {}, "axes_hints": {}, "checkers": {}}
     provider_owners = {}
@@ -278,12 +306,31 @@ def load_plugins(*, entry_points_iter=None):
                 raise LinterPluginError(
                     f"{_GROUP}: PS-220 belongs to scitex-logging, not {name!r}"
                 )
-            if rule.id in owners["rules"]:
+            from ._rules._retired import RETIRED
+
+            if rule.id in RETIRED:
                 raise LinterPluginError(
-                    f"{_GROUP}: duplicate rule {rule.id!r} from {name!r}; already declared by {owners['rules'][rule.id]!r}"
+                    f"{_GROUP}: {rule.id!r} from {name!r} is a retired, reserved id "
+                    f"(see _rules/_retired.py); allocate a new id instead"
                 )
+            takes_over = _takes_over(rule.id, ep, is_logging)
+            if rule.id in owners["rules"]:
+                # A handover between two plugins (_rules/_handover.py): the
+                # declared owner's declaration wins over its predecessor's,
+                # whichever loads first. Any other repeat is a duplicate.
+                if rule.id in merged["handed_over"]:
+                    merged["superseded"][rule.id] = name
+                    continue
+                if not takes_over:
+                    raise LinterPluginError(
+                        f"{_GROUP}: duplicate rule {rule.id!r} from {name!r}; already declared by {owners['rules'][rule.id]!r}"
+                    )
+                merged["superseded"][rule.id] = owners["rules"][rule.id]
             owners["rules"][rule.id] = name
             merged["rules"][rule.id] = rule
+            merged["rule_owners"][rule.id] = name
+            if takes_over:
+                merged["handed_over"][rule.id] = name
         for key in ("call_rules", "axes_hints"):
             for identifier, rule in plugin.get(key, {}).items():
                 if key == "call_rules":
@@ -333,7 +380,11 @@ def load_plugins(*, entry_points_iter=None):
         )
     from ._rules import ALL_RULES
 
-    collisions = set(ALL_RULES).intersection(merged["rules"])
+    # A rule handed over to its owning leaf (_rules/_handover.py) is not a
+    # collision: the engine copy is the compatibility shim and yields.
+    collisions = set(ALL_RULES).intersection(merged["rules"]) - set(
+        merged["handed_over"]
+    )
     if collisions:
         raise LinterPluginError(
             f"{_GROUP}: rules already registered by the engine: {sorted(collisions)!r}"

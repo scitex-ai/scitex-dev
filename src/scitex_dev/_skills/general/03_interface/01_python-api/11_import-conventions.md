@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] Interface Python Api Import Conventions
-  [DETAILS] Standalone vs umbrella import conventions. `pip install scitex-io` → `import scitex_io as sio`. `pip install scitex` → `import scitex.io as sio`. Skills and READMEs document both forms. Inside package source, use the standalone form. In umbrella docs, write `import scitex` (never `as stx`).
+  [DETAILS] Standalone vs umbrella import conventions. `pip install scitex-io` → `import scitex_io as sio`. `pip install scitex` → `import scitex.io as sio`. Skills and READMEs document both forms. Inside package source, use the standalone form. User code (scripts, notebooks, research projects, and the usage examples skills teach) writes `import scitex as stx`.
 tags: [scitex-general-interface-python-api-import-conventions]
 ---
 
@@ -28,7 +28,7 @@ pip install scitex-io   → import scitex_io as sio   ✓
 
 - **Skill / README examples MUST show both forms** side-by-side, with a one-line note on when each applies. Readers land on the skill without knowing which install path they took.
 - **Inside the package's own source code**: use the standalone form (`from scitex_io import save`) — the package cannot assume the umbrella is installed alongside it.
-- **In ecosystem docs that assume the umbrella**: use `import scitex` (not `import scitex as stx`) in all examples. Aliases belong to the user, not the documentation.
+- **In user-facing examples that assume the umbrella**: write `import scitex as stx`. This is the form user code uses (user decision 2026-11-19; the linter's STX-S005 expects it in scripts).
 
 ## Hard rule — no umbrella imports inside standalone source
 
@@ -71,15 +71,17 @@ sio.save(df, "results.csv")
 
 Both forms call the same function; the difference is which module namespace Python resolves. Choose the install path that matches the project's dependency story — standalone if the package is a leaf dependency, umbrella if the project uses many SciTeX packages at once.
 
-## Why no `as stx` in shipped docs
+## Two scopes: user code vs package-internal code
 
-User aliases (`stx`, `np`, `pd`) are the user's choice. Documentation that bakes in `as stx`:
+Decided by the user on 2026-11-19:
 
-- forces every reader to either match your alias or mentally rename in every example;
-- breaks copy-paste into a notebook that already has `stx` defined as something else;
-- couples the brand to a one-letter prefix that competes with NumPy's `np` for prime mental real estate.
+| Code | Umbrella import | Enforced by |
+|---|---|---|
+| **User code**: scripts, notebooks, research projects, and the usage examples in skills and READMEs | `import scitex as stx` | STX-S005 (scripts) |
+| **Package-internal code** (`src/<pkg>/`, and a package's dependencies) | never: import peer leaves directly | PA-304 (source), PS-139 (`pyproject` deps), SK-601 (package source shown in a skill, i.e. a ```python block headed by a `src/` path) |
 
-Write `import scitex` in skills and READMEs. If a user wants `stx`, they alias once and read your docs unchanged.
+Before this decision, SK-601 flagged any `import scitex as stx` anywhere in skill text. It now applies only
+to package source shown in a skill.
 
 ## When to use which path
 
