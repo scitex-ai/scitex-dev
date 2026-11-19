@@ -23,6 +23,8 @@ versions follow [Semantic Versioning](https://semver.org/).
   CLI (`scitex dev quality audit-frontmatter`) no longer reports its valid
   reference as unresolved; a reference that exists on no enclosing group is
   still reported.
+- audit-project: the workflow presence and naming checks recognize the
+  canonical generated CI workflow (#1074).
 - CI timeout evidence observes bounded fixture device IO context (#1076).
 
 ## [0.64.1] - 2026-11-19
