@@ -22,6 +22,27 @@ versions follow [Semantic Versioning](https://semver.org/).
   reference as unresolved; a reference that exists on no enclosing group is
   still reported.
 
+- Linter rule ownership: `docs/rule-ownership.md` gives every lint and audit
+  rule (357) a verdict: correct home, move, cross-cutting, or ambiguous.
+  Ambiguous rules come with options and a recommendation.
+- Linter handover (no behaviour change): `STX-S001/S003/S004/S006` move to
+  scitex-session, `STX-I002` to scitex-stats and `STX-I003` to scitex-io.
+  `_rules/_handover.py` (`spi.HANDOVER`) names the one distribution allowed
+  to declare each id. When that owner's plugin is installed, the loader
+  accepts its declaration and the engine stops emitting the id. Without the
+  owner, the engine copy still fires, so the shim stays until the leaf
+  releases are pinned. Any other provider declaring an engine id still
+  collides.
+- `spi.add_issue` exposes the engine's emission gate (`requires`, `disable`,
+  `# stx-allow`, per-rule pin, category floor) and `SciTeXChecker._add` now
+  uses it, so a moved rule behaves the same whichever package emits it.
+  `spi.is_script` is exported as well.
+- New `scitex-dev linter fingerprint PATHS [--out F] [--against F]`. It
+  fingerprints the effective rule set, every finding and the corpus hashes,
+  and exits 1 on any difference. The fingerprint was identical before and
+  after the handover on 1172 SciTeX example and paper scripts (5375
+  findings).
+
 - Linter STX-S008: fewer false positives (research-script spot check 26% ->
   10% non-parameters on a fresh random 50). Not reported any more: names or
   keywords with a layout / display / identity / tolerance / infrastructure

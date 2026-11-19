@@ -154,6 +154,31 @@ The sweep walks every package registered in `scitex_dev._ecosystem._core.ECOSYST
 
 This is what catches READMEs that *teach* the wrong API — a class of bug nothing else surfaces.
 
+## Moving an engine rule to its owner (handover)
+
+Who owns what — and why the remaining engine rules stay — is the table in
+`docs/rule-ownership.md` (scitex-dev). An engine rule moves with NO
+behaviour change (scitex-dev >= 0.65.0):
+
+1. List it in `scitex_dev.linter._rules._handover.HANDOVER` with its owning
+   distribution (`spi.HANDOVER`). Only that distribution may then declare
+   the id; anyone else still collides.
+2. The owner declares the rule with identical metadata and ships a checker
+   that emits it through `spi.add_issue(issues, rule, line, col, src,
+   config)` — the engine's own emission gate (`requires`, `disable`,
+   `# stx-allow`, per-rule pin, category floor) — so severities per project
+   type cannot drift. `spi.is_script` is the engine's script verdict. Pin
+   `scitex-dev>=0.65.0` (an older engine rejects the id as a collision).
+3. With the owner installed the engine stops emitting the id; without it the
+   engine copy still fires (compatibility shim).
+4. Prove it: `scitex-dev linter fingerprint <corpus> --out before.json` on
+   develop, then `... --against before.json` with the owner installed — it
+   must print `identical` (rule metadata, every finding, corpus hashes).
+5. Remove the engine copy once the owner release is on PyPI and pinned.
+
+Moved so far: `STX-S001/S003/S004/S006` -> scitex-session,
+`STX-I002` -> scitex-stats, `STX-I003` -> scitex-io.
+
 ## Migration status (2026-Q2)
 
 - **Engine**: `scitex-dev` ships it. The legacy `scitex-linter` package is a thin alias that still works; the `scitex-linter` console script and `python -m scitex_linter` are kept for the soft-migration window.

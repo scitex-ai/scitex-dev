@@ -19,7 +19,7 @@ REGISTRARS = [
     (_run, ["lint-and-run"]),
     (_apis, ["list-python-apis"]),
     (_format, ["format-files"]),
-    (_rules, ["list-rules", "list-rules-all"]),
+    (_rules, ["list-rules", "list-rules-all", "fingerprint"]),
 ]
 
 MODULE_IDS = [module.__name__.rsplit(".", 1)[-1] for module, _names in REGISTRARS]

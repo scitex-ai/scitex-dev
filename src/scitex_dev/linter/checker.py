@@ -5,7 +5,6 @@ from __future__ import annotations
 __all__ = ["Issue", "is_script", "lint_file", "lint_source"]
 
 import ast
-from dataclasses import replace
 
 from . import rules
 from ._checks import (
@@ -16,9 +15,10 @@ from ._checks import (
     TestQualityMixin,
     own_scitex_package,
 )
+from ._emit import add_issue
 from ._issue import Issue
 from ._rules import lookup as _lk
-from ._source_helpers import _is_allowed_by_comment, is_script
+from ._source_helpers import _is_allowed_by_comment, is_script  # noqa: F401  (re-export)
 from .rules import Rule
 
 
@@ -83,6 +83,7 @@ class SciTeXChecker(
             for key, group in groups.items()
         }
         self._plugin_checkers = _plugins["checkers"]
+        self._handed_over = frozenset(_plugins.get("handed_over", ()))
         self._plugin_axes_hints = _plugins.get("axes_hints", {})
 
     # -- Module visitor (STX-S008 needs the whole tree) --
@@ -376,37 +377,22 @@ class SciTeXChecker(
         return self.issues
 
     def _add(self, rule: Rule | None, line: int, col: int, source_line: str) -> None:
-        if rule is None:
+        # A rule handed over to its owning leaf (_rules/_handover.py) is
+        # emitted by that leaf's checker; the engine copy only fires when
+        # the owner is not installed (compatibility shim).
+        if rule is not None and rule.id in self._handed_over:
             return
-        if rule.requires and not self._available.get(rule.requires, False):
-            # Pillar-0 fail-loud (#TBD): tally the silent-skip so the
-            # health module can emit an L2 stderr summary the first
-            # time the count goes non-zero. Without this the
-            # `requires=` gate evaporates IO0xx coverage with zero
-            # indication — exactly the 2026-06-12 ripple-wm class.
-            try:
-                from ._health import record_rule_skip
-
-                record_rule_skip(rule.requires)
-            except Exception:  # pragma: no cover
-                pass
-            return
-        if rule.id in self.config.disable:
-            return
-        if _is_allowed_by_comment(source_line, rule.id):
-            return
-        sev = self.config.per_rule_severity.get(rule.id)
-        if not sev:
-            # Pillar 3 (#TBD) — category-wide severity override (e.g.
-            # research project-type flips io/path from warning→error).
-            # Per-rule override (above) still wins; category map is the
-            # floor not the ceiling. See LinterConfig.
-            cat_override = getattr(self.config, "category_severity_override", {}) or {}
-            sev = cat_override.get(rule.category)
-        if sev:
-            rule = replace(rule, severity=sev)
-        self.issues.append(
-            Issue(rule=rule, line=line, col=col, source_line=source_line)
+        # The emission gates (requires / disable / stx-allow / severity) are
+        # shared with plugin checkers via spi.add_issue — one implementation,
+        # so a rule behaves identically whichever package emits it.
+        add_issue(
+            self.issues,
+            rule,
+            line,
+            col,
+            source_line,
+            self.config,
+            available=self._available,
         )
 
     def _get_source(self, lineno: int) -> str:

@@ -30,10 +30,18 @@ call rules and plugin checkers alike — so it fires only in research scripts
 (``is_research_script``). Plugins declare coverage the engine may require
 for a project type via the payload key ``capabilities`` (e.g. scitex-io's
 ``"raw-io"``; see ``REQUIRED_CAPABILITIES``).
+
+Rule handover (scitex-dev >= 0.65.0): an engine rule listed in ``HANDOVER``
+may be declared by the named owning distribution's plugin; the engine then
+stops emitting it and the plugin's checker does. ``add_issue`` is the
+engine's own emission gate (``requires`` / ``disable`` / ``# stx-allow`` /
+per-rule and category severity) so the moved rule behaves identically;
+``is_script`` is the engine's script-vs-library verdict.
 """
 
 from __future__ import annotations
 
+from ._emit import add_issue
 from ._fm_checker import FMChecker
 from ._issue import Issue
 from ._provider_replacements import ProviderReplacement
@@ -43,7 +51,8 @@ from ._research_scope import (
     is_test_file,
 )
 from ._rules._base import SCOPE_ANY, SCOPE_RESEARCH_SCRIPT, SCOPES, Rule
-from ._source_helpers import _is_allowed_by_comment
+from ._rules._handover import HANDOVER
+from ._source_helpers import _is_allowed_by_comment, is_script
 
 __all__ = [
     "Rule",
@@ -57,4 +66,7 @@ __all__ = [
     "REQUIRED_CAPABILITIES",
     "is_research_script",
     "is_test_file",
+    "HANDOVER",
+    "add_issue",
+    "is_script",
 ]

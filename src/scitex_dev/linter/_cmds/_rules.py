@@ -1,4 +1,4 @@
-"""``scitex-dev linter list-rules`` / ``list-rules-all`` commands.
+"""``scitex-dev linter list-rules`` / ``list-rules-all`` / ``fingerprint`` commands.
 
 Extracted from ``cli.py`` (512-line budget). ``_do_list_rules`` is
 re-exported from ``cli`` for back-compat with callers/tests that import
@@ -89,9 +89,7 @@ def register(main_group):
         help_spec=CliHelp(
             summary="List all SciTeX lint rules, including plugin-contributed ones.",
             examples=(
-                Example(
-                    "{prog} linter list-rules-all", "Built-in plus plugin rules."
-                ),
+                Example("{prog} linter list-rules-all", "Built-in plus plugin rules."),
                 Example(
                     "{prog} linter list-rules-all --category io",
                     "Only the io-category rules.",
@@ -121,7 +119,56 @@ def register(main_group):
             rules_list = [r for r in rules_list if r.severity == severity]
         _do_list_rules(rules_list, as_json)
 
-    return list_rules_cmd, list_rules_all
+    @main_group.command(
+        "fingerprint",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Fingerprint the effective rule set and its findings on a corpus.",
+            examples=(
+                Example(
+                    "{prog} linter fingerprint examples/ scripts/ --out before.json",
+                    "Record the rule set + findings before a move.",
+                ),
+                Example(
+                    "{prog} linter fingerprint examples/ scripts/ --against before.json",
+                    "Compare after the move; exit 1 on any difference.",
+                ),
+            ),
+        ),
+    )
+    @click.argument("paths", nargs=-1, required=True, type=click.Path(exists=True))
+    @click.option("--out", "out", default=None, help="Write the fingerprint JSON here.")
+    @click.option(
+        "--against",
+        "against",
+        default=None,
+        type=click.Path(exists=True, dir_okay=False),
+        help="Earlier fingerprint JSON to compare with (exit 1 on difference).",
+    )
+    def fingerprint_cmd(paths, out, against):
+        from pathlib import Path
+
+        from .._fingerprint import diff_fingerprints, fingerprint_paths
+
+        fp = fingerprint_paths(paths)
+        text = json.dumps(fp, indent=1, sort_keys=True)
+        if out:
+            Path(out).write_text(text + "\n", encoding="utf-8")
+        summary = (
+            f"{len(fp['rules'])} rules, {len(fp['corpus'])} files, "
+            f"{len(fp['findings'])} findings, {len(fp['errors'])} errors"
+        )
+        if not against:
+            click.echo(summary if out else text)
+            return
+        diff = diff_fingerprints(json.loads(Path(against).read_text("utf-8")), fp)
+        click.echo(summary)
+        if diff:
+            click.echo(json.dumps(diff, indent=1, sort_keys=True))
+            raise SystemExit(1)
+        click.echo(f"identical to {against}")
+
+    return list_rules_cmd, list_rules_all, fingerprint_cmd
 
 
 # EOF

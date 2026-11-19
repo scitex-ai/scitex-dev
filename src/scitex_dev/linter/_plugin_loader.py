@@ -198,6 +198,21 @@ def _validate_payload(plugin, name):
         seen_checkers.add(id(checker))
 
 
+def _takes_over(rule_id, ep) -> bool:
+    """True when *ep*'s distribution is the declared owner of engine *rule_id*.
+
+    Only the distribution named in ``_rules._handover.HANDOVER`` may take an
+    engine id over; anything else declaring it remains a collision.
+    """
+    from ._provider_replacements import _distribution
+    from ._rules._handover import handover_owner
+
+    owner = handover_owner(rule_id)
+    # Same distribution reading as declared provider replacements: the
+    # entry point's own `dist` record, never a lookup of other metadata.
+    return owner is not None and _distribution(ep) == owner
+
+
 def load_plugins(*, entry_points_iter=None):
     """Load rule providers, requiring the installed logging owner.
 
@@ -219,6 +234,11 @@ def load_plugins(*, entry_points_iter=None):
         "provider_replacements": (),
         # capability name -> declaring provider; see _research_scope.py
         "capabilities": {},
+        # engine rule id -> owning provider that took it over; see
+        # _rules/_handover.py. The engine stops emitting these ids.
+        "handed_over": {},
+        # every plugin-declared rule id -> declaring provider (diagnostics)
+        "rule_owners": {},
     }
     owners = {"rules": {}, "call_rules": {}, "axes_hints": {}, "checkers": {}}
     provider_owners = {}
@@ -284,6 +304,9 @@ def load_plugins(*, entry_points_iter=None):
                 )
             owners["rules"][rule.id] = name
             merged["rules"][rule.id] = rule
+            merged["rule_owners"][rule.id] = name
+            if _takes_over(rule.id, ep):
+                merged["handed_over"][rule.id] = name
         for key in ("call_rules", "axes_hints"):
             for identifier, rule in plugin.get(key, {}).items():
                 if key == "call_rules":
@@ -333,7 +356,11 @@ def load_plugins(*, entry_points_iter=None):
         )
     from ._rules import ALL_RULES
 
-    collisions = set(ALL_RULES).intersection(merged["rules"])
+    # A rule handed over to its owning leaf (_rules/_handover.py) is not a
+    # collision: the engine copy is the compatibility shim and yields.
+    collisions = set(ALL_RULES).intersection(merged["rules"]) - set(
+        merged["handed_over"]
+    )
     if collisions:
         raise LinterPluginError(
             f"{_GROUP}: rules already registered by the engine: {sorted(collisions)!r}"
