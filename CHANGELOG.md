@@ -10,9 +10,14 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.64.3] - 2026-11-19
+
 - audit-cli §1d: the bundled catalog knows `a2a` (the agent-to-agent
   protocol, mounted as `agent-container a2a`), which the umbrella's CI audit
-  reported as an unknown word.
+  reported as an unknown word (#1081).
+- 0.64.2 was tagged but never uploaded to PyPI; 0.64.3 carries its changes.
+
+## [0.64.2] - 2026-11-19
 
 - audit-cli §1d: the bundled catalog now knows the ecosystem mount names
   `msword`, `newb`, `plt` and `ssh` (published package names mounted as
@@ -25,6 +30,11 @@ versions follow [Semantic Versioning](https://semver.org/).
   CLI (`scitex dev quality audit-frontmatter`) no longer reports its valid
   reference as unresolved; a reference that exists on no enclosing group is
   still reported.
+- audit-project: the workflow presence and naming checks recognize the
+  canonical generated CI workflow (#1074).
+- CI timeout evidence observes bounded fixture device IO context (#1076).
+
+## [0.64.1] - 2026-11-19
 
 - Linter STX-S008: fewer false positives (research-script spot check 26% ->
   10% non-parameters on a fresh random 50). Not reported any more: names or
@@ -39,6 +49,11 @@ versions follow [Semantic Versioning](https://semver.org/).
   positionally or with `ax=`/`transform=`/`bbox=`, and argparse options whose
   own name is infrastructure (`--timeout`). Analysis parameters, seeds,
   thresholds and argparse analysis options (`--n-perm`) are still reported.
+- Providers: deduplicate repeated physical metadata origins (#1067).
+- Rename docs describe sequential application and recovery limits (#1069);
+  CI timeout evidence captures bounded public callee stage observations (#1068).
+
+## [0.64.0] - 2026-11-19
 
 - Linter STX-S008 now flags hard-coded analysis parameters anywhere in a
   script, not only module-scope `UPPER = <number>`: number-valued bindings
@@ -57,6 +72,24 @@ versions follow [Semantic Versioning](https://semver.org/).
   under `project-type: research` (not error: two research repos carry
   562 pre-existing findings in 179 of 417 scripts). The STX-S003
   suggestion no longer teaches a numeric signature default.
+- Hierarchy: discover owned provider metadata without loading code (#1063).
+- Docs: fail explicitly on missing named pages, require regular files, confine
+  named pages/indexes and manifest writes to the selected docs root, infer JSON
+  format from page assets, index nested JSON pages without HTML builds, keep
+  package CLI output visible (#1050-#1059).
+- Audit: classify coloured findings without losing severity, accept both
+  warning spellings, exclude relative modules from cross-package gates,
+  recognize contributor dependency groups (PS-210), decode README badge labels
+  consistently (#1039-#1041, #1047, #1054).
+- Doctor reports missing editable source directories (#1061); hooks discover
+  file-owned ESLint flat configs (#1062); rename reports protected-only matches
+  without rewriting (#1046); standalone linter help mounts under its canonical
+  root (#1043); provider-discovery errors identify conflicting metadata (#1042).
+- CI: numeric executable identity in timeout evidence, bounded child
+  scheduling/IO counters (#1045, #1049, #1060); CI template pinned to cd4e545a
+  (#1037).
+
+## [0.63.0] - 2026-11-16
 
 - Linter plugin SPI: `Rule.scope` (`""` or `"research-script"`). The engine
   applies the scope uniformly to engine call rules and plugin checkers once
