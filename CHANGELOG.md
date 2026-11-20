@@ -10,6 +10,15 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.66.0] - 2026-11-20
+
+- Add explicit tenant-store provisioning and catalogue validation for hosted
+  consumers. Separate UUID-derived logins and namespaces use forced restrictive
+  row security across every Store table. Shared credentials, unsafe grants and
+  existing unprotected tables are refused; existing store defaults are unchanged.
+- Correct the 0.64.2 publication record: PyPI upload completed before its
+  publication run was cancelled; that version has no GitHub release.
+
 ## [0.65.0] - 2026-11-19
 
 - Linter rule ownership: `docs/rule-ownership.md` gives every lint and audit
@@ -56,7 +65,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 - audit-cli §1d: the bundled catalog knows `a2a` (the agent-to-agent
   protocol, mounted as `agent-container a2a`), which the umbrella's CI audit
   reported as an unknown word (#1081).
-- 0.64.2 was tagged but never uploaded to PyPI; 0.64.3 carries its changes.
+- Publication correction: 0.64.2 reached PyPI before its run was cancelled;
+  0.64.3 adds the `a2a` catalog entry.
 
 ## [0.64.2] - 2026-11-19
 
