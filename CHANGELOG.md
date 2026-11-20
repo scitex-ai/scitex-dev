@@ -10,6 +10,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.66.1] - 2026-11-21
+
+- Register SciTeX Rich PDF as a leaf library for ecosystem maintenance.
+
 ## [0.66.0] - 2026-11-20
 
 - Add explicit tenant-store provisioning and catalogue validation for hosted
