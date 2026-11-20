@@ -311,6 +311,16 @@ ECOSYSTEM_PART_2 = {
         "import_name": "scitex_affairs",
         "category": "library",
     },
+    # The provider is discovered through its owning distribution. Include it
+    # in ecosystem maintenance while leaving umbrella mounts to user interfaces.
+    "scitex-rich-pdf": {
+        "local_path": "~/proj/scitex-rich-pdf",
+        "pypi_name": "scitex-rich-pdf",
+        "github_repo": "scitex-ai/scitex-rich-pdf",
+        "import_name": "scitex_rich_pdf",
+        "category": "library",
+        "umbrella_skip": True,
+    },
 }
 
 
