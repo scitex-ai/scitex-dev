@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] Subprocess coverage wiring (parallel + COVERAGE_PROCESS_START)
-  [DETAILS] Adopted 2026-05 after scitex-stats lifted Codecov ~32% → ~90%. When tests spawn child Python interpreters (subprocess.run([sys.executable, "-m", ...]), jupyter nbconvert --execute, etc.), the default pytest-cov setup throws their coverage data away because COVERAGE_FILE points to a per-test-process tmp dir before conftest.py runs. The fix is three small changes: pyproject `[tool.coverage.run] parallel = true, concurrency = ["multiprocessing", "thread"]`, conftest.py force-set (not setdefault) of COVERAGE_PROCESS_START + COVERAGE_FILE, and an idempotent `.pth` shim in site-packages that calls `coverage.process_startup()`. This single wiring is what unlocks demo smoke tests + notebook executions counting toward coverage.
+  [DETAILS] Configure independent coverage files and a shared configuration for child Python interpreters. Check installed startup support; use a single-line .pth binding where needed. Verify real child lines and data combination rather than assuming that a coverage or pytest-cov installation provides them.
 tags: [scitex-general-package-subprocess-coverage]
 ---
 
@@ -15,9 +15,10 @@ If your test suite ever spawns a child Python interpreter — e.g.:
 - `jupyter nbconvert --execute notebook.ipynb` (PS-505 example tests)
 - `pytest-xdist` parallel workers (multiple worker processes)
 
-…that child's coverage data is **dropped** in a default pytest-cov setup,
-because `pytest-cov` sets `COVERAGE_FILE` to a per-test tmp dir before
-`conftest.py` runs, and child processes don't know where to write.
+Child interpreters need startup instrumentation and an appropriate data path.
+Some coverage versions provide their own startup binding; environments without
+one need the fallback below. Active children also need separate data files:
+without parallel mode, concurrent SQLite writes can collide.
 
 Symptom: coverage stays mysteriously low despite covering "everything" in
 tests; ~1500 LOC of `_demo_*.py` modules report 0% even when smoke tests
@@ -37,10 +38,10 @@ concurrency = ["multiprocessing", "thread"]
 - `parallel = true` makes every coverage process write to its own
   `.coverage.<hostname>.<pid>.<random>` file (instead of all writing to
   one and racing).
-- `concurrency = ["multiprocessing", "thread"]` covers both
-  `subprocess.run` (multiprocessing) and any threaded test code.
-- `pytest-cov` will call `coverage combine` at session end to merge the
-  shards into a single `coverage.xml`.
+- `concurrency = ["multiprocessing", "thread"]` supports those worker types;
+  startup instrumentation covers independent Python subprocesses.
+- With pytest-cov collection enabled, the plugin combines data and emits the
+  requested reports. A plain pytest run still needs an explicit combination.
 
 ### 2. tests/conftest.py — FORCE-SET, not setdefault
 
@@ -73,9 +74,8 @@ def _ensure_subprocess_coverage_shim() -> None:
     purelib = Path(sysconfig.get_paths()["purelib"])
     pth = purelib / "_<import_name>_subprocess_coverage.pth"
     shim = (
-        "import os, coverage\n"
-        "if os.environ.get('COVERAGE_PROCESS_START'):\n"
-        "    coverage.process_startup()\n"
+        "import os; os.environ.get('COVERAGE_PROCESS_START') and "
+        "__import__('coverage').process_startup()\n"
     )
     try:
         if not pth.exists() or pth.read_text() != shim:
@@ -93,9 +93,20 @@ Critical detail: **force-set, not `setdefault`**. `pytest-cov` sets
 `COVERAGE_FILE` before `conftest.py` runs, so `setdefault` is a silent
 no-op and the fix appears to "do nothing" — a classic foot-gun.
 
-The `.pth` shim works because Python's site initialization imports every
-`.pth` file in `site-packages` before user code runs, so by the time a
-child process imports anything, coverage tracing is already on.
+An executable `.pth` entry must occupy one physical line beginning with
+`import`. A separate `if` line is treated as a path, so its indented body never
+runs. The binding above starts tracing during site initialization when the
+configuration variable is present. Coverage's startup guard handles repeated
+calls when its own installed binding also runs.
+
+The checkout-root data path assumes an isolated test worktree. Coordinate any
+deliberate caller-owned data directory with the combine step rather than
+overwriting another run's location.
+
+`tests/integration/test_documented_coverage_startup.py` exercises this exact
+literal binding in an owned site directory with other startup bindings
+disabled, then checks actual child coverage lines. It does not qualify every
+installed environment or execute arbitrary documentation fences.
 
 ### 3. (Optional) .coveragerc fallback
 
@@ -127,9 +138,9 @@ and demo modules show 0% even though `test_demos.py` executed them.
 
 ## CI side: nothing extra
 
-pytest-cov calls `coverage combine` automatically at session end, then
-emits `coverage.xml`. The Codecov upload step doesn't need to change —
-the same artifact now contains subprocess coverage.
+When collection is enabled with pytest-cov, it combines data and emits the
+requested report. Keep the uploader pointed at that verified report; inspect
+child-only lines rather than treating upload success as coverage acceptance.
 
 ## Gotchas
 
@@ -142,9 +153,9 @@ the same artifact now contains subprocess coverage.
 - **site-packages may be read-only.** Catch `OSError` and continue;
   system-Python users can't write the shim, but in practice everyone
   runs tests from a venv they own.
-- **`coverage>=7` required.** Older versions don't support all the
-  concurrency keys; pin `coverage>=7.0` in `[dev]` extras (already
-  transitive via `pytest-cov>=4.0`).
+- **Check the installed coverage version.** Declare `coverage>=7.0` in the
+  development profile used for this workflow. Do not assume a pytest-cov
+  version alone guarantees that lower bound or a working startup binding.
 
 ## Related skills
 
