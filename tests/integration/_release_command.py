@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ._release_child_observation import OwnedChildObservation
+from ._release_trace_correlation import correlate_git_trace_candidate
 
 _LIMIT = 8192
 _NOTE_PREFIX = "release-command-timeout: "
@@ -37,15 +38,20 @@ def run_release_command(command, root, environment, **options):
         observation.close()
         # Only owned fixture commands and bounded local diagnostics are recorded.
         # Never dump the environment or inspect another process's credentials.
+        trace = _read_bounded(root.parent / "git-trace.jsonl", tail=True)
+        snapshot = observation.snapshot()
         evidence = {
             "observed_utc": datetime.now(timezone.utc).isoformat(),
             "timeout_seconds": error.timeout,
             "command": command,
-            "git_trace_tail": _read_bounded(root.parent / "git-trace.jsonl", tail=True),
+            "git_trace_tail": trace,
             "loadavg": _read_bounded("/proc/loadavg"),
             "io_pressure": _read_bounded("/proc/pressure/io"),
             "memory": _read_bounded("/proc/meminfo"),
-            "owned_child_observation": observation.snapshot(),
+            "owned_child_observation": snapshot,
+            "git_trace_candidate_correlation": correlate_git_trace_candidate(
+                command, trace, snapshot
+            ),
         }
         note = _NOTE_PREFIX + json.dumps(evidence, sort_keys=True)
         if hasattr(error, "add_note"):
