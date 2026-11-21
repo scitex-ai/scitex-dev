@@ -40,6 +40,11 @@ Once authorized, use the leaf-owned release sequence:
 2. Integrate accepted source through an ordinary PR. Inspect **all** checks at
    the exact head, including consent and security outcomes. Preserve failures;
    required-check branch protection alone does not establish acceptance.
+   Inspect workflow runs too: a pending workflow can have no test-job rows yet,
+   leaving an incomplete green check list. The CI readiness helper inspects
+   workflow lifecycle states for the current head; it does not discover every
+   expected workflow. See `ci/_workflow_waits.py` and its fixture-backed controls
+   in `tests/scitex_dev/ci/test__workflow_waits.py`.
 3. Merge only after that review, using the reviewed head guard. Do not use
    auto-merge, administrative bypasses or synthetic verdicts.
 4. Promote through the ordinary `main` release PR. Select an unused canonical
@@ -57,6 +62,7 @@ Useful read-only review commands (replace placeholders):
 gh workflow list --repo scitex-ai/PACKAGE
 gh pr view PR_NUMBER --repo scitex-ai/PACKAGE --json headRefOid,statusCheckRollup
 gh pr checks PR_NUMBER --repo scitex-ai/PACKAGE
+gh api 'repos/scitex-ai/PACKAGE/actions/runs?head_sha=HEAD_SHA&per_page=100' --paginate --slurp
 gh run view RUN_ID --repo scitex-ai/PACKAGE
 ```
 
