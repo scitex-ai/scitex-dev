@@ -144,7 +144,8 @@ _TOKEN_SPLIT_RE = re.compile(r"[_\-]+")
 
 
 def _first_token(stem: str) -> str:
-    """First ``_``/``-``-delimited token of a filename stem, lowercased."""
+    """First action token after an optional research-pipeline ordinal."""
+    stem = re.sub(r"^[0-9]+_", "", stem)
     parts = _TOKEN_SPLIT_RE.split(stem, maxsplit=1)
     return parts[0].lower() if parts and parts[0] else ""
 

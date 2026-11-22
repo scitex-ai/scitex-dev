@@ -81,6 +81,16 @@ def test_grouped_verb_script_is_clean_of_s010():
     assert "STX-S010" not in _ids(issues)
 
 
+def test_numbered_research_scripts_still_require_a_verb():
+    # Arrange
+    cfg = _research_cfg()
+    # Act
+    matching = lint_source(_SRC, "scripts/pac/01_compute_features.py", cfg)
+    missing = lint_source(_SRC, "scripts/pac/02_dataset_matrix.py", cfg)
+    # Assert
+    assert ("STX-S010" in _ids(matching), "STX-S010" in _ids(missing)) == (False, True)
+
+
 def test_deeply_grouped_script_is_clean_of_s009():
     # Arrange
     cfg = _research_cfg()
