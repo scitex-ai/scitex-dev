@@ -10,6 +10,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- **Linter:** ignore package-relative `scipy` names in the engine compatibility
+  path for `STX-I002`; preserve absolute-import selection, availability and
+  ownership gates. This matches the leaf-provider correction in Stats PR 219.
+
 ## [0.66.1] - 2026-11-21
 
 - Register SciTeX Rich PDF as a leaf library for ecosystem maintenance.

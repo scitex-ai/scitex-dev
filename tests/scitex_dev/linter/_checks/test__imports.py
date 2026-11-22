@@ -10,6 +10,8 @@ imports and same-package private imports. Fixtures below use
 submodule".
 """
 
+import pytest
+
 from scitex_dev.linter._checks._imports import (
     cross_pkg_private_import,
     own_scitex_package,
@@ -131,3 +133,45 @@ def test_non_scitex_private_import_is_not_flagged():
     ids = _i008_ids(src, "src/scitex_dsp/_filt.py")
     # Assert
     assert ids == []
+
+
+@pytest.mark.parametrize("source", [
+    "from .scipy import stats\n",
+    "from ..scipy import stats\n",
+    "from .scipy import stats as local_stats\n",
+    "from .scipy.stats import ttest_ind\n",
+    "from ..scipy.stats import pearsonr, ttest_ind\n",
+    "from .scipy.stats import *\n",
+    "if True:\n    from .scipy import stats\n",
+    "def calculate():\n    from ..scipy.stats import ttest_ind\n",
+])
+def test_relative_scipy_imports_do_not_request_engine_rule(source, observe_lint):
+    # Arrange
+    from scitex_dev.linter.config import LinterConfig
+    config = LinterConfig()
+    # Act
+    requested, emitted = observe_lint(source, config=config)
+    # Assert
+    assert ([rule.id for rule in requested if rule.id == "STX-I002"],
+            [issue.rule.id for issue in emitted if issue.rule.id == "STX-I002"]) == ([], [])
+
+
+@pytest.mark.parametrize("source, expected", [
+    ("from scipy import stats\n", ["STX-I002"]),
+    ("from scipy import linalg, stats as scientific_stats\n", ["STX-I002"]),
+    ("from scipy.stats import ttest_ind, pearsonr\n", ["STX-I002"]),
+    ("import scipy.stats\n", []),
+    ("from scipy import linalg\n", []),
+])
+def test_absolute_scipy_requests_keep_actual_availability_gate(source, expected, observe_lint):
+    # Arrange
+    from scitex_dev.linter.config import LinterConfig
+    from scitex_dev.linter._packages import detect
+    available = detect()["scitex"]
+    # Act
+    requested, emitted = observe_lint(source, config=LinterConfig())
+    # Assert
+    assert ([rule.id for rule in requested if rule.id == "STX-I002"],
+            [issue.rule.id for issue in emitted if issue.rule.id == "STX-I002"]) == (
+        expected, expected if available else []
+    )

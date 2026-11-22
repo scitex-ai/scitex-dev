@@ -196,7 +196,7 @@ class ImportChecksMixin:
             self._add(_lk("STX-I001"), node.lineno, node.col_offset, line)
 
         # from scipy import stats / from scipy.stats import *
-        if module in ("scipy", "scipy.stats"):
+        if node.level == 0 and module in ("scipy", "scipy.stats"):
             if module == "scipy":
                 for alias in node.names:
                     if alias.name == "stats":
