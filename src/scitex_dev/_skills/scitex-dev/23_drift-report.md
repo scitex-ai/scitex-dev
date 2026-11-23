@@ -75,8 +75,11 @@ The full human report names NOT JUDGEABLE rows. Quiet output appends nonzero
 drifting and critical-staleness counts. These are distinct finding categories,
 not additional package rows. Consistent-only text and unavailable-container
 notes retain their existing format. JSON carries row references/consistency/
-cells and the two independent warning lists; its summary still omits a
-dedicated unjudgeable count. Full human output includes integrity details and
+cells and the two independent warning lists. Its summary always includes
+`total`, `consistent`, `drifting` and `unjudgeable` integer counts, including
+zero. Rows without a reference version count separately from drifting rows.
+This source extends the previous three-field summary; clients validating exact
+keys need to allow the additional key before adopting it. Full human output includes integrity details and
 the interpreter path before staleness and the matrix. Quiet output gives counts,
 not affected-package details or hints; use full output or JSON for those. Neither
 quiet counts nor the JSON summary establish complete collection coverage.
@@ -120,7 +123,9 @@ Source: `_ecosystem/_drift_report/{_collect,_refs,_model,_build,_sac}.py`,
 Existing controls: `tests/scitex_dev/_ecosystem/_drift_report/` (including real
 Git repositories in `test__refs.py` and full-report composition controls in
 `test__build_integrity_banner.py` and quiet finding counts in
-`test__build_quiet_findings.py`), CLI registration/help in
+`test__build_quiet_findings.py`, with structured row counts and existing-field
+compatibility in `test__model_summary_counts.py` and `test__model.py`),
+CLI registration/help in
 `tests/scitex_dev/_cli/ecosystem/_cmds/test__drift_report.py`, and job declarations
 in `tests/scitex_dev/_ecosystem_jobs/test__provider.py`. Some collection and
 install controls use declared injected probes. Pure assembly/renderer tests,
