@@ -63,7 +63,7 @@ exit codes, notebook metadata and preview/apply file effects through the CLI.
 
 ```bash
 scitex-dev linter mcp list-tools --json
-scitex-dev linter mcp doctor
+scitex-dev linter mcp doctor --json
 scitex-dev linter mcp start --dry-run --json
 scitex-dev linter mcp install --json
 scitex-dev skills list --package scitex-dev --json
@@ -74,8 +74,10 @@ Skill commands belong to Dev's root skills group, not a `linter skills` group.
 Owner selection can include several namespaces of the same distribution.
 
 MCP `list-tools` can fall back to known tool names if server loading fails; that
-output alone does not prove tools are loaded. `doctor` checks dependency/tool
-module imports, CLI lookup and a rule count, not a live server/client round trip.
+output alone does not prove tools are loaded. `doctor` checks the FastMCP import,
+registration-module import, CLI lookup and builtin rule count. A successful
+registration import reports availability, not a registered or fixed tool count.
+These prerequisites do not establish a live server/client round trip.
 `start --dry-run` starts no server; with `--json` it emits an intent object with
 `action="start"`, the selected `transport` (`stdio` or `sse`) and `dry_run=true`.
 This describes a preview and does not establish a running server. `install`
@@ -87,8 +89,16 @@ output modes. The install `--yes` and `--dry-run` flags remain informational
 no-ops. Native start still uses the selected MCP transport; the dry-run JSON
 object is not a live-server status or protocol wrapper.
 
-The accepted `doctor --json` option still produces text; that output gap remains.
-Source: `_cmd_mcp.py`. Informational output, no-op flags, path quoting and owned
-file-preservation controls live in `tests/scitex_dev/linter/test__cmd_mcp.py`.
+`doctor --json` emits `version`, `checks` and overall `ok`. Each check has `name`,
+`ok` and `info`; overall `ok` is true only if all reported prerequisites pass.
+Both output modes exit 0 when they pass and 1 when any check fails. For example,
+a missing CLI on PATH is a failed check even when imports succeed. An importable
+registration module can pass while the separate FastMCP dependency check fails.
+The builtin rule count is not a provider-coverage report, and this command does
+not load the linter server to count its registered tools.
+
+Source: `_cmd_mcp.py`. Complete doctor JSON/text/exit controls, informational
+output, no-op flags, path quoting and owned file-preservation controls live in
+`tests/scitex_dev/linter/test__cmd_mcp.py`.
 Actual tool contracts are in [11_mcp-tools.md](11_mcp-tools.md). Verify a configured
 server, client and hook profile separately.

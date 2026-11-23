@@ -12,6 +12,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Emit structured linter MCP doctor prerequisite results while preserving
+  failed-check exits; report registration imports without an invented tool count.
+
 - Honor JSON output for linter MCP installation snippets and start previews,
   and escape executable paths in text-mode configuration snippets.
 

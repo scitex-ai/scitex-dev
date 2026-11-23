@@ -64,3 +64,57 @@ def test_mcp_start_dry_run_json_describes_intent(transport, flags):
     result = CliRunner().invoke(main_group, ["mcp", "start", "--dry-run", "--json", "--transport", transport, *flags])
     # Assert
     assert (result.exit_code, json.loads(result.stdout)) == (0, expected)
+
+
+@pytest.fixture(params=["normal", "quoted", "missing"])
+def doctor_case(request, tmp_path):
+    import fastmcp
+    from scitex_dev.linter import __version__
+    from scitex_dev.linter.rules import ALL_RULES
+
+    directory = tmp_path / ('quoted "and\\backslash' if request.param == "quoted" else "bin")
+    directory.mkdir()
+    path = directory / "scitex-dev"
+    available = request.param != "missing"
+    if available:
+        path.write_text("#!/bin/sh\nexit 0\n")
+        path.chmod(0o755)
+    rows = [
+        {"name": "fastmcp", "ok": True, "info": fastmcp.__version__},
+        {"name": "MCP tools", "ok": True, "info": "registration imports available"},
+        {"name": "CLI", "ok": available, "info": str(path) if available else "not in PATH"},
+        {"name": "Rules", "ok": True, "info": f"{len(ALL_RULES)} rules"},
+    ]
+    expected = {"version": __version__, "checks": rows, "ok": available}
+    text = f"scitex-dev linter {__version__}\n\nHealth Check\n" + "=" * 40 + "\n"
+    text += "".join(f"  {'✓' if row['ok'] else '✗'} {row['name']}: {row['info']}\n" for row in rows)
+    text += "\n" + ("All checks passed!" if available else
+        "Some checks failed. The MCP dependencies ship in the base install, so reinstall rather than adding an extra: python -m pip install --force-reinstall scitex-dev") + "\n"
+    return {"PATH": str(directory)}, expected, text, 0 if available else 1
+
+
+def test_mcp_doctor_json_describes_checks(doctor_case):
+    # Arrange
+    environment, expected, _, code = doctor_case
+    # Act
+    result = CliRunner().invoke(main_group, ["mcp", "doctor", "--json"], env=environment)
+    # Assert
+    assert (result.exit_code, json.loads(result.stdout), result.stderr) == (code, expected, "")
+
+
+def test_mcp_doctor_text_names_registration_import(doctor_case):
+    # Arrange
+    environment, _, expected, code = doctor_case
+    # Act
+    result = CliRunner().invoke(main_group, ["mcp", "doctor"], env=environment)
+    # Assert
+    assert (result.exit_code, result.stdout, result.stderr) == (code, expected, "")
+
+
+def test_mcp_doctor_retains_failed_check_exit(doctor_case):
+    # Arrange
+    environment, _, _, code = doctor_case
+    # Act
+    result = CliRunner().invoke(main_group, ["mcp", "doctor"], env=environment)
+    # Assert
+    assert result.exit_code == code

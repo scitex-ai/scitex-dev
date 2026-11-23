@@ -29,7 +29,7 @@ def register(main_group):
             examples=(
                 Example("{prog} linter mcp start", "Run the MCP server."),
                 Example("{prog} linter mcp list-tools", "Show the exposed tools."),
-                Example("{prog} linter mcp doctor", "Check MCP server health."),
+                Example("{prog} linter mcp doctor", "Check MCP prerequisites."),
             ),
         ),
     )
@@ -197,9 +197,9 @@ def register(main_group):
         "doctor",
         cls=SpecCommand,
         help_spec=CliHelp(
-            summary="Check MCP server health.",
+            summary="Check MCP prerequisites.",
             examples=(
-                Example("{prog} linter mcp doctor", "Run the health checks."),
+                Example("{prog} linter mcp doctor", "Check imports, CLI lookup and builtin rules."),
             ),
         ),
     )
@@ -208,10 +208,6 @@ def register(main_group):
     )
     def mcp_doctor(as_json):
         import shutil
-
-        click.echo(f"scitex-dev linter {__version__}\n")
-        click.echo("Health Check")
-        click.echo("=" * 40)
 
         checks = []
         try:
@@ -223,7 +219,7 @@ def register(main_group):
         try:
             from ._mcp.tools import register_all_tools  # noqa: F401
 
-            checks.append(("MCP tools", True, "3 tools"))
+            checks.append(("MCP tools", True, "registration imports available"))
         except Exception as e:
             checks.append(("MCP tools", False, str(e)))
         cli_path = shutil.which("scitex-dev")
@@ -232,11 +228,23 @@ def register(main_group):
         )
         checks.append(("Rules", True, f"{len(ALL_RULES)} rules"))
 
-        all_ok = True
+        all_ok = all(ok for _, ok, _ in checks)
+        if as_json:
+            click.echo(json.dumps({
+                "version": __version__,
+                "checks": [
+                    {"name": name, "ok": ok, "info": info}
+                    for name, ok, info in checks
+                ],
+                "ok": all_ok,
+            }, indent=2))
+            sys.exit(0 if all_ok else 1)
+
+        click.echo(f"scitex-dev linter {__version__}\n")
+        click.echo("Health Check")
+        click.echo("=" * 40)
         for name, ok, info in checks:
             status = "✓" if ok else "✗"
-            if not ok:
-                all_ok = False
             click.echo(f"  {status} {name}: {info}")
         click.echo()
         if all_ok:
