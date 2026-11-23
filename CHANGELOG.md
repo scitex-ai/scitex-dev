@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Correct audit-all severity help and guidance: the wrapper currently forwards
+  the option only to audit-cli; a uniform reporting floor remains unresolved.
+
 - Preserve source expressions in generated API defaults so documentation does
   not substitute a builder-specific home path for `CREDENTIALS_PATH`.
 

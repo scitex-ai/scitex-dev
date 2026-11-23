@@ -145,6 +145,12 @@ policy. Read the actual exit status and per-auditor findings: a tally of zero
 unmasked errors alone does not establish success. Invocation or configuration
 errors can return exit code 2.
 
+The wrapper's `--severity` option currently reaches only `audit-cli`; other
+auditors retain their own defaults. Both `warn` and `warning` are accepted, but
+that spelling parity does not implement a uniform reporting floor. See the
+[owning audit skill](src/scitex_dev/_skills/scitex-dev/39_interface-audit.md)
+for direct auditor commands and remaining coverage limits.
+
 Illustrative output structure, rather than a current package assessment:
 
 ```
