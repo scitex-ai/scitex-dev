@@ -10,6 +10,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Correct configuration onboarding: `.env` alone is not loaded by `load_config`/`show-config`; document reader-specific precedence and remove unused variable suggestions from `.env.example`.
+
 - Refuse replacing MCP client JSON when its permission mode changes during
   preparation, preserving the external chmod decision and existing contents.
 
