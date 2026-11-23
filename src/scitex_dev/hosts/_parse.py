@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """Read and validate `hosts.yaml` — deserialization only.
 
@@ -31,13 +32,23 @@ def _load_yaml(path: Path) -> dict:
 
     try:
         with open(path) as f:
-            return yaml.safe_load(f) or {}
+            data = yaml.safe_load(f)
     except yaml.YAMLError as exc:
         raise HostRegistryError(
             f"{path}: invalid YAML ({exc})",
             code=ErrorCode.VALIDATION,
             remediation=f"Fix the YAML syntax in {path}.",
         ) from exc
+
+    if data is None:
+        return {}
+    if not isinstance(data, dict):
+        raise HostRegistryError(
+            f"{path}: top-level document must be a mapping, got {type(data).__name__}",
+            code=ErrorCode.VALIDATION,
+            remediation=f"Write a YAML mapping with a `hosts:` mapping in {path}.",
+        )
+    return data
 
 
 def _parse_runner_labels(
@@ -235,7 +246,9 @@ def _load_registry(
     if not path.exists():
         create_default_hosts_yaml(path)
     data = _load_yaml(path)
-    raw_hosts = data.get("hosts") or {}
+    raw_hosts = data.get("hosts")
+    if raw_hosts is None:
+        raw_hosts = {}
     if not isinstance(raw_hosts, dict):
         raise HostRegistryError(
             f"{path}: top-level `hosts:` must be a mapping of name -> record",
