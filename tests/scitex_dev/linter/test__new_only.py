@@ -1,22 +1,16 @@
-"""Tests for the NEW-ONLY baseline gate (``validate-files --new-only``).
+"""Historical new-only classification helpers and the forbidden file-gate mode.
 
-Safety pair for the research-mode severity promotion (#264 / #265): under
-``--new-only`` only NEWLY-introduced findings keep their promoted ``error``
-severity (and block the post-edit hook), while PRE-EXISTING findings present
-at the baseline ref are capped to ``warning`` (visible, non-blocking).
-
-These tests use REAL temp git repos (``git init`` + commit a baseline, then
-mutate the working tree) — NO mocks. The driving rule is ``STX-NL001`` (a
-bare integer literal >= 1000), which is dependency-free (no scitex / figrecipe
-plugin needed) and lives in category ``style``; the temp repo's
-``pyproject.toml`` promotes it to ``error`` via ``per-rule-severity`` so the
-test exercises the real promotion -> gate flow hermetically.
+The operator ruling forbids new-only file validation. Direct-gate cases retain
+real Git baselines but assert the refusal, matching the existing CLI guard.
+Normal-mode errors still block. Classification and baseline-reader utilities
+remain covered separately for compatibility; they do not admit this gate mode.
 """
 
 from __future__ import annotations
 
 import subprocess
 
+import click
 import pytest
 
 from scitex_dev.linter._cmd_check import _do_check
@@ -131,93 +125,54 @@ class TestApplyNewOnlyUnit:
 
 
 class TestCheckFilesNewOnly:
-    def test_a_preexisting_violation_not_reported_as_error(self, git_repo):
-        # Arrange — commit a file whose ONLY violation is pre-existing.
+    def test_a_preexisting_violation_not_reported_as_error_is_refused(self, git_repo):
+        # Arrange
         _write_pyproject(git_repo)
-        f = git_repo / "script.py"
+        f = git_repo / 'script.py'
         f.write_text(_NL001_LINE)
-        _git(git_repo, "add", "-A")
-        _git(git_repo, "commit", "-m", "baseline")
-        # Act — --new-only at severity error: the pre-existing error is capped
-        # to warning, so it's filtered out by the error floor.
-        rc = _do_check(
-            str(f),
-            as_json=False,
-            no_color=True,
-            severity="error",
-            category=None,
-            new_only=True,
-            baseline="HEAD",
-        )
-        # Assert — exit code does NOT signal error (0 = clean at error floor).
-        assert rc == 0
+        _git(git_repo, 'add', '-A')
+        _git(git_repo, 'commit', '-m', 'baseline')
+        # Act
+        # Assert: the same operator refusal applies to direct callers.
+        with pytest.raises(click.UsageError, match="禁止"):
+            _do_check(str(f), as_json=False, no_color=True, severity='error', category=None, new_only=True, baseline='HEAD')
 
-    def test_b_newly_added_violation_reported_at_error(self, git_repo):
-        # Arrange — baseline has ONE violation; working tree adds a SECOND.
+    def test_b_newly_added_violation_reported_at_error_is_refused(self, git_repo):
+        # Arrange
         _write_pyproject(git_repo)
-        f = git_repo / "script.py"
+        f = git_repo / 'script.py'
         f.write_text(_NL001_LINE)
-        _git(git_repo, "add", "-A")
-        _git(git_repo, "commit", "-m", "baseline")
-        # Mutate the working tree: keep the old line, add a NEW NL001.
+        _git(git_repo, 'add', '-A')
+        _git(git_repo, 'commit', '-m', 'baseline')
         f.write_text(_NL001_LINE + _NL001_LINE_NEW)
         # Act
-        rc = _do_check(
-            str(f),
-            as_json=False,
-            no_color=True,
-            severity="error",
-            category=None,
-            new_only=True,
-            baseline="HEAD",
-        )
-        # Assert — the NEW violation keeps error severity -> exit 2 (blocks).
-        assert rc == 2
+        # Assert: the same operator refusal applies to direct callers.
+        with pytest.raises(click.UsageError, match="禁止"):
+            _do_check(str(f), as_json=False, no_color=True, severity='error', category=None, new_only=True, baseline='HEAD')
 
-    def test_c_line_shift_keeps_preexisting_classification(self, git_repo):
-        # Arrange — baseline has the violation; working tree inserts blank
-        # lines ABOVE it (shifting its line number) but introduces NOTHING new.
+    def test_c_line_shift_keeps_preexisting_classification_is_refused(self, git_repo):
+        # Arrange
         _write_pyproject(git_repo)
-        f = git_repo / "script.py"
+        f = git_repo / 'script.py'
         f.write_text(_NL001_LINE)
-        _git(git_repo, "add", "-A")
-        _git(git_repo, "commit", "-m", "baseline")
-        # Shift the violation down by 5 blank lines — content-based match must
-        # still classify it as PRE-EXISTING (not new).
-        f.write_text("\n\n\n\n\n" + _NL001_LINE)
+        _git(git_repo, 'add', '-A')
+        _git(git_repo, 'commit', '-m', 'baseline')
+        f.write_text('\n\n\n\n\n' + _NL001_LINE)
         # Act
-        rc = _do_check(
-            str(f),
-            as_json=False,
-            no_color=True,
-            severity="error",
-            category=None,
-            new_only=True,
-            baseline="HEAD",
-        )
-        # Assert — still pre-existing -> capped to warning -> no error exit.
-        assert rc == 0
+        # Assert: the same operator refusal applies to direct callers.
+        with pytest.raises(click.UsageError, match="禁止"):
+            _do_check(str(f), as_json=False, no_color=True, severity='error', category=None, new_only=True, baseline='HEAD')
 
-    def test_d_untracked_file_all_violations_new(self, git_repo):
-        # Arrange — a file that was NEVER committed (untracked => empty
-        # baseline => every finding is new).
+    def test_d_untracked_file_all_violations_new_is_refused(self, git_repo):
+        # Arrange
         _write_pyproject(git_repo)
-        _git(git_repo, "commit", "--allow-empty", "-m", "empty baseline")
-        f = git_repo / "fresh.py"
+        _git(git_repo, 'commit', '--allow-empty', '-m', 'empty baseline')
+        f = git_repo / 'fresh.py'
         f.write_text(_NL001_LINE)
-        # (deliberately NOT added/committed)
         # Act
-        rc = _do_check(
-            str(f),
-            as_json=False,
-            no_color=True,
-            severity="error",
-            category=None,
-            new_only=True,
-            baseline="HEAD",
-        )
-        # Assert — treated as new -> error severity kept -> exit 2.
-        assert rc == 2
+        # Assert: the same operator refusal applies to direct callers.
+        with pytest.raises(click.UsageError, match="禁止"):
+            _do_check(str(f), as_json=False, no_color=True, severity='error', category=None, new_only=True, baseline='HEAD')
 
     def test_e_without_new_only_preexisting_reports_at_full_severity(
         self, git_repo

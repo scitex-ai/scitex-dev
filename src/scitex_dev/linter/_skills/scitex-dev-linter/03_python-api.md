@@ -131,3 +131,12 @@ metadata after a supported tag remains accepted. Owning tag/extraction and
 real-finding controls are in `tests/scitex_dev/linter/test__md.py` and
 `test__rst.py`. An empty result for an unsupported language does not establish
 that its content or the complete document was validated.
+
+`_cmd_check._do_check` and its compatibility re-export `cli._do_check` also
+reject `new_only=True` with the same `click.UsageError` message as the CLI,
+before configuration or file analysis. A Python caller cannot enable the
+forbidden gate mode through that re-export. Normal validation still reports
+pre-existing errors at full severity. Historical `_new_only` classification
+utilities remain for compatibility; they are not a supported validation mode.
+Owning controls: `tests/scitex_dev/linter/test__cmd_check.py`,
+`test__forbid_new_only.py` and `test__new_only.py`.

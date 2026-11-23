@@ -107,3 +107,12 @@ owned file-preservation controls live in
 `tests/scitex_dev/linter/test__cmd_mcp.py`.
 Actual tool contracts are in [11_mcp-tools.md](11_mcp-tools.md). Verify a configured
 server, client and hook profile separately.
+
+`_cmd_check._do_check` and its compatibility re-export `cli._do_check` also
+reject `new_only=True` with the same `click.UsageError` message as the CLI,
+before configuration or file analysis. A Python caller cannot enable the
+forbidden gate mode through that re-export. Normal validation still reports
+pre-existing errors at full severity. Historical `_new_only` classification
+utilities remain for compatibility; they are not a supported validation mode.
+Owning controls: `tests/scitex_dev/linter/test__cmd_check.py`,
+`test__forbid_new_only.py` and `test__new_only.py`.

@@ -12,13 +12,11 @@ non-canonical synonym for the ecosystem-wide ``validate`` verb. Both
 warn-phase deprecated aliases (see ``cli.py``) so existing pre-commit /
 CI invocations across the ecosystem keep working.
 
-The ``--new-only`` / ``--baseline`` flags are the SAFETY PAIR for the
-research-mode severity promotion (#264 / #265): under ``--new-only`` only
-NEWLY-introduced findings keep their promoted ``error`` severity (and so
-block the post-edit hook), while PRE-EXISTING findings present at the
-baseline ref are capped to ``warning`` (visible, non-blocking). See
-``_new_only`` for the classification, which mirrors PR #261's diff-aware
-``ecosystem audit-all`` identity (line-number-agnostic, content-keyed).
+The ``--new-only`` mode is forbidden by the operator ruling quoted in
+``_forbid_new_only``. Both the registered command and the back-compatible
+``_do_check`` Python gate reject it before checking files. Historical
+classification utilities remain in ``_new_only``; they are not a supported
+file-gate mode.
 """
 
 from __future__ import annotations
@@ -65,6 +63,8 @@ def _baseline_issues_for(filepath, baseline, config):
 def _do_check(
     path, as_json, no_color, severity, category, new_only=False, baseline="HEAD"
 ):
+    if new_only:
+        raise click.UsageError(FORBIDDEN_NEW_ONLY)
     config = load_config(path)
     use_color = not no_color and sys.stdout.isatty()
     min_sev = SEVERITY_ORDER[severity]

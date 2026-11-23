@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Enforce the existing new-only refusal for direct Python file-gate calls and the compatibility re-export, preserving full-severity normal validation.
+
+
 - Track Markdown fence state to preserve longer/tilde and EOF Python blocks while ignoring Python-looking fences inside non-Python blocks.
 
 
