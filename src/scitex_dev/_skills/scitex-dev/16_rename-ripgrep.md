@@ -13,6 +13,12 @@ normalized text with Python, the same engine/read behavior used for replacement.
 The internal helper's default content-search mode remains available for its
 real-ripgrep controls; it is not the public regex selection predicate.
 
+All content candidates pass the shared NUL-free text reader before editing.
+Literal matches are validated after ripgrep search; regex matches and the
+Python-glob fallback use the same reader. The final content stage reads through
+that gate again. This adds validation I/O for literal candidates; path-only
+queries keep their existing scope. See [content rules](15_rename-content.md).
+
 The optional ripgrep backend in `rename/filters.py::_rg_find_content_matches`
 requests NUL-delimited filenames and decodes each filename with `os.fsdecode`.
 It consumes bytes so text newline normalization cannot alter carriage returns.

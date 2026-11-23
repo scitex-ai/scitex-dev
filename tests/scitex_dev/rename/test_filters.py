@@ -438,3 +438,51 @@ def test_regex_text_application_keeps_python_semantics(regex_text_case):
     sibling_after = (sibling.read_bytes(), sibling.stat().st_ino, sibling.stat().st_mtime_ns)
     # Assert
     assert (result.error, file.read_bytes(), sibling_after) == (None, expected, before[1])
+
+
+_LATE_NUL = b"needle\n" + b"x" * 65536 + b"\0\n"
+_NUL_INPUTS = [(b"\0needle\n", b"\0needle\n", 0), (b"needle\0tail\n", b"needle\0tail\n", 0), (_LATE_NUL, _LATE_NUL, 0), (b"needle\n", b"CHANGED\n", 1)]
+
+@pytest.fixture(params=[(regex, body, "needle", expected, matches) for regex in [False, True] for body, expected, matches in _NUL_INPUTS] + [(True, b"", "^$", b"CHANGED", 1), (False, b"", "needle", b"", 0), (False, b"\0needle\n", "\0", b"\0needle\n", 0), (True, b"\0needle\n", r"\x00", b"\0needle\n", 0), (True, b"\0needle\n", "\0", b"\0needle\n", 0), (True, b"needle\n", "needle|\0", b"CHANGED\n", 1)])
+def nul_content_case(request, tmp_path):
+    assert _RG_PATH is not None, "This cohort checks actual ripgrep availability"
+    regex, body, pattern, expected, matches = request.param
+    root = tmp_path / "owned-repo"
+    root.mkdir()
+    file = root / "owned.txt"
+    file.write_bytes(body)
+    for args in [["init"], ["config", "user.name", "Owned NUL content fixture"], ["config", "user.email", "owned@example.invalid"], ["add", "."], ["commit", "-m", "owned NUL content fixture"]]:
+        subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True, timeout=10)
+    before = (file.read_bytes(), file.stat().st_ino, file.stat().st_mtime_ns)
+    yield root, file, regex, pattern, expected, matches, before
+
+
+def test_nul_content_discovery_excludes_nul_input(nul_content_case):
+    # Arrange
+    from scitex_dev.rename.filters import find_matching_files
+    root, file, regex, pattern, _, matches, _ = nul_content_case
+    config = RenameConfig(pattern, "CHANGED", regex=regex)
+    # Act
+    files = find_matching_files(str(root), config, need_content_match=True)
+    # Assert
+    assert files == ([file] if matches else [])
+
+
+def test_nul_content_preview_preserves_input(nul_content_case):
+    # Arrange
+    root, file, regex, pattern, _, matches, before = nul_content_case
+    # Act
+    result = preview_rename(pattern, "CHANGED", directory=str(root), regex=regex)
+    after = (file.read_bytes(), file.stat().st_ino, file.stat().st_mtime_ns)
+    # Assert
+    assert (result.summary["content_matches"], after) == (matches, before)
+
+
+def test_nul_content_application_preserves_excluded_input(nul_content_case):
+    # Arrange
+    root, file, regex, pattern, expected, matches, before = nul_content_case
+    # Act
+    result = execute_rename(pattern, "CHANGED", directory=str(root), regex=regex)
+    after = (file.read_bytes(), file.stat().st_ino, file.stat().st_mtime_ns)
+    # Assert
+    assert (result.error, result.summary["content_matches"], after[0], after == before) == (None, matches, expected, expected == before[0])

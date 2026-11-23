@@ -13,6 +13,7 @@ from typing import Any
 
 from .config import RenameConfig
 from .filters import (
+    _read_content_text,
     find_matching_files,
     is_django_protected_line,
     is_src_excluded,
@@ -77,9 +78,8 @@ def rename_file_contents(config: RenameConfig, directory: str) -> list[dict[str,
     for i, file_path in enumerate(files):
         file_id = f"c-{i:03d}"
 
-        try:
-            content = file_path.read_text(errors="surrogateescape")
-        except (OSError, UnicodeDecodeError):
+        content = _read_content_text(file_path)
+        if content is None:
             continue
 
         skip_entire_file = _should_skip(file_id, config.skip_ids)

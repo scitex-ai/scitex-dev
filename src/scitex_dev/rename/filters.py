@@ -133,12 +133,19 @@ def _rg_find_content_matches(
         return None
 
 
-def _matches_python_regex(path: Path, pattern: str) -> bool:
-    """Match the same decoded, newline-normalized text used by replacement."""
+def _read_content_text(path: Path) -> str | None:
+    """Read eligible content text; NUL-bearing or unreadable input is excluded."""
     try:
-        return re.search(pattern, path.read_text(errors="surrogateescape"), re.DOTALL) is not None
+        content = path.read_text(errors="surrogateescape")
     except (OSError, UnicodeDecodeError):
-        return False
+        return None
+    return None if "\0" in content else content
+
+
+def _matches_python_regex(path: Path, pattern: str) -> bool:
+    """Match the same eligible, newline-normalized text used by replacement."""
+    content = _read_content_text(path)
+    return content is not None and re.search(pattern, content, re.DOTALL) is not None
 
 
 def find_matching_files(
@@ -149,6 +156,10 @@ def find_matching_files(
     Ripgrep searches literal text or lists regex candidates. Python regex
     matching uses the same text decoding as replacement. Falls back to glob.
     """
+    # A literal NUL cannot match eligible text and cannot be passed in argv.
+    if need_content_match and not config.regex and "\0" in config.pattern:
+        return []
+
     # Keep ripgrep traversal; Python owns regex text semantics.
     if need_content_match:
         rg_results = _rg_find_content_matches(directory, config, files_only=config.regex)
@@ -162,7 +173,11 @@ def find_matching_files(
                 if not p.is_symlink()
                 and not should_exclude_path(p, config)
                 and (config.scope or matches_include_extensions(p, config))
-                and (not config.regex or _matches_python_regex(p, config.pattern))
+                and (
+                    _matches_python_regex(p, config.pattern)
+                    if config.regex
+                    else _read_content_text(p) is not None
+                )
             ]
 
     # Fallback: Python glob
@@ -181,14 +196,13 @@ def find_matching_files(
         if not config.scope and not matches_include_extensions(path, config):
             continue
         if need_content_match:
-            try:
-                content = path.read_text(errors="surrogateescape")
-                if config.regex:
-                    if not re.search(config.pattern, content, re.DOTALL):
-                        continue
-                elif config.pattern not in content:
+            content = _read_content_text(path)
+            if content is None:
+                continue
+            if config.regex:
+                if not re.search(config.pattern, content, re.DOTALL):
                     continue
-            except (OSError, UnicodeDecodeError):
+            elif config.pattern not in content:
                 continue
         matching.append(path)
 

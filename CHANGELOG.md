@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Exclude NUL-bearing input from content edits consistently across literal,
+  regex and missing-ripgrep paths; retain path renames and empty-text matching.
+
 - Round-trip undecodable bytes through rename text reads and content writers
   so selected token edits do not replace surrounding bytes with Unicode markers.
 

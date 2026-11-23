@@ -83,8 +83,30 @@ supported runner argument; it does not qualify sudo authentication or transport.
 Literal preview records can contain escaped surrogate code points. Python and
 CLI JSON round-trips are scoped evidence; cross-language client handling is
 unverified. Existing line-ending normalization still applies to actual changes.
-These LF/UTF-8-locale cases do not establish general binary/encoding support,
-arbitrary-regex byte semantics, or uniform NUL-file eligibility across backends.
+These LF/UTF-8-locale cases do not establish general binary/encoding support
+or arbitrary-regex byte semantics. NUL-bearing input has a separate exclusion
+rule below.
 Git, dirty-tree and permission guards remain active; no privilege policy changes.
+
+## NUL-bearing input
+
+Bulk content editing excludes input text containing NUL (`\0`) in literal and
+regex modes, with or without ripgrep. The shared reader in `rename/filters.py`
+returns no eligible text for that input and is also used by the final content
+stage in `rename/steps.py`. Empty text remains eligible, including regex `^$`.
+Read errors retain the existing skip behavior and decoding uses `surrogateescape`.
+
+The `nul_content` controls in `tests/scitex_dev/rename/test_filters.py` cover
+prefix, suffix and late NULs, ordinary and empty text, and explicit literal/regex
+NUL patterns. Discovery excludes NUL input; preview reports no content matches
+and preserves bytes/inodes/mtimes; application makes no content write. A literal
+NUL pattern has no eligible match. A regex containing a NUL alternative can still
+match ordinary text through its other alternative.
+
+This rule concerns content input. Existing path-renaming behavior and the low-level
+writer remain available independently; a NUL-bearing file can still have its name
+renamed without editing its bytes. The rule is not a complete binary-format or
+encoding detector. Valid text without NUL retains the existing behavior. Matched
+literal candidates now require a validation read as well as the final content read.
 
 See [bulk rename](15_rename.md) for operation guards and result handling.
