@@ -64,7 +64,8 @@ exit codes, notebook metadata and preview/apply file effects through the CLI.
 ```bash
 scitex-dev linter mcp list-tools --json
 scitex-dev linter mcp doctor
-scitex-dev linter mcp start --dry-run
+scitex-dev linter mcp start --dry-run --json
+scitex-dev linter mcp install --json
 scitex-dev skills list --package scitex-dev --json
 scitex-dev skills get scitex-dev-linter SKILL --owner scitex-dev --json
 ```
@@ -75,7 +76,19 @@ Owner selection can include several namespaces of the same distribution.
 MCP `list-tools` can fall back to known tool names if server loading fails; that
 output alone does not prove tools are loaded. `doctor` checks dependency/tool
 module imports, CLI lookup and a rule count, not a live server/client round trip.
-`start --dry-run` starts no server. The accepted `--json` options on `doctor`
-and `start --dry-run` currently remain text-output gaps. Source: `_cmd_mcp.py`;
-actual tool contracts are in [11_mcp-tools.md](11_mcp-tools.md). Verify a configured
+`start --dry-run` starts no server; with `--json` it emits an intent object with
+`action="start"`, the selected `transport` (`stdio` or `sse`) and `dry_run=true`.
+This describes a preview and does not establish a running server. `install`
+prints client configuration and never installs or changes it. Its `--json`
+output is only the `mcpServers` configuration object, with the executable found
+on PATH or the literal `scitex-dev` fallback and arguments
+`["linter", "mcp", "start"]`. Quoted executable paths are JSON-escaped in both
+output modes. The install `--yes` and `--dry-run` flags remain informational
+no-ops. Native start still uses the selected MCP transport; the dry-run JSON
+object is not a live-server status or protocol wrapper.
+
+The accepted `doctor --json` option still produces text; that output gap remains.
+Source: `_cmd_mcp.py`. Informational output, no-op flags, path quoting and owned
+file-preservation controls live in `tests/scitex_dev/linter/test__cmd_mcp.py`.
+Actual tool contracts are in [11_mcp-tools.md](11_mcp-tools.md). Verify a configured
 server, client and hook profile separately.

@@ -12,6 +12,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Honor JSON output for linter MCP installation snippets and start previews,
+  and escape executable paths in text-mode configuration snippets.
+
 - Emit structured formatter JSON with selected-file results, proposed changes,
   actual writes and optional Python diffs, preserving text output and exit codes.
 

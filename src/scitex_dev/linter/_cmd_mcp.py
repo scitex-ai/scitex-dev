@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """``scitex-dev linter mcp ...`` command group.
 
 Extracted from ``cli.py`` (512-line budget). Registered onto the root
@@ -78,7 +79,12 @@ def register(main_group):
     )
     def mcp_start(transport, dry_run, yes, as_json):
         if dry_run:
-            click.echo(f"Would start MCP server (transport={transport}).")
+            if as_json:
+                click.echo(json.dumps({
+                    "action": "start", "transport": transport, "dry_run": True,
+                }))
+            else:
+                click.echo(f"Would start MCP server (transport={transport}).")
             return
         try:
             from ._server import run_server
@@ -289,20 +295,31 @@ def register(main_group):
         del dry_run, yes  # audit §2 — no-op flags
         import shutil
 
+        cli_path = shutil.which("scitex-dev")
+        if as_json:
+            click.echo(json.dumps({
+                "mcpServers": {
+                    "scitex-dev-linter": {
+                        "command": cli_path or "scitex-dev",
+                        "args": ["linter", "mcp", "start"],
+                    },
+                },
+            }, indent=2))
+            return
+
         click.echo(f"scitex-dev linter {__version__}\n")
         click.echo("Add this to your Claude Desktop config file:\n")
         click.echo(
             "  macOS: ~/Library/Application Support/Claude/claude_desktop_config.json"
         )
         click.echo("  Linux: ~/.config/Claude/claude_desktop_config.json\n")
-        cli_path = shutil.which("scitex-dev")
         if cli_path:
             click.echo(f"Your installation path: {cli_path}\n")
         config = (
             "{\n"
             '  "mcpServers": {\n'
             '    "scitex-dev-linter": {\n'
-            f'      "command": "{cli_path or "scitex-dev"}",\n'
+            f'      "command": {json.dumps(cli_path or "scitex-dev")},\n'
             '      "args": ["linter", "mcp", "start"]\n'
             "    }\n"
             "  }\n"
