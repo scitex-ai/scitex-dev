@@ -46,3 +46,29 @@ Findings have a `kind` of `missing`, `broken`, `duplicate`, `obsolete`, or
 [manifest example](examples/skill-projection-manifest.json) is generated from
 the same public API used by adapters, preventing an illustrative schema from
 drifting away from runtime behavior.
+
+## Interpret a clean audit within its snapshot
+
+`discover_skills` computes each `SkillRecord.source_hash` once. The resulting
+`RegistryReport` is a snapshot. `audit_projection` reads projected files and
+the manifest against those supplied records; it does not rediscover canonical
+sources. Rediscover after source edits before auditing. If a copied projection
+and its manifest stay unchanged while source changes, the old report can still
+produce no findings; the fresh report exposes the stale source stamp. These
+calls do not lock trees against concurrent edits or inspect a running agent's
+loaded skills.
+
+Passing `projection_root` to `projection_manifest_json` hashes the materialized
+output, allowing an adapter to add version frontmatter. The audit then checks
+output against that recorded hash and source identity against the supplied
+registry. It does not prove that the output's meaning matches its source or
+approve arbitrary transformations. Review the adapter separately, and preserve
+stale findings rather than restamping unexpected changes to make them pass.
+
+`hash_skill_tree` hashes relative file names and contents while excluding files
+under `.git` and `__pycache__` path components. File modes are not part of this
+hash. The owning implementations are `skill_registry/_discover.py` and
+`skill_registry/_projection.py`; the existing discovery, manifest, changed-copy,
+symlink, duplicate and malformed-manifest controls are in
+`tests/scitex_dev/skill_registry/test___init__.py`. These checks establish their
+fixture scope, not current installed projections across the fleet.

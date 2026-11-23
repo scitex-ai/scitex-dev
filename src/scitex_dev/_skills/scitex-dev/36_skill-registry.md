@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] Harness-neutral skill discovery and projection validation
-  [DETAILS] Package-local `_skills/<name>/` trees are authoritative; Claude, Codex, and Hermes directories are generated projections. Use `scitex_dev.skill_registry` to discover explicit package roots, hash sources, produce a versioned manifest, and report missing, broken, duplicate, obsolete, or stale projection entries. Use when building or checking a harness adapter. This documents implemented runtime behavior; it does not claim that a projection is current until `audit_projection` returns an empty finding set.
+  [DETAILS] Package-local `_skills/<name>/` trees are authoritative; Claude, Codex, and Hermes directories are generated projections. Use `scitex_dev.skill_registry` to discover explicit package roots, hash sources, produce a versioned manifest, and report missing, broken, duplicate, obsolete, or stale projection entries. Use when building or checking a harness adapter. This documents implemented runtime behavior; a clean `audit_projection` result is relative to its supplied registry snapshot and manifest, not proof of live harness adoption or approved transformation semantics.
 tags: [scitex-dev-skill-registry]
 ---
 
@@ -42,6 +42,26 @@ exports to add version frontmatter without concealing later source drift.
 `audit_projection` accepts symlinks or byte-identical copies and reports five
 finding classes: `missing`, `broken`, `duplicate`, `obsolete`, and `stale`.
 A malformed claimed manifest raises `ProjectionManifestError`.
+
+`RegistryReport` stores the source hashes computed during discovery.
+`audit_projection` rereads projected content and the manifest; it does not
+rediscover or rehash canonical source trees. Rediscover after source changes
+before auditing. An unchanged copied projection can still pass against an old
+report even after its canonical source has changed. A fresh report detects that
+stale source stamp. Neither call locks source and projection against concurrent
+changes, nor proves which skills an agent has loaded.
+
+With `projection_root=...`, `projection_manifest_json` records the current
+materialized tree hash. That supports added frontmatter, but also means a clean
+audit does not establish that a transformation preserved skill meaning. Review
+the adapter's transformation separately; do not restamp altered output merely
+to clear a stale finding. `hash_skill_tree` hashes relative file names and bytes,
+excluding `.git` and `__pycache__` path components; it is not a file-mode check.
+
+The owning functions are in `skill_registry/_discover.py` and `_projection.py`.
+Discovery, manifest and projection controls live in
+`tests/scitex_dev/skill_registry/test___init__.py`; installed-provider controls
+are in `test__installed.py` in that same test directory.
 
 ## Adapter boundary
 
