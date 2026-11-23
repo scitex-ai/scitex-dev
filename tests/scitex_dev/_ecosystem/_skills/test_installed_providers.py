@@ -8,7 +8,7 @@ import pytest
 
 from scitex_dev._core.config import set_package_knob
 from scitex_dev._ecosystem._skills.installed_providers import discover_skill_packages
-from scitex_dev._ecosystem._skills.skills import list_skills
+from scitex_dev._ecosystem._skills.skills import get_skill, list_skills
 from scitex_dev.skill_registry import SkillRegistryError
 
 
@@ -541,3 +541,20 @@ def test_listed_owner_round_trips_to_its_content(shared_namespace_owners):
     content = get_skill(namespace, entry["name"], owner=entry["owner"])
     # Assert
     assert content == "# First owner\n"
+
+
+def test_installed_dev_owns_discoverable_linter_skill_namespace(
+    isolated_metadata_environment,
+):
+    # Arrange
+    required = {"SKILL", "04_cli-reference", "20_env-vars"}
+    # Act
+    catalog = list_skills(package="scitex-dev-linter")
+    rows = catalog.get("scitex-dev-linter", [])
+    content = get_skill("scitex-dev-linter", "04_cli-reference", owner="scitex-dev")
+    # Assert
+    assert (
+        required <= {row["name"] for row in rows},
+        {row["owner"] for row in rows},
+        content is not None and "[tool.scitex-dev.linter]" in content,
+    ) == (True, {"scitex-dev"}, True)

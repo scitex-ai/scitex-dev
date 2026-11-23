@@ -12,6 +12,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Declare the existing linter skill namespace under its scitex-dev owner so
+  installed metadata discovery can list and retrieve the nested guides.
+
 - Correct linter configuration help and environment guidance to name actual
   TOML/environment readers and retain unsupported YAML/severity gaps explicitly.
 

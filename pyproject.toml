@@ -233,6 +233,7 @@ scitex-dev = "scitex_dev"
 
 [project.entry-points."scitex_dev.skills"]
 scitex-dev = "scitex_dev"
+scitex-dev-linter = "scitex_dev.linter"
 general = "scitex_dev"
 scientific = "scitex_dev"
 
@@ -401,6 +402,7 @@ scitex_dev = [
     "_branding/*.yaml",
     "_cli/audit/_summary/data/*",
     "linter/_rules/_verb_lexicon.txt",
+    "linter/_skills/**/*",
     "_sphinx_html/**/*",
     "_sphinx_html/**/.[!.]*",
     "_ecosystem/ci_template/templates/*.tmpl",

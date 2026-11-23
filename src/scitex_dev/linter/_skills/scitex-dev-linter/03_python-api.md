@@ -1,47 +1,47 @@
 ---
 description: |
-  [TOPIC] scitex-dev linter Python API
-  [DETAILS] Top-level public callables — list_rules; richer surface (check_source/check_files/Rule) via internal modules and MCP.
+  [TOPIC] Linter Python API
+  [DETAILS] Use the actual top-level list_rules catalog and checker-module
+  lint_file/lint_source functions. Keep installed rule coverage and imports separate.
 tags: [scitex-dev-linter-python-api]
 ---
 
 # Python API
 
-The top-level public surface re-exported from `scitex_dev.linter` is
-intentionally small; most use is via the CLI or the MCP tool layer.
-
-## Top-level
-
-| Name           | Purpose                                                       |
-|----------------|---------------------------------------------------------------|
-| `__version__`  | Installed package version                                     |
-| `list_rules`   | Return all rules (built-in + plugin), optional `category=`    |
+`scitex_dev.linter` exports `__version__` and `list_rules(category=None)`.
+The catalog combines the installed engine and provider rules. Category matching
+uses the actual category strings, such as `io`; it is not an STX ID-prefix filter.
 
 ```python
-from scitex_dev import linter
+from scitex_dev.linter import list_rules
 
-scitex_dev.linter.list_rules()               # every Rule
-scitex_dev.linter.list_rules(category="io")  # filter
+rules = list_rules(category="io")
 ```
 
-## Richer surface (internal modules)
+The checker module exposes the functions used by the CLI and MCP wrappers:
 
-| Symbol                              | Purpose                                  |
-|-------------------------------------|------------------------------------------|
-| `scitex_dev.linter._linter.check_source`| Check a Python source string             |
-| `scitex_dev.linter._linter.check_files` | Check a list of file paths               |
-| `scitex_dev.linter._rules.ALL_RULES`    | Dict of built-in rule definitions        |
-| `scitex_dev.linter._plugin_loader.load_plugins` | Discover entry-point plugins     |
+```python
+from scitex_dev.linter.checker import lint_source
 
-These are stable enough to use from scripts but live under
-underscore-prefixed modules; long-term, prefer the CLI / MCP layer.
+issues = lint_source("VALUE = 1\n", filepath="tool.py")
+```
 
-## MCP tools
+`lint_file(filepath, config=None)` in that same module reads an existing file;
+`lint_source(source, filepath="<stdin>", config=None)` checks a supplied string.
+Results contain `Issue` objects with rule metadata and source positions. A
+filename can affect config resolution, research/library classification and
+coverage, so use the intended path. Checking a string does not execute it.
+These are checker-module interfaces, not nonexistent top-level `check`,
+`check_source` or `check_files` methods. Source: `linter/__init__.py` and
+`linter/checker.py`; owning controls include `tests/scitex_dev/linter/test__emit.py`
+and `tests/scitex_dev/linter/test__source_helpers.py`.
 
-See `11_mcp-tools.md` — the `linter_check`, `linter_check_source`, and
-`linter_list_rules` tools wrap the Python surface for AI agents.
+Rules and required capabilities remain owned by their providers. Missing
+mandatory providers fail; optional unmet requirements can leave reported skips.
+A returned catalog or an empty issue list is not complete-environment acceptance.
+Configuration readers and the unresolved CLI severity-field gap are documented
+in [04_cli-reference.md](04_cli-reference.md).
 
-## flake8 plugin
-
-Installing `scitex-dev linter` registers an `STX` flake8 plugin
-(`scitex_dev.linter.flake8_plugin:SciTeXFlake8Checker`).
+The distribution declares an STX flake8 extension at
+`scitex_dev.linter.flake8_plugin:SciTeXFlake8Checker`; using it also requires a
+flake8 installation. See [11_mcp-tools.md](11_mcp-tools.md) for MCP wrappers.
