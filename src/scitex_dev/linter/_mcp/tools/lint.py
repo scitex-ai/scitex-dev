@@ -2,7 +2,7 @@
 """Lint MCP tools for scitex-linter."""
 
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 
 def register_lint_tools(mcp) -> None:
@@ -10,7 +10,7 @@ def register_lint_tools(mcp) -> None:
 
     @mcp.tool()
     def linter_check(
-        path: str, severity: str = "info", category: Optional[str] = None
+        path: str, severity: Literal["error", "warning", "info"] = "info", category: Optional[str] = None
     ) -> dict:
         """Lint one existing regular file using enabled installed SciTeX checks.
 
@@ -35,7 +35,7 @@ def register_lint_tools(mcp) -> None:
 
         config = load_config(path)
         issues = lint_file(path, config=config, raise_input_errors=True)
-        min_sev = SEVERITY_ORDER.get(severity, 0)
+        min_sev = SEVERITY_ORDER[severity]
         categories = set(category.split(",")) if category else None
 
         issues = [
@@ -49,7 +49,7 @@ def register_lint_tools(mcp) -> None:
 
     @mcp.tool()
     def linter_list_rules(
-        category: Optional[str] = None, severity: Optional[str] = None
+        category: Optional[str] = None, severity: Optional[Literal["error", "warning", "info"]] = None
     ) -> dict:
         """List the installed SciTeX lint catalog, including provider rules.
 

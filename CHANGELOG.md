@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Validate MCP linter severity choices consistently with the linter CLI;
+  invalid strings now fail argument validation rather than silently filtering.
+
 - Clarify linter validation coverage metadata, early-return JSON limits and
   unreported provider gaps without changing the health verdict or guards.
 

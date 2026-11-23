@@ -358,3 +358,42 @@ def test_mcp_file_input_preserves_accepted_file_bytes(_owned_installed_skill_pro
     after = _source_label_state(files)
     # Assert
     assert after == before
+
+
+@pytest.fixture(params=["linter_check", "linter_list_rules"])
+def _severity_contract_tool(request, tmp_path):
+    from scitex_dev import linter
+    from scitex_dev.linter.checker import lint_file
+    from scitex_dev.linter.config import load_config
+    from scitex_dev.linter.formatter import to_json
+    from scitex_dev.linter.rules import SEVERITY_ORDER
+
+    file = tmp_path / "owned.py"
+    file.write_text('import requests\nrequests.get("https://owned.invalid")\n')
+    (tmp_path / "pyproject.toml").write_text('[tool.scitex-dev.linter]\nlibrary_dirs = ["."]\n')
+    issues = lint_file(str(file), config=load_config(str(file)))
+    expected = {value: to_json([i for i in issues if SEVERITY_ORDER[i.rule.severity] >= SEVERITY_ORDER[value]], str(file)) for value in ["error", "warning", "info"]}
+    catalogs = {value: {"rules": [{"id": r.id, "severity": r.severity, "category": r.category, "message": r.message, "suggestion": r.suggestion} for r in linter.list_rules() if r.severity == value], "count": sum(r.severity == value for r in linter.list_rules())} for value in ["error", "warning", "info"]}
+    return request.param, {"path": str(file)} if request.param == "linter_check" else {}, expected if request.param == "linter_check" else catalogs
+
+
+@pytest.mark.parametrize("severity", ["warn", "fatal", "", "ERROR", " warning", "warning "])
+def test_mcp_severity_contract_rejects_unknown_values(_owned_installed_skill_profile, _severity_contract_tool, severity):
+    # Arrange
+    from fastmcp.exceptions import ToolError
+
+    tool, arguments, _ = _severity_contract_tool
+    # Act
+    # Assert
+    with pytest.raises(ToolError, match="severity"):
+        _call_registered_skill_tool(tool, {**arguments, "severity": severity})
+
+
+@pytest.mark.parametrize("severity", ["error", "warning", "info"])
+def test_mcp_severity_contract_preserves_known_filters(_owned_installed_skill_profile, _severity_contract_tool, severity):
+    # Arrange
+    tool, arguments, expected = _severity_contract_tool
+    # Act
+    result = _call_registered_skill_tool(tool, {**arguments, "severity": severity})
+    # Assert
+    assert result == expected[severity]

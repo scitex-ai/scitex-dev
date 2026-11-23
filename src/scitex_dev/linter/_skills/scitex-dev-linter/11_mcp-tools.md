@@ -25,6 +25,16 @@ respective handlers; other file extensions are analyzed as Python text.
 The CLI `validate-files` command has its separate collection path.
 Catalog category names are strings such as `io`, not uppercase rule prefixes.
 The catalog size depends on installed providers; do not assume a fixed count.
+Both severity arguments advertise and accept exactly `error`, `warning` and
+`info`, with case-sensitive spelling and no whitespace trimming. Registered
+MCP calls reject other strings during argument validation instead of silently
+using an unfiltered file threshold or an empty catalog. File validation defaults
+to `info`; the catalog's omitted or null severity retains its unfiltered behavior.
+These are the current linter choices; this does not resolve alias conventions
+on the separate ecosystem audit commands. Category filters retain their existing
+exact-string behavior. Owning real-client controls are the `severity_contract`
+cases in `tests/scitex_dev/linter/_mcp/tools/test_lint.py`.
+
 
 The two validation tools use `formatter.to_json`: `file`, `issues` and `summary`.
 Each issue includes `rule_id`, severity, category, line, column (`col`), message,
