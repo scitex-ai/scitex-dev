@@ -133,11 +133,16 @@ def build_docs(
         formats: List of builders ("html", "json"). Default: ["html"].
 
     Returns:
-        Dict mapping package name → build result (path or error).
+        Per-package dict of builder names to output-path strings or error dicts.
+        RuntimeError/FileNotFoundError from each build become {"error": str(e)};
+        other formats continue. Missing source gives a package-level error.
+        An override uses output_dir/<builder>; defaults use source_dir/_build/<builder>.
+        A returned path records Sphinx success, not warning-free/content acceptance.
+
+    Source-lookup errors and other exception types can still propagate.
 
     Raises:
-        LookupError: If package not found.
-        RuntimeError: If Sphinx is not installed.
+        LookupError: If the package is absent from discovery.
     """
     from .._core.builder import build_sphinx
 

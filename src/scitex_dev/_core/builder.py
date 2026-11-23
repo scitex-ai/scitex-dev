@@ -31,7 +31,9 @@ def build_sphinx(
         timeout: Build timeout in seconds.
 
     Returns:
-        Path to the build output directory, or None on failure.
+        Output path after a zero Sphinx exit status. Failures below raise.
+        Quiet mode (-q) does not enable warnings-as-errors (-W); a returned
+        path does not establish warning-free or accepted documentation content.
 
     Raises:
         FileNotFoundError: If source_dir or conf.py doesn't exist.

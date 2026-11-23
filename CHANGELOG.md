@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Document per-format docs build results and warning/content limits; correct
+  leaf-owned page CLI examples and remove the unavailable `docs build` route.
+
 - Clarify unified-search index boundaries, import side effects and fuzzy
   required-term scoring; broader subcommand/tool coverage remains unresolved.
 
