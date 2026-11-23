@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Add an always-present `unjudgeable` integer count to drift-report JSON
+  summaries, retaining the existing three counts and classification rules.
+
 - Include missing-reference and install-integrity finding counts in quiet
   drift reports without changing model verdicts or JSON output.
 
