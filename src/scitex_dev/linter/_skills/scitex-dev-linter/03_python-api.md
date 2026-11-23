@@ -42,8 +42,11 @@ A returned catalog or an empty issue list is not complete-environment acceptance
 The shared Python `lint_file` dispatcher currently returns an empty list for
 missing or non-file paths, and `lint_source` does the same for syntax errors.
 Neither result establishes successful input validation. The MCP file endpoint
-adds an explicit missing/non-regular target check before dispatch; it does not
-change these Python API behaviors. Sources: `linter/_dispatch.py` and
+adds an explicit missing/non-regular target check before dispatch. The MCP
+source endpoint first uses Python's AST parser and turns its syntax errors
+into tool errors. Parser acceptance is not successful compilation or runtime
+validation; the endpoint does not compile or execute code. These boundary
+checks do not change the shared Python API behaviors. Sources: `linter/_dispatch.py` and
 `linter/checker.py`.
 Configuration readers and the unresolved CLI severity-field gap are documented
 in [04_cli-reference.md](04_cli-reference.md).

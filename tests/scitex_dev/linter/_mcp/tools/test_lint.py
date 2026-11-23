@@ -208,3 +208,68 @@ def test_mcp_file_check_preserves_valid_file_bytes(_owned_installed_skill_profil
     info = file.stat()
     # Assert
     assert (file.read_bytes(), info.st_ino, info.st_mtime_ns) == before
+
+
+@pytest.fixture(params=[(source, stdin) for source in ["def broken(\n", "if True print('bad')\n", "value = )\n", "pass\x00\n"] for stdin in [False, True]])
+def _unparseable_mcp_source(request, tmp_path):
+    source, stdin = request.param
+    return source, "<stdin>" if stdin else str(tmp_path / "label.py")
+
+
+def test_mcp_source_check_rejects_ast_parser_error(_owned_installed_skill_profile, _unparseable_mcp_source):
+    # Arrange
+    from fastmcp.exceptions import ToolError
+
+    source, filepath = _unparseable_mcp_source
+    # Act
+    # Assert
+    with pytest.raises(ToolError, match="Python source could not be parsed"):
+        _call_registered_skill_tool("linter_check_source", {"source": source, "filepath": filepath})
+
+
+def _source_label_state(files):
+    result = []
+    for file in files:
+        if file.exists():
+            info = file.stat()
+            result.append((file.read_bytes(), info.st_ino, info.st_mtime_ns))
+        else:
+            result.append(None)
+    return result
+
+
+@pytest.fixture(params=[(source, label) for source in ["", "values = (\n 1,\n 2,\n)\n", 'import requests\nrequests.get("https://owned.invalid")\n', 'raise RuntimeError("source must not execute")\n', "await worker()\n"] for label in ["existing", "absent", "stdin"]])
+def _parseable_mcp_source_case(request, tmp_path):
+    from scitex_dev.linter.checker import lint_source
+    from scitex_dev.linter.config import load_config
+    from scitex_dev.linter.formatter import to_json
+
+    source, label = request.param
+    file = tmp_path / "label.py"
+    if label == "existing":
+        file.write_text("UNRELATED_LABEL_CONTENT = True\n")
+    config = tmp_path / "pyproject.toml"
+    config.write_text('[tool.scitex-dev.linter]\nlibrary_dirs = ["."]\n')
+    filepath = "<stdin>" if label == "stdin" else str(file)
+    expected = to_json(lint_source(source, filepath=filepath, config=load_config(filepath)), filepath)
+    files = [config, file]
+    return source, filepath, expected, files, _source_label_state(files)
+
+
+def test_mcp_parseable_source_preserves_issue_payload(_owned_installed_skill_profile, _parseable_mcp_source_case):
+    # Arrange
+    source, filepath, expected, _, _ = _parseable_mcp_source_case
+    # Act
+    result = _call_registered_skill_tool("linter_check_source", {"source": source, "filepath": filepath})
+    # Assert
+    assert result == expected
+
+
+def test_mcp_parseable_source_does_not_write_label_or_config(_owned_installed_skill_profile, _parseable_mcp_source_case):
+    # Arrange
+    source, filepath, _, files, before = _parseable_mcp_source_case
+    # Act
+    _call_registered_skill_tool("linter_check_source", {"source": source, "filepath": filepath})
+    after = _source_label_state(files)
+    # Assert
+    assert after == before

@@ -12,6 +12,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Reject AST syntax errors at the MCP source-string boundary with location
+  diagnostics while preserving shared checker and parseable-source behavior.
+
 - Reject missing and non-regular MCP lint file targets instead of returning empty
   findings, and describe actual dispatch/provider and syntax-check limits.
 

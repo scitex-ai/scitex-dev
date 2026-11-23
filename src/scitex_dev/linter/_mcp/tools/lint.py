@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Lint MCP tools for scitex-linter."""
 
+import ast
+
 from pathlib import Path
 from typing import Optional
 
@@ -88,11 +90,20 @@ def register_lint_tools(mcp) -> None:
         The filepath controls configuration and research/library classification
         as well as labels. Return findings from enabled installed checks;
         optional provider coverage is not established by an empty result.
-        This is not a syntax validator: the current checker returns no
-        findings for an unparseable Python string."""
+        AST syntax errors become tool errors before checks run. AST parser
+        acceptance does not establish compilation or runtime validity; this
+        endpoint does not compile or execute the source."""
         from ...checker import lint_source
         from ...config import load_config
         from ...formatter import to_json
+
+        try:
+            ast.parse(source, filename=filepath)
+        except SyntaxError as exc:
+            location = f"{filepath}:{exc.lineno or '?'}:{exc.offset or '?'}"
+            raise ValueError(
+                f"Python source could not be parsed at {location}: {exc.msg}"
+            ) from exc
 
         config = load_config(filepath)
         issues = lint_source(source, filepath=filepath, config=config)
