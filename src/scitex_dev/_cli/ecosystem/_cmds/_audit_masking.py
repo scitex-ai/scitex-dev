@@ -373,7 +373,9 @@ def resolve_skip_rules(distributions, explicit_path):
     resolve declares nothing (rather than erroring) — but a tree we CAN
     resolve whose config is malformed raises, and the caller exits 2. A
     deferral config we cannot trust must not be graded as if the repo
-    had declared no deferrals at all.
+    had declared no deferrals at all. A normal unresolved target returns
+    ``(None, None)``; unexpected resolver failures propagate instead of
+    being reported as an empty declaration inventory.
     """
     from pathlib import Path
 
@@ -384,13 +386,9 @@ def resolve_skip_rules(distributions, explicit_path):
         if explicit_path:
             root = Path(explicit_path)
         else:
-            try:
-                from ...audit._target_tree import resolve_target_tree
+            from ...audit._target_tree import resolve_target_tree
 
-                root, _ = resolve_target_tree(distribution, None)
-            except Exception:
-                out[distribution] = []
-                continue
+            root, _ = resolve_target_tree(distribution, None)
         out[distribution] = load_skip_rules(Path(root)) if root is not None else []
     return out
 
