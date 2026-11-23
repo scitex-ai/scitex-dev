@@ -33,8 +33,8 @@ def register(ecosystem):
                 "matrix filters. Exit 1 on drifting rows, missing reference "
                 "versions, critical staleness or untrustworthy installs; "
                 "otherwise 0. Unknown cells can leave coverage incomplete. "
-                "Use --json for install-integrity details; full/quiet human "
-                "renderers do not currently include those details."
+                "Full human output includes install-integrity details; quiet "
+                "output omits them. Use --json for structured findings."
             ),
             examples=(
                 Example("{prog} ecosystem drift-report", "Full matrix report."),
