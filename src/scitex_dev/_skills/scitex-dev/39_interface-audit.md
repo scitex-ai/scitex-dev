@@ -48,6 +48,12 @@ Record the checkout commit, imported/installed versions and rule-provider
 metadata separately. Python source auditing must inspect the resolved checkout,
 not substitute a different installed copy. Missing source is not auditable.
 
+An unresolved declaration target yields no declared skips; it does not establish
+that the package is clean. Unexpected resolver failures propagate before child
+audits start. Explicit paths still load their declarations, and malformed skip
+configs still refuse. Owning source: `_cli/ecosystem/_cmds/_audit_masking.py::resolve_skip_rules`;
+controls: `tests/scitex_dev/_cli/ecosystem/_cmds/test__audit_masking_resolution_followup.py`.
+
 The ecosystem commands `audit-all`, `audit-cli`, `audit-mcp-tools`,
 `audit-project`, `audit-django`, `audit-local-state` and `audit-registry-layout`
 accept both `--severity warn` and `--severity warning` for the same warning

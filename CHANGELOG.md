@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Surface unexpected audit declaration-target resolver failures instead of
+  reporting empty declarations; retain normal unresolved and explicit targets.
+
 - Correct root CLI configuration help to match the actual shared path resolver
   and package-state overlay, keeping command-specific readers explicit.
 
