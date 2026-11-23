@@ -40,6 +40,18 @@ are absent. Strict CI checks, selected content assertions and source/version
 binding remain separate evidence. Neither a build nor a correct local HTML/JSON
 file establishes which artifact an installed wheel or live host serves.
 
+**Displayed API defaults**
+
+The project's Sphinx configuration preserves source expressions in displayed
+function defaults. For example, `rotate_all` shows `source_path=CREDENTIALS_PATH`
+instead of the documentation builder's absolute home path. In the owning
+`src/scitex_dev/_creds/_rotate.py`, that constant is computed at module import
+from `Path.home() / ".claude" / ".credentials.json"`. The display setting does
+not change the runtime default or credential access behavior. The bundled
+signature is checked by
+`tests/integration/test_sphinx_source_defaults.py`; source, generated output,
+installed resources and live serving still need their separate checks.
+
 **CLI boundaries**
 
 `scitex-dev docs get [PAGE_NAME]` reads Dev's pages. Its positional argument is

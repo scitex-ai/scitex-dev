@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Preserve source expressions in generated API defaults so documentation does
+  not substitute a builder-specific home path for `CREDENTIALS_PATH`.
+
 - Document per-format docs build results and warning/content limits; correct
   leaf-owned page CLI examples and remove the unavailable `docs build` route.
 
