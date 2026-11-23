@@ -27,11 +27,12 @@ _SNIPPET_SKIP_RULES = {
     "STX-S005",  # Missing timestamp
 }
 
-# Match fenced blocks tagged ``python`` or ``py`` (case-insensitive).
-# Captures (lang, body, start_line) so issue line numbers remain
-# meaningful relative to the original markdown file.
+# Match supported triple-backtick Python/py openings (case-insensitive).
+# A closer has at least three backticks followed only by horizontal whitespace.
+# Captures are opening indentation, language and body; line mapping is below.
 _FENCE_RE = re.compile(
-    r"^([ \t]{0,3})```[ \t]*(python|py)\b[^\n]*\n(.*?)^[ \t]{0,3}```",
+    r"^([ \t]{0,3})```[ \t]*(python|py)\b[^\n]*\n"
+    r"(.*?)^[ \t]{0,3}`{3,}[ \t]*\r?$",
     re.MULTILINE | re.DOTALL | re.IGNORECASE,
 )
 

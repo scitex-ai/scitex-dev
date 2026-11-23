@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Require Markdown closing fences to end after backticks and whitespace, preserving backtick-prefixed Python string content.
+
+
 - End reST directive options at the blank separator so colon-prefixed code is retained and opt-in syntax errors remain visible.
 
 

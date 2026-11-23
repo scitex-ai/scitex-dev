@@ -109,3 +109,12 @@ respects the [directive block indentation boundary](https://docutils.sourceforge
 it does not validate directive arguments, option syntax, nested reST or an
 empty directive. Owning boundary and real-option/body controls are in
 `tests/scitex_dev/linter/test__rst.py`.
+
+For those supported triple-backtick openings, a closing fence uses at least
+three backticks followed only by spaces or tabs and the line ending (or end
+of input). A backtick-prefixed line with other trailing text stays in the code
+body; this prevents Python multiline strings from being truncated. Owning
+controls for body preservation, findings and accepted closing forms are in
+`tests/scitex_dev/linter/test__md.py`. This does not add tilde or longer opening
+fences, container-aware parsing, unclosed-fence handling or full CommonMark
+validation.
