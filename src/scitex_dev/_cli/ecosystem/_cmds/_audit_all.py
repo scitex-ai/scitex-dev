@@ -47,7 +47,7 @@ def register(ecosystem):
         "--severity",
         type=SeverityChoice("warn"),
         default="warn",
-        help="Minimum severity to report (passed through to each auditor).",
+        help="Severity for audit-cli only; other auditors keep their own defaults.",
     )
     @click.option(
         "--jobs",
@@ -185,8 +185,8 @@ def register(ecosystem):
             )
             _sys.exit(2)
 
-        # Order: cheap-to-fast → slow. Each audit-* honours --json + --severity
-        # idempotently. audit-summary excluded — it's the cross-leaf rollup.
+        # Fixed reporting order. All six accept --json; only audit-cli receives
+        # this wrapper's severity below. audit-summary is the cross-leaf rollup.
         audits = [
             "audit-cli",
             "audit-mcp-tools",
