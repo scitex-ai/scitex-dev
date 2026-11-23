@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Clarify unified-search index boundaries, import side effects and fuzzy
+  required-term scoring; broader subcommand/tool coverage remains unresolved.
+
 - Clarify inert docs-provider catalogs versus cached legacy discovery and
   import-capable docs resolution; document duplicate-name and runtime limits.
 

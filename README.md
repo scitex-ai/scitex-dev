@@ -233,6 +233,11 @@ installed declarations. `get_docs` uses a separate legacy mapping and can import
 package code during root lookup or introspection. See the
 [discovery boundaries](src/scitex_dev/_skills/scitex-dev/16_docs-search.md#discovery-and-execution-boundaries).
 
+Unified `search` indexes docs manifest metadata, shallow API introspection,
+console-script declarations and selected MCP source text. It does not enumerate
+CLI subcommands or verify MCP registration. See the
+[search index scope](src/scitex_dev/_skills/scitex-dev/16_docs-search.md#search).
+
 > Discover and install skills through `scitex-dev dev skills list/get/install`.
 > Python discovery/export helpers are public in `scitex_dev.ecosystem`:
 > `list_skills`, `get_skill` and `export_skills`; the root module does not
