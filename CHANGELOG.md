@@ -12,6 +12,11 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Require literal IPv4 strings for direct host requested-address construction,
+  matching YAML validation instead of accepting integers, bytes or address objects.
+
+### Fixed
+
 - Validate host kinds as strings before set membership, so list/mapping values
   report registry validation errors instead of leaking unhashable-type failures.
 

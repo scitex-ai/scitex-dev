@@ -65,6 +65,14 @@ change host-record validation, alias resolution, runner floors or seeding.
 Controls: `tests/scitex_dev/hosts/test__parse_shapes.py` exercises the public
 `list_hosts(hosts_path=...)` API against actual YAML fixture files.
 
+`HostRecord.requested_address` is a literal IPv4 string or `None` (no
+preference). Direct construction rejects numeric values, packed bytes and
+address objects instead of coercing them; YAML loading also rejects non-string
+values. Valid strings and `None` retain their original values in `to_dict()`.
+This field records a desired DHCP request, not an observed address or a lease.
+Controls: `tests/scitex_dev/hosts/test__registry_address_types.py` and
+`tests/scitex_dev/hosts/test__registry_requested_address.py`.
+
 ## Storage: `~/.scitex/dev/hosts.yaml`
 
 A DATA/STATE store (see

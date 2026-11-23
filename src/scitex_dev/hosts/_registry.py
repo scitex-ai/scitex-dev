@@ -270,6 +270,8 @@ class HostRecord:
             # lease it had, which looks exactly like "the server ignored
             # our request". Catching it here keeps those two apart.
             try:
+                if not isinstance(self.requested_address, str):
+                    raise ValueError("expected an IPv4 string")
                 ipaddress.IPv4Address(self.requested_address)
             except ValueError as exc:
                 raise HostRegistryError(
