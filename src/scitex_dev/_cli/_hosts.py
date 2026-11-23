@@ -93,9 +93,14 @@ def _register_list(host: click.Group) -> None:
         help=_HOSTS_FILE_HELP,
     )
     def _list(as_json: bool, hosts_file: str | None) -> None:
+        from .._core.errors import ScitexError
         from ..hosts import list_hosts
 
-        records = list_hosts(hosts_path=hosts_file)
+        try:
+            records = list_hosts(hosts_path=hosts_file)
+        except ScitexError as exc:
+            _fail(exc)
+            return
         if as_json:
             click.echo(
                 json.dumps({"hosts": [r.to_dict() for r in records]}, indent=2)

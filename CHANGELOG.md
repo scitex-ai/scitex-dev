@@ -12,6 +12,11 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Format `host list` registry errors on stderr with their declared exit code,
+  matching `show` and `resolve`; preserve success output and unexpected errors.
+
+### Fixed
+
 - Refuse nonmapping host-registry YAML documents and `hosts` blocks with a
   structured validation error instead of collapsing false-valued shapes to
   empty state or leaking attribute errors. Preserve accepted empty/null forms.
