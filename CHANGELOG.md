@@ -10,6 +10,12 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Documentation
+
+- Clarify that skill projection audits use the supplied discovery snapshot and
+  recorded materialized hash; require rediscovery after source edits and separate
+  review of adapter transformations, hash exclusions and live harness adoption.
+
 - Add an always-present `unjudgeable` integer count to drift-report JSON
   summaries, retaining the existing three counts and classification rules.
 
