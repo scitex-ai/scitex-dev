@@ -5,7 +5,7 @@
 Usage:
     from scitex_dev import get_docs, build_docs
 
-    # All installed packages (manifest overview)
+    # All discovered packages (local legacy mapping)
     get_docs()
 
     # Single package — returns unwrapped result
@@ -49,7 +49,11 @@ def get_docs(
     _root_fn=None,
     _sphinx_fn=None,
 ) -> Any:
-    """Get documentation for one, several, or all installed SciTeX packages.
+    """Retrieve docs for named packages or the local legacy discovery mapping.
+
+    This path can import package code for root lookup or introspection. Use
+    list_doc_providers for an inert, duplicate-preserving declaration catalog;
+    retrieval does not establish provider activation or live availability.
 
     Resolution chain per package:
         1. Pre-built _sphinx_html/ in installed package → fastest (production)

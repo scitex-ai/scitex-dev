@@ -228,6 +228,11 @@ executing examples. Inspect its `checked_scope`, `unverified` and `limitations`;
 it does not prove complete documentation drift coverage. See
 [scoped documentation verification](docs/documentation-verification.md).
 
+`list_doc_providers()` and `scitex-dev docs list-providers --json` inspect inert
+installed declarations. `get_docs` uses a separate legacy mapping and can import
+package code during root lookup or introspection. See the
+[discovery boundaries](src/scitex_dev/_skills/scitex-dev/16_docs-search.md#discovery-and-execution-boundaries).
+
 > Discover and install skills through `scitex-dev dev skills list/get/install`.
 > Python discovery/export helpers are public in `scitex_dev.ecosystem`:
 > `list_skills`, `get_skill` and `export_skills`; the root module does not

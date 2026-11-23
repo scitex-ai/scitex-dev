@@ -1,15 +1,41 @@
 ---
 description: |
   [TOPIC] Docs Search
-  [DETAILS] Documentation aggregation and unified search across all SciTeX packages. get_docs resolves pre-built Sphinx HTML, existing Sphinx builds, or introspected docstrings. search supports Google-like query syntax across Python API, CLI commands, MCP tools, and docs pages.
+  [DETAILS] Documentation retrieval and search in the current Python environment. Separate inert provider declarations from legacy docs resolution, which can import packages.
 tags: [scitex-dev-docs-search]
 ---
 
 # Docs Aggregation and Search
 
+## Discovery and execution boundaries
+
+`scitex_dev.list_doc_providers()` reads installed `scitex_dev.docs` declarations
+without importing their targets or adding roster fallbacks. Duplicate names stay
+visible. `docs list-providers --json` reports `declarations_only: true` and
+`live_verified: false`; metadata does not establish callable or enabled providers.
+
+`get_docs` and `build_docs` use a separate legacy mapping from
+`_core.discovery.discover_packages`: entry points plus missing names from
+installed packages in `ECOSYSTEM`. Default calls cache the mapping until
+`invalidate_cache()`; explicit injection arguments or `use_cache=False` bypass
+that cache. Duplicate names collapse in this dict; ambiguous routing remains
+unresolved, not a stable provider-selection contract. Missing-entry-point hints
+are DEBUG messages, not warnings.
+
+`get_package_root` tries metadata first, then imports a target if no root was
+found. `get_docs` can also import for introspection. Import initialization can
+execute code and non-`ImportError` exceptions can propagate. Use the declaration
+catalog for inert inspection; retrieval is not a no-execution guarantee.
+
+Owners: `_core/discovery.py`, `doc_providers` and `_docs/docs.py`. Controls:
+`tests/scitex_dev/doc_providers/test___init__.py`,
+`tests/scitex_dev/_core/test_discovery.py` and
+`tests/scitex_dev/_cli/test__docs_cmds.py`. These checks do not qualify fleet
+profiles, provider activation, generated content or served documentation.
+
 ## get_docs
 
-Get documentation for one, several, or all installed SciTeX packages.
+Get docs for named packages or every package in the local legacy mapping.
 
 ```python
 from scitex_dev import get_docs
