@@ -31,7 +31,7 @@ _SNIPPET_SKIP_RULES = {
 # A closer has at least three backticks followed only by horizontal whitespace.
 # Captures are opening indentation, language and body; line mapping is below.
 _FENCE_RE = re.compile(
-    r"^([ \t]{0,3})```[ \t]*(python|py)\b[^\n]*\n"
+    r"^([ \t]{0,3})```[ \t]*(python|py)(?=[ \t\r\n])[^\n]*\n"
     r"(.*?)^[ \t]{0,3}`{3,}[ \t]*\r?$",
     re.MULTILINE | re.DOTALL | re.IGNORECASE,
 )

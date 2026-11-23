@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Match complete Python/py language tags in Markdown and reST instead of parsing prefix lookalikes as Python.
+
+
 - Require Markdown closing fences to end after backticks and whitespace, preserving backtick-prefixed Python string content.
 
 

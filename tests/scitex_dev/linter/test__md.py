@@ -104,3 +104,48 @@ def test_closing_fence_valid_lengths_whitespace_and_endings(closing_fence_valid_
     issues = lint_file(closing_fence_valid_case, raise_input_errors=True)
     # Assert
     assert [(issue.rule.id, issue.line) for issue in issues] == [("STX-NET001", 3)]
+
+
+@pytest.fixture(params=[(tag, indent) for tag in ["python-console", "python-repl", "python.notebook", "python!", "py-repl", "py!"] for indent in [0, 2]])
+def md_language_tag_case(request, tmp_path):
+    tag, indent = request.param
+    prefix = " " * indent
+    text = prefix + "```" + tag + "\n" + prefix + ">>> not Python code (\n" + prefix + "```\n"
+    file = tmp_path / "foreign.md"
+    file.write_text(text)
+    return file, text
+
+
+def test_language_tag_md_does_not_extract_prefix_lookalikes(md_language_tag_case):
+    # Arrange
+    _, text = md_language_tag_case
+    # Act
+    blocks = list(_iter_python_blocks(text))
+    # Assert
+    assert blocks == []
+
+
+def test_language_tag_md_does_not_parse_foreign_text(md_language_tag_case):
+    # Arrange
+    file, _ = md_language_tag_case
+    # Act
+    issues = lint_file(str(file), raise_input_errors=True)
+    # Assert
+    assert issues == []
+
+
+@pytest.fixture(params=[(tag, indent) for tag in ["python", "py", "PYTHON", "Py", 'python title="owned"', "py\ttitle=owned"] for indent in [0, 2]])
+def md_language_tag_valid_case(request, tmp_path):
+    tag, indent = request.param
+    prefix = " " * indent
+    file = tmp_path / "actual.md"
+    file.write_text(prefix + "```" + tag + "\n" + prefix + "import requests\n" + prefix + 'requests.get("https://owned.invalid")\n' + prefix + "```\n")
+    return str(file)
+
+
+def test_language_tag_md_keeps_complete_tags_and_metadata(md_language_tag_valid_case):
+    # Arrange
+    # Act
+    issues = lint_file(md_language_tag_valid_case, raise_input_errors=True)
+    # Assert
+    assert [(issue.rule.id, issue.line) for issue in issues] == [("STX-NET001", 3)]

@@ -125,3 +125,13 @@ controls for body preservation, findings and accepted closing forms are in
 `tests/scitex_dev/linter/test__md.py`. This does not add tilde or longer opening
 fences, container-aware parsing, unclosed-fence handling or full CommonMark
 validation.
+
+Markdown info strings and recognized reST directive arguments select Python
+only when the complete first language token is `python` or `py`
+(case-insensitive), followed by a space, tab or line ending. Labels such as
+`python-console`, `python-repl` and `py-repl` are not Python aliases and their
+text is not analyzed by these handlers. Existing whitespace-separated Markdown
+metadata after a supported tag remains accepted. Owning tag/extraction and
+real-finding controls are in `tests/scitex_dev/linter/test__md.py` and
+`test__rst.py`. An empty result for an unsupported language does not establish
+that its content or the complete document was validated.

@@ -24,7 +24,7 @@ from ._md import _SNIPPET_SKIP_RULES
 
 _DIRECTIVE_RE = re.compile(
     r"^(?P<indent>[ \t]*)\.\. (?:code-block|code|sourcecode|ipython)::"
-    r"[ \t]*(?:python|py)\b[^\n]*\n",
+    r"[ \t]*(?:python|py)(?=[ \t\r\n])[^\n]*\n",
     re.IGNORECASE,
 )
 

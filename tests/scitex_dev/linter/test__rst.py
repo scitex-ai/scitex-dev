@@ -89,3 +89,46 @@ def test_content_separator_preserves_default_syntax_error_behavior(rst_content_s
     issues = lint_file(str(file))
     # Assert
     assert issues == []
+
+
+@pytest.fixture(params=[(directive, tag) for directive in ["code", "code-block"] for tag in ["python-console", "python-repl", "python.notebook", "python!", "py-repl", "py!"]])
+def rst_language_tag_case(request, tmp_path):
+    directive, tag = request.param
+    text = ".. " + directive + ":: " + tag + "\n\n    >>> not Python code (\n"
+    file = tmp_path / "foreign.rst"
+    file.write_text(text)
+    return file, text
+
+
+def test_language_tag_rst_does_not_extract_prefix_lookalikes(rst_language_tag_case):
+    # Arrange
+    _, text = rst_language_tag_case
+    # Act
+    blocks = list(_iter_python_blocks(text))
+    # Assert
+    assert blocks == []
+
+
+def test_language_tag_rst_does_not_parse_foreign_text(rst_language_tag_case):
+    # Arrange
+    file, _ = rst_language_tag_case
+    # Act
+    issues = lint_file(str(file), raise_input_errors=True)
+    # Assert
+    assert issues == []
+
+
+@pytest.fixture(params=[(directive, tag) for directive in ["code-block", "code", "sourcecode", "ipython"] for tag in ["python", "py", "PYTHON", "Py"]])
+def rst_language_tag_valid_case(request, tmp_path):
+    directive, tag = request.param
+    file = tmp_path / "actual.rst"
+    file.write_text(".. " + directive + ":: " + tag + '\n\n    import requests\n    requests.get("https://owned.invalid")\n')
+    return str(file)
+
+
+def test_language_tag_rst_keeps_complete_tags(rst_language_tag_valid_case):
+    # Arrange
+    # Act
+    issues = lint_file(rst_language_tag_valid_case, raise_input_errors=True)
+    # Assert
+    assert [(issue.rule.id, issue.line) for issue in issues] == [("STX-NET001", 4)]
