@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Correct root CLI configuration help to match the actual shared path resolver
+  and package-state overlay, keeping command-specific readers explicit.
+
 - Correct environment-variable guidance for consumer-specific precedence,
   package state, completion commands and diagnostic scope.
 
