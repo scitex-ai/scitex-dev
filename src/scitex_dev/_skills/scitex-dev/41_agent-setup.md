@@ -90,9 +90,14 @@ scitex dev mcp list-tools --json
 
 Doctor returns nonzero for dependency/import or empty-catalog failures. A catalog
 check does not establish that a client loaded or authorized the server. Qualify
-stdio separately with initialize and tools/list before claiming protocol readiness;
-stdout must carry protocol JSON, while diagnostics go to stderr. Business tool
-execution needs its own appropriate tests.
+stdio in the selected client's protocol mode before claiming readiness. Legacy
+handshake clients use `initialize` and `notifications/initialized`; modern clients
+may use `server/discover` with a per-request version/capability envelope. Inspect
+the installed SDK/server's supported revisions rather than assuming its newest
+revision uses the legacy handshake. Record the negotiated revision and verify
+`tools/list`, protocol-only stdout and clean exit on stdin EOF; diagnostics belong
+on stderr. Passing one mode does not qualify the other or a real agent's loading,
+approvals or authorization. Business tool execution needs its own tests.
 
 ## Skills setup
 

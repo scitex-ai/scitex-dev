@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Clarify mode-specific MCP stdio qualification: legacy initialization versus
+  modern discovery, per-request envelopes, catalog checks and clean EOF exit.
+
 - Treat an empty SCITEX_DEV_CONFIG as unset so load_config reads the same
   default file reported by get_config_path and the exposure snapshot.
 
