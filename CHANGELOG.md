@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Make piped symlink creation refuse occupied destinations with GNU ln -T,
+  avoiding implicit creation inside a directory or directory symlink.
+
 - Make piped moves target the exact destination path with GNU mv -T,
   avoiding accidental nesting or destination-directory symlink traversal.
 

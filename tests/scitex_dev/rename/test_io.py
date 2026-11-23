@@ -379,3 +379,58 @@ else:
     observed = [_move_entry_state(path) for path in [source, destination, sibling, outside]]
     # Assert
     assert (json.loads(result.stdout)['accepted'], observed) == (accepted, expected)
+
+
+@pytest.fixture(params=[(piped, target, destination) for piped in [False, True] for target in ['target-file', 'target-directory', 'missing-target'] for destination in ['absent', 'file', 'empty-directory', 'nonempty-directory', 'file-link', 'directory-link', 'dangling-link']])
+def link_exact_case(request, tmp_path):
+    piped, target, kind = request.param
+    root = tmp_path / 'owned-exact-link'
+    root.mkdir()
+    outside = tmp_path / 'outside-target'
+    outside.mkdir()
+    (outside / 'sentinel.txt').write_bytes(b'outside directory sentinel\n')
+    target_file = root / 'target-file'
+    target_file.write_bytes(b'owned target payload\n')
+    target_directory = root / 'target-directory'
+    target_directory.mkdir()
+    (target_directory / 'payload.txt').write_bytes(b'owned directory target\n')
+    sibling = root / 'sibling.txt'
+    sibling.write_bytes(b'unrelated sibling\n')
+    link = root / 'destination'
+    if kind == 'file':
+        link.write_bytes(b'existing destination\n')
+    elif kind in ['empty-directory', 'nonempty-directory']:
+        link.mkdir()
+        if kind == 'nonempty-directory':
+            (link / 'existing.txt').write_bytes(b'occupied destination\n')
+    elif kind in ['file-link', 'directory-link', 'dangling-link']:
+        link.symlink_to(outside / 'sentinel.txt' if kind == 'file-link' else (outside if kind == 'directory-link' else outside / 'missing'))
+    protected = [target_file, target_directory, sibling, outside]
+    before = [_move_entry_state(path) for path in protected]
+    yield root, link, target, piped, kind == 'absent', protected, before, _move_entry_state(link)
+
+
+def test_link_exact_destination_refuses_occupied_paths(link_exact_case):
+    # Arrange
+    import json
+    import os
+    import sys
+    root, link, target, piped, accepted, protected, before, link_before = link_exact_case
+    code = """
+from pathlib import Path
+import json,subprocess,sys
+from scitex_dev.rename.io import symlink_to
+def real_runner(args):
+    subprocess.run(args,check=True,capture_output=True,timeout=10)
+try:
+    symlink_to(Path('destination'),sys.argv[1],use_sudo=sys.argv[2]=='True',runner=real_runner if sys.argv[2]=='True' else None)
+except (OSError,subprocess.CalledProcessError):
+    print(json.dumps({'accepted':False}))
+else:
+    print(json.dumps({'accepted':True}))
+"""
+    # Act
+    result = subprocess.run([sys.executable, '-I', '-c', code, target, str(piped)], cwd=root, check=True, capture_output=True, timeout=15)
+    link_matches = link.is_symlink() and os.readlink(link) == target if accepted else _move_entry_state(link) == link_before
+    # Assert
+    assert (json.loads(result.stdout)['accepted'], link_matches, [_move_entry_state(path) for path in protected]) == (accepted, True, before)
