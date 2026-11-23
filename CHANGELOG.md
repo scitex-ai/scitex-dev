@@ -16,6 +16,8 @@ versions follow [Semantic Versioning](https://semver.org/).
   matching YAML validation instead of accepting integers, bytes or address objects.
 - Propagate registry failures while generating DHCP request declarations, so
   malformed or unreadable input cannot silently appear to have no applicable hosts.
+- Preserve existing dangling host-registry links during first-use seeding by
+  creating missing files exclusively instead of writing through link targets.
 
 ### Fixed
 
