@@ -104,8 +104,14 @@ def _pre_check_safety(
         if _contains(path.name, config):
             new_name = _replace(path.name, config)
             new_path = path.parent / new_name
-            if new_path.exists() and new_path != path:
-                collisions.append({"type": "directory", "path": str(new_path)})
+            if (new_path.exists() or new_path.is_symlink()) and new_path != path:
+                if new_path.is_symlink():
+                    collision_type = "symlink"
+                elif new_path.is_dir():
+                    collision_type = "directory"
+                else:
+                    collision_type = "file"
+                collisions.append({"type": collision_type, "path": str(new_path)})
             parent = path.parent
             if not os.access(parent, os.W_OK):
                 permission_errors.append(

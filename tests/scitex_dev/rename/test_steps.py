@@ -205,3 +205,109 @@ def test_dangling_collision_refusal_precedes_content_writes(_dangling_collision_
     expected = state != "absent"
     # Assert
     assert unchanged == expected
+
+
+def _directory_collision_state(base):
+    import os
+
+    state = {}
+    for file in base.rglob("*"):
+        if ".git" in file.parts:
+            continue
+        name = str(file.relative_to(base))
+        state[name] = ("link", os.readlink(file)) if file.is_symlink() else ("directory", "") if file.is_dir() else ("file", file.read_text())
+    return state
+
+
+@pytest.fixture(params=["dangling", "link-file", "link-directory", "file", "directory", "absent"])
+def _directory_target_case(request, tmp_path):
+    import subprocess
+
+    state = request.param
+    root, outside = tmp_path / "repo", tmp_path / "outside"
+    root.mkdir()
+    outside.mkdir()
+    (outside / "keep.txt").write_text("KEEP = 1\n")
+    (root / "notes.txt").write_text("alpha_pkg\n")
+    source, target = root / "alpha_pkg", root / "beta_pkg"
+    source.mkdir()
+    (source / "module.txt").write_text("VALUE = 1\n")
+    if state == "dangling":
+        target.symlink_to("../missing")
+    elif state == "link-file":
+        target.symlink_to("../outside/keep.txt")
+    elif state == "link-directory":
+        target.symlink_to("../outside")
+    elif state == "file":
+        target.write_text("DESTINATION = 2\n")
+    elif state == "directory":
+        target.mkdir()
+        (target / "keep.txt").write_text("DESTINATION = 2\n")
+    for args in [["init"], ["config", "user.name", "Owned directory fixture"], ["config", "user.email", "owned@example.invalid"], ["add", "."], ["commit", "-m", "owned directory fixture"]]:
+        subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True, timeout=10)
+    before = _directory_collision_state(tmp_path)
+    expected = dict(before)
+    if state in ["directory", "absent"]:
+        expected["repo/beta_pkg"] = expected.pop("repo/alpha_pkg")
+        expected["repo/beta_pkg/module.txt"] = expected.pop("repo/alpha_pkg/module.txt")
+        expected["repo/notes.txt"] = ("file", "beta_pkg\n")
+    return root, state, before, expected
+
+
+def test_directory_target_preview_counts_occupied_destination(_directory_target_case):
+    # Arrange
+    root, state, _, _ = _directory_target_case
+    # Act
+    result = preview_rename("alpha_pkg", "beta_pkg", directory=str(root))
+    # Assert
+    assert result.summary["collisions"] == int(state != "absent")
+
+
+def test_directory_target_preview_marks_only_real_directory_merge(_directory_target_case):
+    # Arrange
+    root, state, _, _ = _directory_target_case
+    # Act
+    result = preview_rename("alpha_pkg", "beta_pkg", directory=str(root))
+    # Assert
+    assert result.dir_names[0]["merged"] == (state == "directory")
+
+
+@pytest.fixture
+def _directory_target_application(_directory_target_case):
+    from scitex_dev import execute_rename
+
+    root, state, before, expected = _directory_target_case
+    info = (root / "notes.txt").stat()
+    try:
+        result = execute_rename("alpha_pkg", "beta_pkg", directory=str(root))
+    except OSError:
+        result = None
+    after = (root / "notes.txt").stat()
+    return root, state, expected, result, (info.st_ino, info.st_mtime_ns) == (after.st_ino, after.st_mtime_ns)
+
+
+def test_directory_target_apply_refuses_non_directory_destination(_directory_target_application):
+    # Arrange
+    _, state, _, result, _ = _directory_target_application
+    # Act
+    refused = bool(result and result.error and "Collisions detected" in result.error)
+    # Assert
+    assert refused == (state not in ["directory", "absent"])
+
+
+def test_directory_target_apply_preserves_or_moves_exact_owned_state(_directory_target_application):
+    # Arrange
+    root, _, expected, _, _ = _directory_target_application
+    # Act
+    actual = _directory_collision_state(root.parent)
+    # Assert
+    assert actual == expected
+
+
+def test_directory_target_refusal_precedes_all_content_writes(_directory_target_application):
+    # Arrange
+    _, state, _, _, unchanged = _directory_target_application
+    # Act
+    expected = state not in ["directory", "absent"]
+    # Assert
+    assert unchanged == expected

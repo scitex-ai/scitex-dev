@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Reject non-directory directory-rename destinations before content writes;
+  preview distinguishes real-directory merges from symlink/file collisions.
+
 - Refuse file/symlink basename renames onto dangling destination symlinks
   during preflight and report those occupied paths in preview.
 

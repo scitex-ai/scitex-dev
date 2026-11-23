@@ -398,7 +398,7 @@ def rename_directory_names(
             rel = str(dir_path.relative_to(root))
             new_rel = _replace(rel, config)
             new_path = root / new_rel
-        target_exists = new_path.exists() and new_path != dir_path
+        target_exists = (new_path.exists() or new_path.is_symlink()) and new_path != dir_path
 
         if not config.dry_run and not _should_skip(item_id, config.skip_ids):
             _mkdir(new_path.parent, parents=True, use_sudo=config.use_sudo)
@@ -413,7 +413,7 @@ def rename_directory_names(
                 "old_path": str(dir_path),
                 "new_path": str(new_path),
                 "target_exists": target_exists,
-                "merged": target_exists,
+                "merged": target_exists and new_path.is_dir() and not new_path.is_symlink(),
             }
         )
 

@@ -94,10 +94,27 @@ occupied, even when its target is absent. Preview reports that collision;
 normal live orchestration refuses it during preflight, before the content
 replacement step. Existing regular destinations are still collisions and absent
 destinations remain renameable. This check concerns file/symlink basename
-collisions, not directory merging, same-path replacement or concurrent changes.
+collisions. Directory basename destinations have the additional checks below;
+same-path replacement and concurrent changes remain outside these guarantees.
 Owning controls: `tests/scitex_dev/rename/test_steps.py` exercises dangling,
 regular and absent destinations with real clean Git repositories, and
 `test_core.py` retains the existing collision and directory-merge controls.
+
+For directory basename renames, an occupied destination is mergeable only when
+it is a real directory rather than a symlink. Regular-file destinations and
+symlinks to missing targets, files or directories cause live preflight to refuse
+before any content replacement. This prevents a destination-directory symlink
+from redirecting the merge into its target. Real-directory merging and absent
+destination renames retain their existing behavior. Preview counts an occupied
+destination in `target_exists`; its `merged` flag is true only for a real directory.
+
+The `directory_target` controls in `tests/scitex_dev/rename/test_steps.py` cover
+all six destination states with real clean Git repositories and owned sibling
+symlink targets. They check the source, destination and sibling contents. These
+are basename preflight checks, not general symlink-ancestry confinement or
+coverage of relative-path patterns, concurrent changes or direct internal step
+calls without orchestration.
+
 
 
 Application is sequential, not a transaction across all selected files and
