@@ -372,3 +372,69 @@ def test_fallback_order_apply_skip_keeps_second_sorted_file(fallback_order_case)
     outside_after = (outside.read_bytes(), outside.stat().st_ino, outside.stat().st_mtime_ns)
     # Assert
     assert (result.error, (root / "a.txt").read_bytes(), (root / "m.txt").read_bytes(), (root / "z.txt").read_bytes(), outside_after) == (None, b"prefix:REPLACED\n", b"prefix:needle\n", b"prefix:REPLACED\n", before[-1])
+
+
+@pytest.fixture(params=[
+    (r"needle\n", b"needle\r\n", b"REPLACED", "needle\n"),
+    (r"needle$", b"needle\r\n", b"REPLACED\n", "needle"),
+    (r"(?m)^needle$", b"head\r\nneedle\r\ntail\r\n", b"head\nREPLACED\ntail\n", "needle"),
+    (r"head\nneedle\ntail\n", b"head\rneedle\rtail\r", b"REPLACED", "head\nneedle\ntail\n"),
+    (r"needle\n", b"needle\n", b"REPLACED", "needle\n"),
+    (r"needle", b"needle\r\n", b"REPLACED\n", "needle"),
+    (r"(?<=head\n)needle", b"head\r\nneedle\r\n", b"head\nREPLACED\n", "needle"),
+    (r"(?m)^needle$", b"head\nneedle\ntail\n", b"head\nREPLACED\ntail\n", "needle"),
+])
+def regex_text_case(request, tmp_path):
+    pattern, body, expected, matched = request.param
+    assert _RG_PATH is not None, "This regression cohort requires actual ripgrep availability"
+    root = tmp_path / "owned-repo"
+    root.mkdir()
+    file = root / "owned.txt"
+    file.write_bytes(body)
+    sibling = root / "other.txt"
+    sibling.write_bytes(b"unrelated\n")
+    for args in [["init"], ["config", "user.name", "Owned regex text fixture"], ["config", "user.email", "owned@example.invalid"], ["add", "."], ["commit", "-m", "owned regex text fixture"]]:
+        subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True, timeout=10)
+    before = [(f.read_bytes(), f.stat().st_ino, f.stat().st_mtime_ns) for f in (file, sibling)]
+    return root, file, sibling, pattern, expected, matched, before
+
+
+def test_regex_text_discovery_uses_application_text(regex_text_case):
+    # Arrange
+    from scitex_dev.rename.filters import find_matching_files
+
+    root, file, _, pattern, _, _, _ = regex_text_case
+    config = RenameConfig(pattern, "REPLACED", regex=True)
+    # Act
+    files = find_matching_files(str(root), config, need_content_match=True)
+    # Assert
+    assert files == [file]
+
+
+def test_regex_text_preview_reports_normalized_match(regex_text_case):
+    # Arrange
+    root, file, _, pattern, _, matched, _ = regex_text_case
+    # Act
+    result = preview_rename(pattern, "REPLACED", directory=str(root), regex=True)
+    # Assert
+    assert (result.summary["content_matches"], [(entry["file"], [(line["before"], line["after"]) for line in entry["lines"]]) for entry in result.contents]) == (1, [(str(file), [(matched, "REPLACED")])])
+
+
+def test_regex_text_preview_preserves_original_bytes(regex_text_case):
+    # Arrange
+    root, file, sibling, pattern, _, _, before = regex_text_case
+    # Act
+    preview_rename(pattern, "REPLACED", directory=str(root), regex=True)
+    after = [(f.read_bytes(), f.stat().st_ino, f.stat().st_mtime_ns) for f in (file, sibling)]
+    # Assert
+    assert after == before
+
+
+def test_regex_text_application_keeps_python_semantics(regex_text_case):
+    # Arrange
+    root, file, sibling, pattern, expected, _, before = regex_text_case
+    # Act
+    result = execute_rename(pattern, "REPLACED", directory=str(root), regex=True)
+    sibling_after = (sibling.read_bytes(), sibling.stat().st_ino, sibling.stat().st_mtime_ns)
+    # Assert
+    assert (result.error, file.read_bytes(), sibling_after) == (None, expected, before[1])

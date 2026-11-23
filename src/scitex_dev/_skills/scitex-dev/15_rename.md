@@ -60,7 +60,7 @@ and conflicts before treating an operation as successful. Definitions are in
 
 ## Option-shaped patterns
 
-Ripgrep binds literal/regex patterns as data, including `--version` and `--help`.
+The ripgrep helper binds patterns as data, including `--version` and `--help`.
 End CLI options before such arguments:
 
 ```bash

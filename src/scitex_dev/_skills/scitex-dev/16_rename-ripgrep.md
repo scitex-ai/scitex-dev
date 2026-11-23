@@ -7,6 +7,12 @@ tags: [scitex-dev-rename-ripgrep]
 
 # Rename ripgrep discovery
 
+Literal content discovery uses ripgrep's content search when available. Regex
+content discovery uses ripgrep only to list candidate files, then matches their
+normalized text with Python, the same engine/read behavior used for replacement.
+The internal helper's default content-search mode remains available for its
+real-ripgrep controls; it is not the public regex selection predicate.
+
 The optional ripgrep backend in `rename/filters.py::_rg_find_content_matches`
 requests NUL-delimited filenames and decodes each filename with `os.fsdecode`.
 It consumes bytes so text newline normalization cannot alter carriage returns.
@@ -22,10 +28,11 @@ used to assign content IDs such as `c-000` and `c-001`. IDs are not persistent
 identities: adding/removing selected paths or changing selection can shift them.
 
 The `fallback_order` controls in `tests/scitex_dev/rename/test_filters.py` use
-three file creation orders and a real unsupported-lookbehind ripgrep failure
-to exercise Python fallback. They check sorted discovery, preview IDs, preview
-preservation and application skipping the first or middle sorted file. These
-controls do not establish complete regex or traversal equivalence.
+three file creation orders, sorted Python matching and an independently observed
+unsupported-lookbehind ripgrep failure. Public regex selection now always uses
+Python after candidate listing; that diagnostic failure does not choose its
+engine. The controls check discovery, preview IDs, preservation and application
+skipping the first or middle sorted file, not complete traversal equivalence.
 
 Actual ripgrep absence is covered separately by the `missing_rg_safety`
 controls in `tests/scitex_dev/rename/test_safety.py`. Real child processes have
@@ -52,8 +59,9 @@ the backend does not add `--no-ignore`.
 
 The `rg_config` controls in `tests/scitex_dev/rename/test_filters.py` use real
 child processes with owned empty, quiet and excluding-glob configs in literal
-and regex modes. They verify exact discovery/preview, no preview writes, and
-application with an unchanged sibling and config. Only those config cases
+and regex modes of the internal helper. Public regex selection instead combines
+file listing with Python matching. They verify exact discovery/preview, no preview
+writes, and application with an unchanged sibling and config. Only those config cases
 are qualified; full ripgrep configuration equivalence is not established.
 
 The `rg_filename` controls in `tests/scitex_dev/rename/test_filters.py` use a

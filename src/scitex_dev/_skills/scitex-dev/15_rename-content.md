@@ -7,6 +7,28 @@ tags: [scitex-dev-rename-content]
 
 # Rename content previews and writes
 
+## Regex text selection
+
+Regex content selection and replacement both use Python `re.DOTALL` on text
+read with `Path.read_text(errors="replace")`, including universal-newline
+normalization. A match such as `needle\n` can therefore select CRLF text, and
+line anchors apply to the normalized text. A raw ripgrep regex search is not an
+authoritative filter for these Python operations.
+
+When ripgrep is available, it enumerates candidate files with the existing
+scope, depth, exclusions and default ignore rules; Python checks each eligible
+file's content. Literal mode retains ripgrep content search. Regex mode can
+read more candidates than a ripgrep regex prefilter. Missing/failed ripgrep
+listing keeps the existing Python-glob fallback, whose traversal/ignore behavior
+is not completely equivalent.
+
+The `regex_text` controls in `tests/scitex_dev/rename/test_filters.py` verify
+LF, CRLF and standalone-CR cases with actual ripgrep available: exact discovery,
+normalized preview snippets, no preview writes and whole-file application.
+They include newline/anchor cases previously missed plus ordinary, LF and
+lookbehind controls. This qualifies those text cases, not arbitrary encodings
+or binary content policy. Nonidentity writes retain existing normalization.
+
 ## Regex preview snippets
 
 Regex preview expands replacement strings from the original match, preserving

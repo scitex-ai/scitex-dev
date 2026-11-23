@@ -80,13 +80,16 @@ def matches_scope(path: Path, config: RenameConfig) -> bool:
     return fnmatch.fnmatch(path.name, config.scope)
 
 
-def _rg_find_content_matches(directory: str, config: RenameConfig) -> list[Path] | None:
-    """Use ripgrep to find files containing the pattern. Returns None on failure."""
+def _rg_find_content_matches(
+    directory: str, config: RenameConfig, *, files_only: bool = False
+) -> list[Path] | None:
+    """Search with ripgrep, or list candidate paths. Returns None on failure."""
 
     if not _RG_PATH:
         return None
 
-    cmd = [_RG_PATH, "--no-config", "--files-with-matches", "--null", "--no-messages"]
+    mode = "--files" if files_only else "--files-with-matches"
+    cmd = [_RG_PATH, "--no-config", mode, "--null", "--no-messages"]
 
     # Scope as glob filter
     if config.scope:
@@ -96,12 +99,13 @@ def _rg_find_content_matches(directory: str, config: RenameConfig) -> list[Path]
     if not config.recursive:
         cmd += ["--max-depth", "1"]
 
-    # Regex vs fixed string
-    if config.regex:
-        cmd += ["--multiline", "--multiline-dotall"]
-    else:
-        cmd += ["--fixed-strings"]
-    cmd.append("--regexp=" + config.pattern)
+    # File listing preserves traversal/ignore rules without filtering regex text.
+    if not files_only:
+        if config.regex:
+            cmd += ["--multiline", "--multiline-dotall"]
+        else:
+            cmd += ["--fixed-strings"]
+        cmd.append("--regexp=" + config.pattern)
 
     # Exclude patterns
     for exc in parse_csv_config(config.path_excludes):
@@ -129,17 +133,25 @@ def _rg_find_content_matches(directory: str, config: RenameConfig) -> list[Path]
         return None
 
 
+def _matches_python_regex(path: Path, pattern: str) -> bool:
+    """Match the same decoded, newline-normalized text used by replacement."""
+    try:
+        return re.search(pattern, path.read_text(errors="replace"), re.DOTALL) is not None
+    except (OSError, UnicodeDecodeError):
+        return False
+
+
 def find_matching_files(
     directory: str, config: RenameConfig, need_content_match: bool = False
 ) -> list[Path]:
     """Find files matching the filtering criteria.
 
-    Uses ripgrep for content matching when available (much faster),
-    falls back to Python glob + read_text.
+    Ripgrep searches literal text or lists regex candidates. Python regex
+    matching uses the same text decoding as replacement. Falls back to glob.
     """
-    # Fast path: ripgrep for content matching
+    # Keep ripgrep traversal; Python owns regex text semantics.
     if need_content_match:
-        rg_results = _rg_find_content_matches(directory, config)
+        rg_results = _rg_find_content_matches(directory, config, files_only=config.regex)
         if rg_results is not None:
             # Apply Python-level filters rg can't handle. Extension filtering
             # only kicks in when no explicit `scope` glob is set — same as
@@ -150,6 +162,7 @@ def find_matching_files(
                 if not p.is_symlink()
                 and not should_exclude_path(p, config)
                 and (config.scope or matches_include_extensions(p, config))
+                and (not config.regex or _matches_python_regex(p, config.pattern))
             ]
 
     # Fallback: Python glob
