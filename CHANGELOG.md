@@ -12,6 +12,11 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Preserve existing dangling host-registry links during first-use seeding by
+  creating missing files exclusively instead of writing through link targets.
+
+### Fixed
+
 - Validate host kinds as strings before set membership, so list/mapping values
   report registry validation errors instead of leaking unhashable-type failures.
 

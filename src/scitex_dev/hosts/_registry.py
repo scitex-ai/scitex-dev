@@ -326,9 +326,9 @@ def get_hosts_yaml_path(hosts_path: str | Path | None = None) -> Path:
 
 
 def create_default_hosts_yaml(hosts_path: str | Path | None = None) -> Path:
-    """Seed ``hosts.yaml`` with the known operator hosts if it doesn't exist.
+    """Seed ``hosts.yaml`` only when no filesystem entry occupies its path.
 
-    Idempotent — a no-op when the file already exists. Mirrors
+    Idempotent — existing files and symbolic links stay untouched. Mirrors
     ``scitex_dev._core.config.create_default_config``'s first-run
     seeding pattern for consistency across the package's config
     surfaces.
@@ -337,7 +337,12 @@ def create_default_hosts_yaml(hosts_path: str | Path | None = None) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
         return path
-    path.write_text(_DEFAULT_HOSTS_YAML)
+    try:
+        handle = path.open("x")
+    except FileExistsError:
+        return path
+    with handle:
+        handle.write(_DEFAULT_HOSTS_YAML)
     return path
 
 

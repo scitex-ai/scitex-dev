@@ -71,6 +71,12 @@ A DATA/STATE store (see
 `01_ecosystem/12_local-state-resolution.md`), resolved via
 `local_state.user_path()` so it is never project-shadowed. Seeded on first use
 if the registry does not already exist.
+Missing files are created exclusively. An existing dangling leaf symlink is
+left untouched and its target is not populated; a later read through that link
+still fails instead of silently repairing it. Existing regular files and valid
+links retain their contents. Controls:
+`tests/scitex_dev/hosts/test__registry_seed_links.py`. These controlled entry
+checks do not establish concurrent reader/writer coordination or permissions.
 The seed inventory is maintained in `hosts/_seed.py`; enumerate the live
 registry rather than copying an inventory into a consumer skill.
 Precedence (highest first): explicit `hosts_path=`/`--hosts-file` →
