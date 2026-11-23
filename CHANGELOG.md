@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Refuse replacing MCP client JSON when its permission mode changes during
+  preparation, preserving the external chmod decision and existing contents.
+
 - Clarify mode-specific MCP stdio qualification: legacy initialization versus
   modern discovery, per-request envelopes, catalog checks and clean EOF exit.
 
