@@ -290,7 +290,7 @@ def rename_symlink_names(config: RenameConfig, directory: str) -> list[dict[str,
             item_id = f"sn-{idx:03d}"
             new_name = _replace(name, config)
             new_path = path.parent / new_name
-            target_exists = new_path.exists() and new_path != path
+            target_exists = (new_path.exists() or new_path.is_symlink()) and new_path != path
 
             if not config.dry_run and not _should_skip(item_id, config.skip_ids):
                 _rename_path(path, new_path, config.use_sudo)
@@ -320,7 +320,7 @@ def rename_file_names(config: RenameConfig, directory: str) -> list[dict[str, An
             item_id = f"f-{idx:03d}"
             new_name = _replace(name, config)
             new_path = file_path.parent / new_name
-            target_exists = new_path.exists() and new_path != file_path
+            target_exists = (new_path.exists() or new_path.is_symlink()) and new_path != file_path
 
             if not config.dry_run and not _should_skip(item_id, config.skip_ids):
                 _rename_path(file_path, new_path, config.use_sudo)

@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Refuse file/symlink basename renames onto dangling destination symlinks
+  during preflight and report those occupied paths in preview.
+
 - Clarify that ecosystem auditor warning aliases already exist and are
   separate from the linter MCP severity choices and aggregate reporting floor.
 

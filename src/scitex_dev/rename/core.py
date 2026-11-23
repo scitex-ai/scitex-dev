@@ -61,7 +61,7 @@ def _pre_check_safety(
         if _contains(file_path.name, config):
             new_name = _replace(file_path.name, config)
             new_path = file_path.parent / new_name
-            if new_path.exists() and new_path != file_path:
+            if (new_path.exists() or new_path.is_symlink()) and new_path != file_path:
                 collisions.append({"type": "file", "path": str(new_path)})
             parent = file_path.parent
             if not os.access(parent, os.W_OK):
@@ -82,7 +82,7 @@ def _pre_check_safety(
         if _contains(path.name, config):
             new_name = _replace(path.name, config)
             new_path = path.parent / new_name
-            if new_path.exists() and new_path != path:
+            if (new_path.exists() or new_path.is_symlink()) and new_path != path:
                 collisions.append({"type": "symlink", "path": str(new_path)})
             parent = path.parent
             if not os.access(parent, os.W_OK):

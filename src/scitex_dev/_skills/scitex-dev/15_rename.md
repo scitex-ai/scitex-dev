@@ -89,6 +89,17 @@ It checks uncommitted changes before dispatching. Live operations require a safe
 Git working directory and run collision/permission checks. Preview does not
 require a Git repository.
 
+File and symlink basename destinations count an existing dangling symlink as
+occupied, even when its target is absent. Preview reports that collision;
+normal live orchestration refuses it during preflight, before the content
+replacement step. Existing regular destinations are still collisions and absent
+destinations remain renameable. This check concerns file/symlink basename
+collisions, not directory merging, same-path replacement or concurrent changes.
+Owning controls: `tests/scitex_dev/rename/test_steps.py` exercises dangling,
+regular and absent destinations with real clean Git repositories, and
+`test_core.py` retains the existing collision and directory-merge controls.
+
+
 Application is sequential, not a transaction across all selected files and
 paths. The orchestrator in `rename/core.py` calls each step in order; the I/O
 helpers in `rename/io.py` write or move individual paths. No rollback restores
