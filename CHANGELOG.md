@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Clarify deployment dependency checks for uv profiles without pip, required
+  extras and standalone installed-provider discovery.
+
 - Accept a visible existing directory in piped mkdir with parents=False,
   matching local exist_ok behavior while retaining file/link refusals.
 
