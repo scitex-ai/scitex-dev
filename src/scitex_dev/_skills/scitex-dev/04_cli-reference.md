@@ -20,9 +20,9 @@ scitex-dev [OPTIONS] COMMAND [ARGS]...
 | `--help-recursive` | Show help for every subcommand |
 | `--json` | Emit structured JSON (propagated to subcommands that honour it) |
 
-Config path resolution:
-`./config.yaml → $SCITEX_DEV_CONFIG → ~/.scitex/dev/config.yaml → defaults`
-(see [20_env-vars.md](20_env-vars.md)).
+`show-config`: `SCITEX_DEV_CONFIG`, else the shared Dev project/user path.
+Python `load_config(config_path=...)` overrides that selection; knob state overlays package preferences.
+See [12_config.md](12_config.md) for legacy fallback and [20_env-vars.md](20_env-vars.md) for other readers.
 
 ## Ecosystem
 
