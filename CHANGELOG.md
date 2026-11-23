@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Correct environment-variable guidance for consumer-specific precedence,
+  package state, completion commands and diagnostic scope.
+
 - Reject non-object documentation manifests so normal safe overview discovery
   can run; preserve valid object fields and existing file-containment rules.
 
