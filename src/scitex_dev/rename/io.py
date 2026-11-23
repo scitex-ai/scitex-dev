@@ -46,11 +46,11 @@ def write_text(
 
 
 def rename_path(src: Path, dst: Path, use_sudo: bool = False, *, runner=None) -> None:
-    """Rename (move) a path, optionally via sudo."""
+    """Move to the exact destination path, optionally via sudo."""
     if not use_sudo:
         src.rename(dst)
         return
-    (runner or _sudo_run)(["mv", "--", str(src), str(dst)])
+    (runner or _sudo_run)(["mv", "-T", "--", str(src), str(dst)])
 
 
 def unlink_path(path: Path, use_sudo: bool = False, *, runner=None) -> None:

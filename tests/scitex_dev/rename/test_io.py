@@ -312,3 +312,70 @@ print(json.dumps({'error':error}))
     payload = json.loads(result.stdout)
     # Assert
     assert (payload["error"] is None, _existing_mkdir_snapshot(paths), missing.exists()) == (accepted, before, False)
+
+
+def _move_entry_state(path):
+    import os
+    import stat
+    if not os.path.lexists(path):
+        return None
+    info = path.lstat()
+    payload = os.readlink(path) if stat.S_ISLNK(info.st_mode) else (path.read_bytes() if stat.S_ISREG(info.st_mode) else sorted((item.name, _move_entry_state(item)) for item in path.iterdir()))
+    return info.st_mode, info.st_ino, info.st_mtime_ns, payload
+
+
+@pytest.fixture(params=[(piped, source, destination) for piped in [False, True] for source in ['file', 'directory', 'file-link', 'directory-link'] for destination in ['empty-directory', 'nonempty-directory', 'directory-link', 'file']])
+def move_exact_case(request, tmp_path):
+    piped, source_kind, destination_kind = request.param
+    root = tmp_path / 'owned-exact-move'
+    root.mkdir()
+    outside = tmp_path / 'outside'
+    outside.mkdir()
+    (outside / 'sentinel.txt').write_bytes(b'outside target stays untouched\n')
+    sibling = root / 'sibling.txt'
+    sibling.write_bytes(b'unrelated sibling\n')
+    source, destination = root / 'source', root / 'destination'
+    if source_kind == 'file':
+        source.write_bytes(b'source payload\n')
+    elif source_kind == 'directory':
+        source.mkdir()
+        (source / 'payload.txt').write_bytes(b'source directory payload\n')
+    else:
+        source.symlink_to(outside if source_kind == 'directory-link' else outside / 'sentinel.txt')
+    if destination_kind.endswith('directory'):
+        destination.mkdir()
+        if destination_kind == 'nonempty-directory':
+            (destination / 'existing.txt').write_bytes(b'occupied destination\n')
+    elif destination_kind == 'directory-link':
+        destination.symlink_to(outside)
+    else:
+        destination.write_bytes(b'old destination\n')
+    accepted = (source_kind == 'directory' and destination_kind == 'empty-directory') or (source_kind != 'directory' and destination_kind in ['directory-link', 'file'])
+    before = [_move_entry_state(path) for path in [source, destination, sibling, outside]]
+    yield root, source, destination, piped, accepted, sibling, outside, before
+
+
+def test_move_exact_destination_does_not_nest_or_follow(move_exact_case):
+    # Arrange
+    import json
+    import sys
+    root, source, destination, piped, accepted, sibling, outside, before = move_exact_case
+    code = """
+from pathlib import Path
+import json,subprocess,sys
+from scitex_dev.rename.io import rename_path
+def real_runner(args):
+    subprocess.run(args,check=True,capture_output=True,timeout=10)
+try:
+    rename_path(Path('source'),Path('destination'),use_sudo=sys.argv[1]=='True',runner=real_runner if sys.argv[1]=='True' else None)
+except (OSError,subprocess.CalledProcessError):
+    print(json.dumps({'accepted':False}))
+else:
+    print(json.dumps({'accepted':True}))
+"""
+    expected = [None, before[0], before[2], before[3]] if accepted else before
+    # Act
+    result = subprocess.run([sys.executable, '-I', '-c', code, str(piped)], cwd=root, check=True, capture_output=True, timeout=15)
+    observed = [_move_entry_state(path) for path in [source, destination, sibling, outside]]
+    # Assert
+    assert (json.loads(result.stdout)['accepted'], observed) == (accepted, expected)

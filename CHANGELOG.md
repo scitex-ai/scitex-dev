@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Make piped moves target the exact destination path with GNU mv -T,
+  avoiding accidental nesting or destination-directory symlink traversal.
+
 - Clarify deployment dependency checks for uv profiles without pip, required
   extras and standalone installed-provider discovery.
 
