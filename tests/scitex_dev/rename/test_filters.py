@@ -120,3 +120,86 @@ def test_rg_filename_application_preserves_sibling(rg_filename_case):
     result = execute_rename("needle", "REPLACED", directory=str(root))
     # Assert
     assert (result.error, file.read_text(), outside.read_text()) == (None, "REPLACED\n", "needle external sentinel\n")
+
+
+@pytest.fixture(params=[b"ordinary.txt", b"invalid-\xff.txt", b"invalid-\xfe.txt", b"invalid-\xff\nline.txt"])
+def rg_byte_name_case(request, tmp_path):
+    import os
+
+    assert _RG_PATH is not None, "This cohort requires an actual installed ripgrep backend"
+    root = tmp_path / "owned-repo"
+    root.mkdir()
+    file = root / os.fsdecode(request.param)
+    file.write_text("needle\n")
+    sibling = root / "other.txt"
+    sibling.write_text("unrelated\n")
+    for args in [["init"], ["config", "user.name", "Owned byte filename fixture"], ["config", "user.email", "owned@example.invalid"], ["add", "."], ["commit", "-m", "owned byte filename fixture"]]:
+        subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True, timeout=10)
+    before = [(f.read_bytes(), f.stat().st_ino, f.stat().st_mtime_ns) for f in (file, sibling)]
+    return root, file, sibling, before
+
+
+def test_rg_byte_name_backend_exact_path(rg_byte_name_case):
+    # Arrange
+    root, file, _, _ = rg_byte_name_case
+    config = RenameConfig("needle", "REPLACED")
+    # Act
+    result = _rg_find_content_matches(str(root), config)
+    # Assert
+    assert result == [file]
+
+
+def test_rg_byte_name_preview_exact_path(rg_byte_name_case):
+    # Arrange
+    root, file, _, _ = rg_byte_name_case
+    # Act
+    result = preview_rename("needle", "REPLACED", directory=str(root))
+    # Assert
+    assert (result.summary["content_matches"], [entry["file"] for entry in result.contents]) == (1, [str(file)])
+
+
+def test_rg_byte_name_preview_preserves_metadata(rg_byte_name_case):
+    # Arrange
+    root, file, sibling, before = rg_byte_name_case
+    # Act
+    preview_rename("needle", "REPLACED", directory=str(root))
+    after = [(f.read_bytes(), f.stat().st_ino, f.stat().st_mtime_ns) for f in (file, sibling)]
+    # Assert
+    assert after == before
+
+
+def test_rg_byte_name_apply_preserves_sibling(rg_byte_name_case):
+    # Arrange
+    root, file, sibling, _ = rg_byte_name_case
+    # Act
+    result = execute_rename("needle", "REPLACED", directory=str(root))
+    # Assert
+    assert (result.error, file.read_bytes(), sibling.read_bytes()) == (None, b"REPLACED\n", b"unrelated\n")
+
+
+def test_rg_byte_name_cli_preview_exact_json_path(rg_byte_name_case):
+    # Arrange
+    import json
+    from click.testing import CliRunner
+    from scitex_dev._cli._root import main
+
+    root, file, _, _ = rg_byte_name_case
+    # Act
+    result = CliRunner().invoke(main, ["rename-symbols", "--root", str(root), "--dry-run", "--json", "needle", "REPLACED"])
+    payload = json.loads(result.stdout)
+    # Assert
+    assert (result.exit_code, payload["success"] is True, [entry["file"] for entry in payload["data"]["contents"]]) == (0, True, [str(file)])
+
+
+def test_rg_byte_name_cli_apply_preserves_sibling(rg_byte_name_case):
+    # Arrange
+    import json
+    from click.testing import CliRunner
+    from scitex_dev._cli._root import main
+
+    root, file, sibling, _ = rg_byte_name_case
+    # Act
+    result = CliRunner().invoke(main, ["rename-symbols", "--root", str(root), "--yes", "--json", "needle", "REPLACED"])
+    payload = json.loads(result.stdout)
+    # Assert
+    assert (result.exit_code, payload["success"] is True, [entry["file"] for entry in payload["data"]["contents"]], file.read_bytes(), sibling.read_bytes()) == (0, True, [str(file)], b"REPLACED\n", b"unrelated\n")

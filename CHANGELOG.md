@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Cover Linux non-UTF-8 rename filenames and CLI JSON path round-trips
+  with real ripgrep controls; document the verified byte-filename scope.
+
 - Preserve newline and carriage-return filenames in ripgrep rename discovery
   by consuming raw NUL-delimited paths.
 
