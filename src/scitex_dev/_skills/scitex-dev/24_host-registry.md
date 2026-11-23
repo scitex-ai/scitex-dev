@@ -98,6 +98,19 @@ exceptions are not converted into registry errors. Controls in
 text/JSON channels, valid/empty results and an unexpected decoding failure.
 
 
+## DHCP declaration errors
+
+`hosts._dhcp.provide_request_address_specs(hosts_path=...)` propagates
+`HostRegistryError` for malformed registries; an unexpected decoding failure
+also stays visible. A failed registry read must not look like a valid registry
+with no applicable DHCP requests. Valid empty registries and registries with
+only noncompute hosts still yield no request specs. Applicable compute hosts
+retain their packaged requested addresses and existing drop-in content.
+The separate fleet-floor provider still refuses an unscopable compute set.
+Controls: `tests/scitex_dev/hosts/test__dhcp_registry_errors.py` and
+`tests/scitex_dev/hosts/test__dhcp.py`. These are owned-fixture declaration
+checks, not permission to apply networking or proof of a live DHCP lease.
+
 ## Scope note
 
 This module owns registry records and path/locality resolution, not whether
