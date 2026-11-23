@@ -273,3 +273,88 @@ def test_mcp_parseable_source_does_not_write_label_or_config(_owned_installed_sk
     after = _source_label_state(files)
     # Assert
     assert after == before
+
+
+@pytest.fixture(params=["python", "text", "notebook-code", "notebook-json", "notebook-empty", "notebook-no-cells", "notebook-null-cells", "notebook-map-cells", "notebook-cell-type", "notebook-missing-source", "markdown", "rst"])
+def _bad_mcp_file_input(request, tmp_path):
+    import json
+
+    invalid = "def broken(\n"
+    notebook = lambda cells: json.dumps({"cells": cells})
+    cases = {
+        "python": (".py", invalid),
+        "text": (".txt", invalid),
+        "notebook-code": (".ipynb", notebook([{"cell_type": "code", "source": [invalid]}])),
+        "notebook-json": (".ipynb", "{broken JSON"),
+        "notebook-empty": (".ipynb", ""),
+        "notebook-no-cells": (".ipynb", "{}"),
+        "notebook-null-cells": (".ipynb", notebook(None)),
+        "notebook-map-cells": (".ipynb", notebook({})),
+        "notebook-cell-type": (".ipynb", notebook([{"cell_type": "cod", "source": [invalid]}])),
+        "notebook-missing-source": (".ipynb", notebook([{"cell_type": "code"}])),
+        "markdown": (".md", "```python\n" + invalid + "```\n"),
+        "rst": (".rst", ".. code-block:: python\n\n    def broken(\n"),
+    }
+    suffix, content = cases[request.param]
+    file = tmp_path / ("bad-input" + suffix)
+    file.write_text(content)
+    (tmp_path / "pyproject.toml").write_text('[tool.scitex-dev.linter]\nlibrary_dirs = ["."]\n')
+    return file
+
+
+def test_mcp_file_input_errors_are_visible(_owned_installed_skill_profile, _bad_mcp_file_input):
+    # Arrange
+    from fastmcp.exceptions import ToolError
+
+    # Act
+    # Assert
+    with pytest.raises(ToolError):
+        _call_registered_skill_tool("linter_check", {"path": str(_bad_mcp_file_input)})
+
+
+@pytest.fixture(params=["empty-notebook", "mixed-notebook", "markdown-nonpython", "rst-nonpython", "AST-only-python"])
+def _accepted_mcp_file_input(request, tmp_path):
+    import json
+    from scitex_dev.linter.checker import lint_file
+    from scitex_dev.linter.config import load_config
+    from scitex_dev.linter.formatter import to_json
+
+    source = 'import requests\nrequests.get("https://owned.invalid")\n'
+    cases = {
+        "empty-notebook": (".ipynb", json.dumps({"cells": []})),
+        "mixed-notebook": (".ipynb", json.dumps({"cells": [
+            {"cell_type": "markdown", "source": ["not Python syntax ("]},
+            {"cell_type": "raw", "source": ["not Python syntax ("]},
+            {"cell_type": "code", "source": source.splitlines(keepends=True)},
+        ], "metadata": {"owned": True}})),
+        "markdown-nonpython": (".md", "```bash\nnot Python syntax (\n```\n"),
+        "rst-nonpython": (".rst", ".. code-block:: bash\n\n    not Python syntax (\n"),
+        "AST-only-python": (".py", "return 1\n"),
+    }
+    suffix, content = cases[request.param]
+    file = tmp_path / ("accepted-input" + suffix)
+    file.write_text(content)
+    config = tmp_path / "pyproject.toml"
+    config.write_text('[tool.scitex-dev.linter]\nlibrary_dirs = ["."]\n')
+    expected = to_json(lint_file(str(file), config=load_config(str(file))), str(file))
+    files = [file, config]
+    return file, expected, files, _source_label_state(files)
+
+
+def test_mcp_file_input_accepted_payloads_stay_stable(_owned_installed_skill_profile, _accepted_mcp_file_input):
+    # Arrange
+    file, expected, _, _ = _accepted_mcp_file_input
+    # Act
+    result = _call_registered_skill_tool("linter_check", {"path": str(file)})
+    # Assert
+    assert result == expected
+
+
+def test_mcp_file_input_preserves_accepted_file_bytes(_owned_installed_skill_profile, _accepted_mcp_file_input):
+    # Arrange
+    file, _, files, before = _accepted_mcp_file_input
+    # Act
+    _call_registered_skill_tool("linter_check", {"path": str(file)})
+    after = _source_label_state(files)
+    # Assert
+    assert after == before

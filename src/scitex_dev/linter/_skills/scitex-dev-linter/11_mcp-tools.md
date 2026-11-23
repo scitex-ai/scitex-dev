@@ -33,9 +33,18 @@ These payloads do not prove all optional rule categories ran. The source-string
 endpoint rejects syntax errors raised by Python's AST parser before checks
 run, with the supplied filename and parser location in the error. AST parser
 acceptance does not establish successful compilation or runtime validity; code
-is never compiled or executed by this endpoint. The file endpoint still uses
-shared handlers that can yield no findings for unparseable Python or malformed
-notebook JSON. Its empty finding list is not complete input validation.
+is never compiled or executed by this endpoint. The file endpoint opts into
+`raise_input_errors=True` on the owning dispatcher. Missing targets, supported
+handler read/JSON errors, invalid extractable notebook-cell structure and AST
+syntax errors in extracted Python units become tool errors. Existing Python
+and CLI callers keep their default behavior unless they opt in.
+
+This checks the handlers' supported extraction: notebook code cells, closed
+Markdown Python fences and recognized reST Python directives. Notebook magics
+or other non-Python cell syntax can fail AST parsing. Other languages and
+non-code cells are not analyzed, and this is not full nbformat, CommonMark or
+reST validation. No extracted Python units can still yield an empty result;
+that does not prove a full document or corpus was checked.
 Mandatory provider failures remain failures, and an in-process registered tool is not evidence that
 an external MCP server or consuming client is enabled.
 

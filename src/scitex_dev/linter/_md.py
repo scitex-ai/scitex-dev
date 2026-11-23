@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Markdown (`*.md`) linting — extract fenced ``python`` code blocks
 and lint each one.
 
@@ -48,16 +49,20 @@ def _iter_python_blocks(text: str):
         yield idx, lines_before + 2, body
 
 
-def lint_md(path: Path, config=None) -> list:
+def lint_md(path: Path, config=None, *, raise_input_errors: bool = False) -> list:
     """Lint a markdown file's fenced ``python`` blocks.
 
     Issue filepaths are tagged ``"/path/to/README.md::block-N"``.
+    ``raise_input_errors`` exposes read and extracted AST errors for supported
+    closed fences; it does not validate Markdown or non-Python blocks.
     """
     from .checker import lint_source
 
     try:
         text = path.read_text(encoding="utf-8")
     except OSError:
+        if raise_input_errors:
+            raise
         return []
 
     issues: list = []
@@ -65,7 +70,7 @@ def lint_md(path: Path, config=None) -> list:
         if not body.strip():
             continue
         fake_path = f"{path}::block-{idx}"
-        block_issues = lint_source(body, filepath=fake_path, config=config)
+        block_issues = lint_source(body, filepath=fake_path, config=config, raise_input_errors=raise_input_errors)
         # Filter snippet-irrelevant rules and shift line numbers so the
         # report points back at the markdown file's actual line.
         for iss in block_issues:

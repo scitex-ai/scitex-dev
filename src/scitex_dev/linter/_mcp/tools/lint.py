@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Lint MCP tools for scitex-linter."""
 
-import ast
-
 from pathlib import Path
 from typing import Optional
 
@@ -21,7 +19,9 @@ def register_lint_tools(mcp) -> None:
         traversed. Source is analyzed, never executed. Filter reported issues
         by minimum severity (error/warning/info) and comma-separated category
         names from the actual catalog. Findings do not prove all optional
-        providers ran, and this endpoint is not a Python syntax validator."""
+        providers ran. Supported handler read, notebook structure/JSON and
+        extracted Python AST errors become tool errors. This is not complete
+        notebook/document validation, compilation or runtime validation."""
         from ...checker import lint_file
         from ...config import load_config
         from ...formatter import to_json
@@ -34,7 +34,7 @@ def register_lint_tools(mcp) -> None:
             raise ValueError(f"Lint target must be a regular file: {path}")
 
         config = load_config(path)
-        issues = lint_file(path, config=config)
+        issues = lint_file(path, config=config, raise_input_errors=True)
         min_sev = SEVERITY_ORDER.get(severity, 0)
         categories = set(category.split(",")) if category else None
 
@@ -97,14 +97,6 @@ def register_lint_tools(mcp) -> None:
         from ...config import load_config
         from ...formatter import to_json
 
-        try:
-            ast.parse(source, filename=filepath)
-        except SyntaxError as exc:
-            location = f"{filepath}:{exc.lineno or '?'}:{exc.offset or '?'}"
-            raise ValueError(
-                f"Python source could not be parsed at {location}: {exc.msg}"
-            ) from exc
-
         config = load_config(filepath)
-        issues = lint_source(source, filepath=filepath, config=config)
+        issues = lint_source(source, filepath=filepath, config=config, raise_input_errors=True)
         return to_json(issues, filepath)

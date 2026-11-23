@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """reStructuredText (`*.rst`) linting — extract Python code-block
 directives and lint each one.
 
@@ -77,16 +78,20 @@ def _iter_python_blocks(text: str):
         block_idx += 1
 
 
-def lint_rst(path: Path, config=None) -> list:
+def lint_rst(path: Path, config=None, *, raise_input_errors: bool = False) -> list:
     """Lint Python ``code-block`` directives inside an RST file.
 
     Issue filepaths are tagged ``"/path/to/index.rst::block-N"``.
+    ``raise_input_errors`` exposes read and extracted Python AST errors;
+    recognized directives are extraction, not complete document validation.
     """
     from .checker import lint_source
 
     try:
         text = path.read_text(encoding="utf-8")
     except OSError:
+        if raise_input_errors:
+            raise
         return []
 
     issues: list = []
@@ -94,7 +99,7 @@ def lint_rst(path: Path, config=None) -> list:
         if not body.strip():
             continue
         fake_path = f"{path}::block-{idx}"
-        block_issues = lint_source(body, filepath=fake_path, config=config)
+        block_issues = lint_source(body, filepath=fake_path, config=config, raise_input_errors=raise_input_errors)
         for iss in block_issues:
             if iss.rule.id in _SNIPPET_SKIP_RULES:
                 continue

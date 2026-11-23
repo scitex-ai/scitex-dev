@@ -23,7 +23,7 @@ The checker module exposes the functions used by the CLI and MCP wrappers:
 ```python
 from scitex_dev.linter.checker import lint_source
 
-issues = lint_source("VALUE = 1\n", filepath="tool.py")
+issues = lint_source("VALUE = 1\n", filepath="tool.py", raise_input_errors=True)
 ```
 
 `lint_file(filepath, config=None)` in that same module reads an existing file;
@@ -39,15 +39,24 @@ and `tests/scitex_dev/linter/test__source_helpers.py`.
 Rules and required capabilities remain owned by their providers. Missing
 mandatory providers fail; optional unmet requirements can leave reported skips.
 A returned catalog or an empty issue list is not complete-environment acceptance.
-The shared Python `lint_file` dispatcher currently returns an empty list for
-missing or non-file paths, and `lint_source` does the same for syntax errors.
-Neither result establishes successful input validation. The MCP file endpoint
-adds an explicit missing/non-regular target check before dispatch. The MCP
-source endpoint first uses Python's AST parser and turns its syntax errors
-into tool errors. Parser acceptance is not successful compilation or runtime
-validation; the endpoint does not compile or execute code. These boundary
-checks do not change the shared Python API behaviors. Sources: `linter/_dispatch.py` and
-`linter/checker.py`.
+By default, `lint_file` still returns no findings for missing/non-file inputs,
+and the shared handlers retain their earlier read/parse behavior. `lint_source`
+still returns no findings for AST syntax errors unless explicitly requested.
+A default file handler can retain earlier findings while a later code unit is
+unparseable; the opt-in mode raises instead of returning partial findings.
+Use keyword-only `raise_input_errors=True` on either function to expose these
+errors instead. File dispatch passes this mode to the notebook, Markdown and
+reST handlers; they also accept that keyword. It covers file availability,
+handler read errors, notebook JSON/extractable cell structure and Python AST
+syntax errors in supported code units. It is not complete notebook/document
+validation, compilation or runtime validation.
+
+Both MCP validation endpoints opt in. The source endpoint delegates to the
+owning checker rather than parsing the input twice. Existing default Python
+and CLI calls retain their behavior; valid supported input yields the same
+findings. Sources: `linter/_dispatch.py`, `linter/checker.py`, `_ipynb.py`,
+`_md.py` and `_rst.py`; owning compatibility/error controls are in
+`tests/scitex_dev/linter/test__dispatch.py`.
 Configuration readers and the unresolved CLI severity-field gap are documented
 in [04_cli-reference.md](04_cli-reference.md).
 

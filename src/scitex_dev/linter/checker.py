@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """AST-based checker that detects SciTeX anti-patterns."""
 
 from __future__ import annotations
@@ -402,9 +403,13 @@ class SciTeXChecker(
 
 
 def lint_source(
-    source: str, filepath: str = "<stdin>", config=None, plugins=None
+    source: str, filepath: str = "<stdin>", config=None, plugins=None,
+    *, raise_input_errors: bool = False,
 ) -> list:
     """Lint Python source code and return list of Issues.
+
+    ``raise_input_errors=True`` exposes AST syntax errors instead of returning
+    an empty list. This is parser-level validation, not compilation or execution.
 
     ``plugins`` is the plugin-payload seam (defaults to ``load_plugins()``);
     tests pass a hand-rolled payload to drive the fail-loud path without
@@ -412,7 +417,12 @@ def lint_source(
     """
     try:
         tree = ast.parse(source, filename=filepath)
-    except SyntaxError:
+    except SyntaxError as exc:
+        if raise_input_errors:
+            location = f"{filepath}:{exc.lineno or '?'}:{exc.offset or '?'}"
+            raise ValueError(
+                f"Python source could not be parsed at {location}: {exc.msg}"
+            ) from exc
         return []
 
     lines = source.splitlines()

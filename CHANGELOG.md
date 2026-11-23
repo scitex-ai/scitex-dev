@@ -12,6 +12,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Add opt-in file/source input-error propagation through owning handlers and
+  enable it for MCP, preserving default callers and valid findings.
+
 - Reject AST syntax errors at the MCP source-string boundary with location
   diagnostics while preserving shared checker and parseable-source behavior.
 
