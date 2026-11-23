@@ -256,7 +256,11 @@ def update_symlink_targets(
             item_id = f"st-{idx:03d}"
             new_target = _replace(target, config)
 
-            if not config.dry_run and not _should_skip(item_id, config.skip_ids):
+            if (
+                not config.dry_run
+                and not _should_skip(item_id, config.skip_ids)
+                and new_target != target
+            ):
                 _unlink_path(path, config.use_sudo)
                 _symlink_to(path, new_target, config.use_sudo)
 

@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Preserve symlink inode and modification time when target replacement is
+  unchanged, retaining selected-target reporting and deliberate target updates.
+
 - Add permanent actual-missing-ripgrep content regression controls for NUL
   exclusion, empty text and literal/regex matches, linked from the content guide.
 

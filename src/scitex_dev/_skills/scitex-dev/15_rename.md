@@ -98,6 +98,14 @@ See [content details](15_rename-content.md) for regex snippets and unchanged-tex
 The owning checks are in `tests/scitex_dev/rename/test_steps.py` and
 `tests/scitex_dev/_cli/test__rename.py`.
 
+## Unchanged symlink targets
+
+`rename/steps.py` leaves a symlink intact when replacement produces the same
+target text. Its record and `symlink_targets_updated` count remain selection
+reports, not write counts. The `symlink_noop` controls in
+`tests/scitex_dev/rename/test_safety.py` check link metadata, outside targets,
+preview and actual target changes for file, directory and dangling targets.
+
 ## Application
 
 `execute_rename` accepts `pattern`, `replacement`, `directory`, Django protection,

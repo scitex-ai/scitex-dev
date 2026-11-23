@@ -191,3 +191,73 @@ def test_fallback_content_application_bytes_and_exclusions(fallback_content_case
     after = _missing_rg_state([file, *protected])
     # Assert
     assert (payload["rg"], payload["which_rg"], payload["git"], result["error"], result["summary"]["content_matches"], after[0][0], after[1:], after == before) == (None, None, str(bin_dir / "git"), None, matches, expected, before[1:], expected == before[0][0])
+
+
+def _symlink_noop_state(link):
+    info = link.lstat()
+    return os.readlink(link), info.st_ino, info.st_mtime_ns, stat.S_IMODE(info.st_mode)
+
+
+@pytest.fixture(params=[(regex, target_kind, changed) for regex in [False, True] for target_kind in ["file", "directory", "dangling"] for changed in [False, True]])
+def symlink_noop_case(request, tmp_path):
+    regex, target_kind, changed = request.param
+    root = tmp_path / "owned-repo"
+    root.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    protected = []
+    for name in ["needle", "CHANGED"]:
+        target = outside / name
+        if target_kind == "directory":
+            target.mkdir()
+            target = target / "sentinel.txt"
+        if target_kind != "dangling":
+            target.write_bytes(b"unrelated outside content\n")
+            protected.append(target)
+    sibling = root / "other.txt"
+    sibling.write_bytes(b"unrelated sibling\n")
+    protected.append(sibling)
+    link = root / "owned-link"
+    old_target = "../outside/needle"
+    new_target = "../outside/CHANGED" if changed else old_target
+    link.symlink_to(old_target)
+    os.utime(link, ns=(1600000000000000000, 1600000000000000000), follow_symlinks=False)
+    for args in [["init"], ["config", "user.name", "Owned symlink no-op fixture"], ["config", "user.email", "owned@example.invalid"], ["add", "."], ["commit", "-m", "owned symlink no-op fixture"]]:
+        subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True, timeout=10)
+    pattern = "(needle)" if regex else "needle"
+    replacement = "CHANGED" if changed else (r"\1" if regex else "needle")
+    record = {"id": "st-000", "link": str(link), "old_target": old_target, "new_target": new_target}
+    before = (_symlink_noop_state(link), _missing_rg_state(protected))
+    yield root, link, protected, regex, pattern, replacement, changed, record, before
+
+
+def test_symlink_noop_preview_reports_selected_targets(symlink_noop_case):
+    # Arrange
+    from scitex_dev import preview_rename
+    root, _, _, regex, pattern, replacement, _, record, _ = symlink_noop_case
+    # Act
+    result = preview_rename(pattern, replacement, directory=str(root), regex=regex)
+    # Assert
+    assert (result.summary["symlink_targets_updated"], result.symlink_targets) == (1, [record])
+
+
+def test_symlink_noop_preview_preserves_link_and_targets(symlink_noop_case):
+    # Arrange
+    from scitex_dev import preview_rename
+    root, link, protected, regex, pattern, replacement, _, _, before = symlink_noop_case
+    # Act
+    preview_rename(pattern, replacement, directory=str(root), regex=regex)
+    after = (_symlink_noop_state(link), _missing_rg_state(protected))
+    # Assert
+    assert after == before
+
+
+def test_symlink_noop_application_preserves_unchanged_link(symlink_noop_case):
+    # Arrange
+    from scitex_dev import execute_rename
+    root, link, protected, regex, pattern, replacement, changed, record, before = symlink_noop_case
+    # Act
+    result = execute_rename(pattern, replacement, directory=str(root), regex=regex)
+    after = (_symlink_noop_state(link), _missing_rg_state(protected))
+    # Assert
+    assert (result.error, result.summary["symlink_targets_updated"], result.symlink_targets, after[0][0], after[1], after[0] == before[0]) == (None, 1, [record], record["new_target"], before[1], not changed)
