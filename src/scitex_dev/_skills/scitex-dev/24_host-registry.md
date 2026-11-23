@@ -47,7 +47,11 @@ for host in list_hosts():
 ```
 
 `HostRecord.kind` is one of `HOST_KINDS`: `workstation`, `hpc-login`,
-`compute`, `storage`. A missing SSH alias does not establish that a host is
+`compute`, `storage`. It must be a string: non-string lists, mappings and
+sets are rejected as `HostRegistryError` during direct construction. YAML
+loading retains the selected file path when reporting these validation errors.
+The owning controls are in
+`tests/scitex_dev/hosts/test__registry_kind_shapes.py`. A missing SSH alias does not establish that a host is
 local; use the registry's locality API rather than assuming local execution.
 `resolve()` raises `UnknownHostError` (fail loud, no silent
 fallback) with the full list of registered hosts and a remediation

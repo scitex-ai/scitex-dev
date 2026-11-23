@@ -256,7 +256,7 @@ class HostRecord:
         return any(wanted <= served for served in self.runner_labels)
 
     def __post_init__(self) -> None:
-        if self.kind not in HOST_KINDS:
+        if not isinstance(self.kind, str) or self.kind not in HOST_KINDS:
             raise HostRegistryError(
                 f"host {self.name!r}: invalid kind {self.kind!r} "
                 f"(must be one of: {', '.join(sorted(HOST_KINDS))})",
