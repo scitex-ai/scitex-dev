@@ -71,6 +71,7 @@ def mkdir(
     cmd = ["mkdir"]
     if parents:
         cmd.append("-p")
+    cmd.append("--")
     cmd.append(str(path))
     (runner or _sudo_run)(cmd)
 

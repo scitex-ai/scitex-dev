@@ -2271,7 +2271,7 @@ class TestIO:
         d = tmp_path / "new_dir"
         calls: list[list[str]] = []
         mkdir(d, parents=True, use_sudo=True, runner=lambda argv: calls.append(argv))
-        assert calls == [["mkdir", "-p", str(d)]]
+        assert calls == [["mkdir", "-p", "--", str(d)]]
 
 
 # ===========================================================================

@@ -190,5 +190,5 @@ restoration mechanism. Swapping search and replacement does not generally undo
 an operation: `alpha beta` becomes `beta beta`, then `alpha alpha` on a reverse
 replacement. Restore from reviewed version-control state or a verified backup.
 
-Piped writes, removals and links use literal operands; see `rename/io.py` and
+Piped writes, mkdir, removals and links use operands; see `rename/io.py` and
 `tests/scitex_dev/rename/test_io.py`. Sudo authentication is unqualified.

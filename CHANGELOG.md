@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Pass piped mkdir paths after an option separator, with or without -p,
+  so leading-hyphen directory names are created as intended.
+
 - Pass piped writer paths after a tee option separator so leading-hyphen
   filenames are written as intended; retain existing exact-dash behavior.
 

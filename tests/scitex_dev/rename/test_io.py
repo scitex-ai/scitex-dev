@@ -174,3 +174,35 @@ write_text(Path(name),"CHANGED α\n",use_sudo=piped=='True',runner=real_runner i
     subprocess.run([sys.executable, "-I", "-c", code, name, str(piped)], cwd=root, check=True, capture_output=True, timeout=15)
     # Assert
     assert (file.read_bytes(), _byte_fixture_state(protected)) == ("CHANGED α\n".encode("utf-8"), before)
+
+
+@pytest.fixture(params=[(piped, parents, name) for piped in [False, True] for parents in [False, True] for name in ["ordinary", "--help", "--version", "-x"]])
+def mkdir_operand_case(request, tmp_path):
+    piped, parents, name = request.param
+    root = tmp_path / "owned-mkdir"
+    root.mkdir()
+    sibling = root / "other.txt"
+    sibling.write_bytes(b"unrelated sibling\n")
+    outside = tmp_path / "outside.txt"
+    outside.write_bytes(b"unrelated outside\n")
+    before = _byte_fixture_state([sibling, outside])
+    yield root, piped, parents, name, [sibling, outside], before
+
+
+def test_mkdir_operand_literal_path_and_sentinels(mkdir_operand_case):
+    # Arrange
+    import sys
+    root, piped, parents, name, protected, before = mkdir_operand_case
+    code = """
+from pathlib import Path
+import subprocess,sys
+from scitex_dev.rename.io import mkdir
+name,piped,parents=sys.argv[1:]
+def real_runner(args):
+    subprocess.run(args,check=True,capture_output=True,timeout=10)
+mkdir(Path(name),parents=parents=='True',use_sudo=piped=='True',runner=real_runner if piped=='True' else None)
+"""
+    # Act
+    subprocess.run([sys.executable, "-I", "-c", code, name, str(piped), str(parents)], cwd=root, check=True, capture_output=True, timeout=15)
+    # Assert
+    assert ((root / name).is_dir(), _byte_fixture_state(protected)) == (True, before)
