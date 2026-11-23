@@ -86,6 +86,14 @@ SPARTAN_ROOT=$(scitex-dev host resolve spartan --field scitex_root)
 `host resolve --field` exits non-zero with an actionable stderr
 message when the host isn't found — never a silent empty string.
 
+`host list`, `show` and `resolve` format declared registry errors on stderr and
+exit with that error's declared code; validation errors use code 2. This also
+applies to `list --json`: failure emits no success JSON on stdout. Unexpected
+exceptions are not converted into registry errors. Controls in
+`tests/scitex_dev/_cli/test__hosts_list_errors.py` cover malformed registries,
+text/JSON channels, valid/empty results and an unexpected decoding failure.
+
+
 ## Scope note
 
 This module owns registry records and path/locality resolution, not whether
