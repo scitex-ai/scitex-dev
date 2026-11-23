@@ -52,7 +52,14 @@ local; use the registry's locality API rather than assuming local execution.
 `resolve()` raises `UnknownHostError` (fail loud, no silent
 fallback) with the full list of registered hosts and a remediation
 pointing at the file to edit. `HostRegistryError` covers a malformed
-`hosts.yaml` (bad shape, invalid `kind`, YAML parse error).
+`hosts.yaml` (bad shape, invalid `kind`, YAML parse error). The document and its
+`hosts` block must be mappings: lists, booleans, numbers and strings are refused
+even when empty or false-valued. Errors retain the selected file path and a
+validation code. Empty documents, YAML `null`, `{}`, and missing/null `hosts`
+still describe an empty registry; `hosts: {}` remains valid. These checks do not
+change host-record validation, alias resolution, runner floors or seeding.
+Controls: `tests/scitex_dev/hosts/test__parse_shapes.py` exercises the public
+`list_hosts(hosts_path=...)` API against actual YAML fixture files.
 
 ## Storage: `~/.scitex/dev/hosts.yaml`
 

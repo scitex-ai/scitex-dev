@@ -10,6 +10,12 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Refuse nonmapping host-registry YAML documents and `hosts` blocks with a
+  structured validation error instead of collapsing false-valued shapes to
+  empty state or leaking attribute errors. Preserve accepted empty/null forms.
+
 ### Documentation
 
 - Clarify that skill projection audits use the supplied discovery snapshot and
