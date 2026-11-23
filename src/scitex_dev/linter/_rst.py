@@ -33,7 +33,8 @@ def _iter_python_blocks(text: str):
     """Yield ``(block_index, start_line, body)`` for each python directive.
 
     ``start_line`` is 1-indexed and points at the first body line so
-    issue line numbers map back to source.
+    issue line numbers map back to source. Option scanning stops at a
+    nonblank line dedented to the directive level or beyond.
     """
     lines = text.splitlines(keepends=True)
     block_idx = 0
@@ -49,7 +50,10 @@ def _iter_python_blocks(text: str):
         # blank line that separates the directive from the body.
         while i < len(lines):
             stripped = lines[i].strip()
-            if not stripped or stripped.startswith(":"):
+            line_indent = len(lines[i]) - len(lines[i].lstrip(" \t"))
+            if not stripped or (
+                stripped.startswith(":") and line_indent > directive_indent
+            ):
                 i += 1
                 continue
             break

@@ -97,3 +97,12 @@ source is `_issue.py`, `_ipynb.py`, `_md.py`, `_rst.py` and `formatter.py`. Exis
 controls in `tests/scitex_dev/linter/test__dispatch.py`, `test__md.py` and
 `_mcp/tools/test_lint.py` cover extraction, document lines and parser error
 boundaries; complete per-cell output attribution is not established by them.
+
+For recognized reST Python directives, `_rst._iter_python_blocks` skips an
+option-looking colon line only while it is indented beyond the directive
+marker. A nonblank line at that marker's indentation or less ends that scan,
+so a following field-list body is not analyzed as directive Python. This
+respects the [directive block indentation boundary](https://docutils.sourceforge.io/docs/ref/rst/restructuredtext.html#directives);
+it does not validate directive arguments, option syntax, nested reST or an
+empty directive. Owning boundary and real-option/body controls are in
+`tests/scitex_dev/linter/test__rst.py`.

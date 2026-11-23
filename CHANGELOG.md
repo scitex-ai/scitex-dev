@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Stop reST directive-option scanning at dedented fields so unrelated field bodies are not linted as Python.
+
+
 - Clarify linter finding locations versus parser labels; record the unresolved notebook cell-attribution gap.
 
 
