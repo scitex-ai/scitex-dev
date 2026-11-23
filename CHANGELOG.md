@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Correct drift-report guidance and help for committed Git references, missing
+  baselines, independent install findings and incomplete observation coverage.
+
 - Surface unexpected audit declaration-target resolver failures instead of
   reporting empty declarations; retain normal unresolved and explicit targets.
 

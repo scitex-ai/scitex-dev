@@ -1,64 +1,122 @@
 ---
 description: |
   [TOPIC] Ecosystem drift-report
-  [DETAILS] `scitex-dev ecosystem drift-report` — the unified per-package × per-layer VERSION matrix across all 8 drift layers (PyPI, GitHub, both hosts, container base-image, agent overlay, CI, editable). SSoT = pyproject@develop; a disagreeing cell is drift; exit 1 on drift so it doubles as a scheduled gate. Companion to the version-drift-management skill (general/05_development/13). Use to answer "is this package the same version everywhere it lives?".
+  [DETAILS] Version and checkout-reference matrix, missing-baseline findings, independent install checks, and observe-timer limits. Unknown cells and an exit of zero do not establish full fleet coverage.
 tags: [scitex-dev-drift-report]
 ---
 
-# `ecosystem drift-report` — unified version-drift matrix
+# Ecosystem drift report
 
-One command answering the operator's #1 question — *"is this package the
-same version everywhere it lives?"* Prints a matrix, package rows × layer
-columns → version, spanning all eight drift layers from
-[13_version-drift-management.md](../general/05_development/13_version-drift-management.md)
-§1, so drift across hosts / containers / agents is identifiable at a
-glance instead of discovered when something breaks.
+Use the umbrella route when installed; standalone bootstrap examples follow:
 
 ```bash
-scitex-dev ecosystem drift-report                 # full matrix + drift detail
-scitex-dev ecosystem drift-report -p scitex-io    # one package
-scitex-dev ecosystem drift-report -h spartan      # one host's column
-scitex-dev ecosystem drift-report --json          # structured matrix
-scitex-dev ecosystem drift-report -q              # one-line summary
+scitex-dev ecosystem drift-report -p scitex-io --json
+scitex-dev ecosystem drift-report -h spartan
+scitex-dev ecosystem drift-report -q
 ```
 
-The eight layer columns, per package:
+The collector performs live PyPI, Git/host and `sac` probes. Inspect installed
+help and intended scope before running it. `--package` and `--host` are repeatable
+matrix filters; `--host all` selects the default enabled hosts. Independent
+install checks below still run when the matrix is filtered.
 
-| # | Column | Holds | Source (reused, not reinvented) |
-|---|--------|-------|---------------------------------|
-| 1 | `pypi` | published latest version | `_release.versions.get_pypi_version` |
-| 2 | `github` | latest release tag (what `main` shipped) | `get_git_latest_tag` |
-| 3–4 | `host:<name>` | that host's `develop` checkout sha | `_ecosystem._packages.packages_audit` |
-| 5 | `img` | container base-image version | `sac versions --json` (layer `base-image`) |
-| 6 | `overlay` | agent overlay effective version (overlay-else-base) | `sac versions --json` (layer `agent-overlay`) |
-| 7 | `ci` | out of scope for v1 — honestly `not-collected` | — |
-| 8 | `editable` | current interpreter's installed version + localhost sha | `importlib.metadata` + `packages_audit` |
+## References and layers
 
-**SSoT + drift marking.** "What SHOULD the version be?" is
-`pyproject.toml` on the local `develop` checkout (the `SSoT` column);
-"what IS published?" is PyPI. Every other layer is a *cache* of the SSoT
-— a cell that disagrees is DRIFT, marked with a trailing `*` (e.g.
-`0.9.0*`). The report then lists, per drifting package, exactly which
-layers disagree and how (`behind SSoT` / `ahead of SSoT` / `mixed`).
+`SSoT` is the committed `pyproject.toml` version read from local `develop`,
+falling back to `origin/develop` when the first ref is absent. The reader does
+not substitute a dirty working tree, another checked-out branch or local HEAD.
+A missing checkout/ref/file/version yields no reference. This reader does not
+resolve a dynamic version from a build backend.
 
-**Only KNOWN-different is drift.** An *unknown* cell renders `-` and
-never counts as drift: a host that is unreachable (sleeping laptop), a
-package not installed there, the not-collected CI layer, and the case
-where `sac versions --json` is absent all degrade gracefully. This is
-deliberate — a false-red gate is a detector people learn to ignore
-(§4 broken-feedback-loop lesson), so a down host or a missing `sac`
-never trips the exit code.
+The `github` value comes from `git describe --tags --abbrev=0 --match v*` at
+`origin/main`, falling back to `main`. It is a reachable tag in the local clone,
+not a live GitHub Releases query or proof of the latest published artifact.
+A newer tag elsewhere in that clone can produce a reachability note. Ref
+readers do not themselves fetch; results depend on the clone's available refs.
 
-**sac integration (layers 5–6).** Shelled as `sac versions --json`
-(list-form argv, never a shell). If `sac` is not on `PATH`, the verb is
-unknown, or the output isn't parseable, those two columns show `-` with
-a footnote `unavailable (sac versions --json not present)` and the report
-still completes.
+The historical eight-layer model has one column per selected host, so the
+actual column count varies:
 
-**Exit code.** `0` when no drift is detected, `1` when any KNOWN drift
-exists — so it doubles as a scheduled gate. It is federated as the
-`drift-report` **timer** JobSpec (kind `timer`, OnBootSec catch-up +
-every 6h) via the `scitex_dev.jobs` entry-point; the timer appends the
-matrix to `~/.scitex/dev/logs/timer-drift-report.log` (with `|| true` so
-finding drift is a successful observation, not a failed unit). Install
-it with `scitex-dev ecosystem up` alongside the other federated jobs.
+| JSON layer key | Human header | Value and comparison |
+|---|---|---|
+| `pypi` | `pypi` | PyPI version against reference version |
+| `github` | `github` | Reachable version tag against reference version |
+| `host:<name>` | host name | Abbreviated checkout SHA; full SHA compared with `packages_audit`'s origin reference |
+| `base-image` | `img` | Versions reported by `sac`, compared with reference version |
+| `agent-overlay` | `overlay` | Per-agent overlay version, else its image's base version |
+| `ci` | `ci` | Always unknown: `not-collected (v1)` |
+| `editable` | `editable` | Current interpreter's installed version against reference version |
+
+The editable cell is a version cell; checkout SHAs belong to host columns.
+Container cells collapse equal raw version strings to one value. Multiple
+strings yield `mixed` with the image/agent breakdown and mark that cell as drift.
+Version comparison otherwise uses the existing PEP 440 helpers. A `*` marks a
+cell's drift; `-` means unknown, and `???` means the row has no version reference.
+
+## Unknown data and exit status
+
+An unknown individual cell does not itself count as drift. An unreachable host,
+missing package or unavailable `sac` can therefore leave coverage incomplete
+without making a judgeable row inconsistent. Inspect notes and collected scope.
+
+A missing reference version is different: the row is **NOT JUDGEABLE**, neither
+consistent nor counted in `drifting`, and makes `DriftMatrix.has_drift` true.
+The CLI's normal completed-report exit is 1 if any of these are present:
+
+- a judgeable row with a drifting cell;
+- a row with no reference version;
+- a critical-package staleness warning;
+- an untrustworthy-install finding.
+
+Otherwise it exits 0. This is the model's current verdict, not proof that every
+host/layer/package was checked; unexpected collection errors remain separate.
+The full human report names NOT JUDGEABLE rows. Quiet output omits that count;
+its consistency/drift counts are not the complete verdict. JSON carries row
+references/consistency/cells and the two independent warning lists. The current
+JSON summary also omits a dedicated unjudgeable count. Install-integrity detail
+is not currently included by the full/quiet human renderers; consult JSON.
+These display gaps remain limitations, not evidence of a clean install.
+
+## Independent interpreter checks
+
+The critical staleness watch uses `_model.CRITICAL_PACKAGES`. It compares the
+verified installed version with a local checkout's version when available,
+otherwise PyPI. This separate reader uses the checkout file, not the matrix's
+committed-ref reader. It reports strictly behind versions; absent, current,
+ahead or unavailable readings are omitted without establishing their health.
+
+The install-integrity scan defaults to every registered ecosystem package in
+the current interpreter. It reports untrustworthy claimed metadata, including
+orphaned or drifted installs; absent packages and bare paths claiming no version
+are omitted. It is distinct from staleness and invalidates a version-only
+interpretation for affected packages. Neither check verifies other hosts.
+
+## Container collection and timer
+
+`sac versions --json` uses list-form argv. Absent executable, nonzero exit,
+probe failure, unparseable output or zero rows makes both container layers
+unavailable with a reason. Even exit 0 with `[]` proves no container coverage.
+The full report prints a BLIND LAYERS warning when container data is unavailable.
+A nonempty response still does not prove that every intended image/agent exists
+in those rows or that a live process uses the reported content.
+
+The `scitex_dev.jobs` provider declares `scitex-dev-drift-report` as a timer
+with `OnBootSec=5min` and `OnUnitActiveSec=6h`. Its command uses the shared
+`scitex-dev ecosystem cron exec` log sink (default
+`~/.scitex/dev/runtime/logs/timer-drift-report.log`) and runs the report with
+`|| true`. That wrapper masks any report nonzero exit, including a collection
+failure; unit success alone proves neither a complete observation nor no drift.
+A declared JobSpec does not prove installation, activation or a successful run.
+
+## Owning evidence and limits
+
+Source: `_ecosystem/_drift_report/{_collect,_refs,_model,_build,_sac}.py`,
+`_package_watch.py`, `_untrustworthy_installs.py`, CLI
+`_cli/ecosystem/_cmds/_drift_report.py`, and `_ecosystem_jobs/_provider.py`.
+Existing controls: `tests/scitex_dev/_ecosystem/_drift_report/` (including real
+Git repositories in `test__refs.py`), CLI registration/help in
+`tests/scitex_dev/_cli/ecosystem/_cmds/test__drift_report.py`, and job declarations
+in `tests/scitex_dev/_ecosystem_jobs/test__provider.py`. Some collection and
+install controls use declared injected probes. Pure assembly/renderer tests,
+help and owned Git fixtures do not establish live PyPI/SSH/container collection,
+timer execution, wheel content, process currency or release/deployment readiness.
