@@ -39,6 +39,12 @@ and `tests/scitex_dev/linter/test__source_helpers.py`.
 Rules and required capabilities remain owned by their providers. Missing
 mandatory providers fail; optional unmet requirements can leave reported skips.
 A returned catalog or an empty issue list is not complete-environment acceptance.
+The shared Python `lint_file` dispatcher currently returns an empty list for
+missing or non-file paths, and `lint_source` does the same for syntax errors.
+Neither result establishes successful input validation. The MCP file endpoint
+adds an explicit missing/non-regular target check before dispatch; it does not
+change these Python API behaviors. Sources: `linter/_dispatch.py` and
+`linter/checker.py`.
 Configuration readers and the unresolved CLI severity-field gap are documented
 in [04_cli-reference.md](04_cli-reference.md).
 

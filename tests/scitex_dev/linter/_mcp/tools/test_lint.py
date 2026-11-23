@@ -149,3 +149,62 @@ def test_mcp_skill_get_matches_actual_installed_owner_content(
     result = _call_registered_skill_tool("linter_skills_get", {"name": "03_python-api"})
     # Assert
     assert (result["success"], result.get("content")) == (True, expected)
+
+
+@pytest.fixture(params=["missing", "directory", "empty"])
+def _unavailable_mcp_target(request, tmp_path):
+    values = {"missing": str(tmp_path / "absent.py"), "directory": str(tmp_path), "empty": ""}
+    return values[request.param]
+
+
+def test_mcp_file_check_rejects_unavailable_target(_owned_installed_skill_profile, _unavailable_mcp_target):
+    # Arrange
+    from fastmcp.exceptions import ToolError
+
+    # Act
+    # Assert
+    with pytest.raises(ToolError, match="Lint target"):
+        _call_registered_skill_tool("linter_check", {"path": _unavailable_mcp_target})
+
+
+@pytest.fixture(params=["python", "notebook", "markdown", "rst", "text"])
+def _valid_mcp_file_case(request, tmp_path):
+    import json
+    from scitex_dev.linter.checker import lint_file
+    from scitex_dev.linter.config import load_config
+    from scitex_dev.linter.formatter import to_json
+
+    code = 'import requests\nrequests.get("https://owned.invalid")\n'
+    formats = {
+        "python": (".py", code),
+        "notebook": (".ipynb", json.dumps({"cells": [{"cell_type": "code", "source": code.splitlines(keepends=True)}], "metadata": {}, "nbformat": 4, "nbformat_minor": 5})),
+        "markdown": (".md", "```python\n" + code + "```\n"),
+        "rst": (".rst", ".. code-block:: python\n\n    import requests\n    requests.get(\"https://owned.invalid\")\n"),
+        "text": (".txt", code),
+    }
+    suffix, content = formats[request.param]
+    file = tmp_path / ("owned" + suffix)
+    file.write_text(content)
+    (tmp_path / "pyproject.toml").write_text('[tool.scitex-dev.linter]\nlibrary_dirs = ["."]\n')
+    expected = to_json(lint_file(str(file), config=load_config(str(file))), str(file))
+    info = file.stat()
+    return file, expected, (file.read_bytes(), info.st_ino, info.st_mtime_ns)
+
+
+def test_mcp_file_check_preserves_valid_dispatch_payload(_owned_installed_skill_profile, _valid_mcp_file_case):
+    # Arrange
+    file, expected, _ = _valid_mcp_file_case
+    # Act
+    result = _call_registered_skill_tool("linter_check", {"path": str(file)})
+    # Assert
+    assert (result, "STX-NET001" in [issue["rule_id"] for issue in result["issues"]]) == (expected, True)
+
+
+def test_mcp_file_check_preserves_valid_file_bytes(_owned_installed_skill_profile, _valid_mcp_file_case):
+    # Arrange
+    file, _, before = _valid_mcp_file_case
+    # Act
+    _call_registered_skill_tool("linter_check", {"path": str(file)})
+    info = file.stat()
+    # Assert
+    assert (file.read_bytes(), info.st_ino, info.st_mtime_ns) == before

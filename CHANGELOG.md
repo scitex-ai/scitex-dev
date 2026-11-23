@@ -12,6 +12,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Reject missing and non-regular MCP lint file targets instead of returning empty
+  findings, and describe actual dispatch/provider and syntax-check limits.
+
 - Report linter MCP catalog loading failures instead of returning a successful
   hard-coded fallback, and include existing skill tools in server instructions.
 

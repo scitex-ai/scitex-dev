@@ -1,5 +1,7 @@
+#!/usr/bin/env python3
 """Lint MCP tools for scitex-linter."""
 
+from pathlib import Path
 from typing import Optional
 
 
@@ -10,11 +12,24 @@ def register_lint_tools(mcp) -> None:
     def linter_check(
         path: str, severity: str = "info", category: Optional[str] = None
     ) -> dict:
-        """Lint a Python file against 47+ SciTeX reproducible-research rules — raw `pd.read_csv` / `np.load` / `pickle` instead of `stx.io` (STX-IO), hardcoded `/home/...` paths (STX-P), `plt.show()` in scripts, missing axis labels (STX-PA), p-values without effect sizes (STX-S), missing `@stx.session` entrypoints (STX-ST), etc. Drop-in complement to `flake8` / `ruff` / `pylint` — not a replacement for general style but specifically covers scientific-reproducibility anti-patterns. Use whenever the user asks to "lint this file", "check scitex conventions", "find stx.io violations", "lint my script for reproducibility rules", or before committing scientific Python. Filter by `severity` (error / warning / info) or comma-separated `category`."""
+        """Lint one existing regular file using enabled installed SciTeX checks.
+
+        Python, notebook, Markdown and reST inputs use the owning filetype
+        dispatcher. Missing or non-file targets fail; directories are not
+        traversed. Source is analyzed, never executed. Filter reported issues
+        by minimum severity (error/warning/info) and comma-separated category
+        names from the actual catalog. Findings do not prove all optional
+        providers ran, and this endpoint is not a Python syntax validator."""
         from ...checker import lint_file
         from ...config import load_config
         from ...formatter import to_json
         from ...rules import SEVERITY_ORDER
+
+        target = Path(path)
+        if not target.exists():
+            raise FileNotFoundError(f"Lint target does not exist: {path}")
+        if not target.is_file():
+            raise ValueError(f"Lint target must be a regular file: {path}")
 
         config = load_config(path)
         issues = lint_file(path, config=config)
@@ -34,7 +49,14 @@ def register_lint_tools(mcp) -> None:
     def linter_list_rules(
         category: Optional[str] = None, severity: Optional[str] = None
     ) -> dict:
-        """Browse the catalog of every lint rule scitex-linter knows — 47 built-ins plus any rules contributed by plugin packages (scitex-io, scitex-stats, figrecipe, etc.) via `scitex_linter.plugins` entry points. Returns each rule's ID (e.g. `STX-IO001`), category, severity, message, and suggested fix. Use whenever the user asks "what rules are there?", "list linter rules", "show me all STX-IO rules", "what does STX-PA-002 mean?", "catalog errors by severity", or is learning the rule set. Filter by `category=` (imports,io,path,axes,stats,fm,structure,…) or `severity=` (error|warning|info)."""
+        """List the installed SciTeX lint catalog, including provider rules.
+
+        Return each rule's ID, category, severity, message and suggested fix,
+        plus the filtered count. The catalog size depends on this interpreter's
+        installed providers declared through `scitex_dev.linter.plugins`.
+        Category filters match comma-separated exact
+        catalog strings; severity is an exact match. Catalog presence and
+        counts do not establish that a rule ran for a particular file."""
         from ... import list_rules
 
         rules_list = list_rules()
@@ -61,7 +83,13 @@ def register_lint_tools(mcp) -> None:
 
     @mcp.tool()
     def linter_check_source(source: str, filepath: str = "<stdin>") -> dict:
-        """Lint an in-memory Python source string (no file on disk) against the full SciTeX rule set — useful for LLM-generated code, notebook cells, REPL snippets, and CI hooks checking patches before write. Use whenever the user asks to "lint this code I just wrote", "check this snippet against scitex rules", "validate this function without saving it", "pre-commit lint this patch", or passes a string rather than a path. Optional `filepath=` labels the source in error messages."""
+        """Analyze a Python source string without executing or saving it.
+
+        The filepath controls configuration and research/library classification
+        as well as labels. Return findings from enabled installed checks;
+        optional provider coverage is not established by an empty result.
+        This is not a syntax validator: the current checker returns no
+        findings for an unparseable Python string."""
         from ...checker import lint_source
         from ...config import load_config
         from ...formatter import to_json
