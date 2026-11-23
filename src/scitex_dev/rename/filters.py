@@ -86,7 +86,7 @@ def _rg_find_content_matches(directory: str, config: RenameConfig) -> list[Path]
     if not _RG_PATH:
         return None
 
-    cmd = [_RG_PATH, "--files-with-matches", "--null", "--no-messages"]
+    cmd = [_RG_PATH, "--no-config", "--files-with-matches", "--null", "--no-messages"]
 
     # Scope as glob filter
     if config.scope:

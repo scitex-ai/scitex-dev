@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] Rename ripgrep discovery
-  [DETAILS] Preserve filename boundaries in real ripgrep content discovery and distinguish backend coverage from general traversal or platform equivalence.
+  [DETAILS] Isolate programmatic ripgrep discovery from external tool configuration, preserve filename boundaries and distinguish backend coverage from general traversal or platform equivalence.
 tags: [scitex-dev-rename-ripgrep]
 ---
 
@@ -14,6 +14,20 @@ A filename containing a line break remains one path; its components must not
 be interpreted as separate matching files. Results remain sorted for stable
 preview/application IDs. Existing exclusions, 60-second timeout and fallback
 on backend failure remain unchanged.
+
+The programmatic command passes `--no-config`, so `RIPGREP_CONFIG_PATH` does
+not change its selection or filename output. A personal config containing
+`--quiet` can suppress filenames even when ripgrep exits successfully; an
+extra negative glob can hide a file that the rename configuration selected.
+Rename discovery uses its explicit `RenameConfig` arguments instead. This
+neither edits the external config nor disables existing ignore-file behavior;
+the backend does not add `--no-ignore`.
+
+The `rg_config` controls in `tests/scitex_dev/rename/test_filters.py` use real
+child processes with owned empty, quiet and excluding-glob configs in literal
+and regex modes. They verify exact discovery/preview, no preview writes, and
+application with an unchanged sibling and config. Only those config cases
+are qualified; full ripgrep configuration equivalence is not established.
 
 The `rg_filename` controls in `tests/scitex_dev/rename/test_filters.py` use a
 real installed ripgrep and owned clean Git fixtures. They assert exact backend

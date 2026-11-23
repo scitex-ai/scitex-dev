@@ -203,3 +203,82 @@ def test_rg_byte_name_cli_apply_preserves_sibling(rg_byte_name_case):
     payload = json.loads(result.stdout)
     # Assert
     assert (result.exit_code, payload["success"] is True, [entry["file"] for entry in payload["data"]["contents"]], file.read_bytes(), sibling.read_bytes()) == (0, True, [str(file)], b"REPLACED\n", b"unrelated\n")
+
+
+def _run_owned_rg_config(operation, root, config_file, regex):
+    import json
+    import os
+    import sys
+
+    code = """
+import dataclasses,json,sys
+from scitex_dev import preview_rename,execute_rename
+from scitex_dev.rename.config import RenameConfig
+from scitex_dev.rename.filters import _rg_find_content_matches
+operation,root,regex=sys.argv[1:];regex=regex=='True'
+if operation=='backend':
+    files=_rg_find_content_matches(root,RenameConfig('needle','REPLACED',regex=regex))
+    data=None if files is None else list(map(str,files))
+else:
+    fn=preview_rename if operation=='preview' else execute_rename
+    data=dataclasses.asdict(fn('needle','REPLACED',directory=root,regex=regex))
+print(json.dumps(data))
+"""
+    result = subprocess.run([sys.executable, "-c", code, operation, str(root), str(regex)], env={**os.environ, "RIPGREP_CONFIG_PATH": str(config_file)}, check=True, capture_output=True, timeout=15)
+    return json.loads(result.stdout)
+
+
+@pytest.fixture(params=[(regex, options) for regex in [False, True] for options in ["", "--quiet\n", "--glob=!*.txt\n"]])
+def rg_config_case(request, tmp_path):
+    regex, options = request.param
+    assert _RG_PATH is not None, "This cohort requires an actual installed ripgrep backend"
+    config_file = tmp_path / "ripgrep.config"
+    config_file.write_text(options)
+    root = tmp_path / "owned-repo"
+    root.mkdir()
+    file = root / "owned.txt"
+    file.write_text("needle\n")
+    sibling = root / "other.txt"
+    sibling.write_text("unrelated\n")
+    for args in [["init"], ["config", "user.name", "Owned rg config fixture"], ["config", "user.email", "owned@example.invalid"], ["add", "."], ["commit", "-m", "owned rg config fixture"]]:
+        subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True, timeout=10)
+    before = [(f.read_bytes(), f.stat().st_ino, f.stat().st_mtime_ns) for f in (file, sibling, config_file)]
+    return root, file, sibling, config_file, regex, before
+
+
+def test_rg_config_backend_exact_selection(rg_config_case):
+    # Arrange
+    root, file, _, config_file, regex, _ = rg_config_case
+    # Act
+    files = _run_owned_rg_config("backend", root, config_file, regex)
+    # Assert
+    assert files == [str(file)]
+
+
+def test_rg_config_preview_exact_selection(rg_config_case):
+    # Arrange
+    root, file, _, config_file, regex, _ = rg_config_case
+    # Act
+    result = _run_owned_rg_config("preview", root, config_file, regex)
+    # Assert
+    assert (result["summary"]["content_matches"], [entry["file"] for entry in result["contents"]]) == (1, [str(file)])
+
+
+def test_rg_config_preview_preserves_owned_files(rg_config_case):
+    # Arrange
+    root, file, sibling, config_file, regex, before = rg_config_case
+    # Act
+    _run_owned_rg_config("preview", root, config_file, regex)
+    after = [(f.read_bytes(), f.stat().st_ino, f.stat().st_mtime_ns) for f in (file, sibling, config_file)]
+    # Assert
+    assert after == before
+
+
+def test_rg_config_apply_uses_rename_configuration(rg_config_case):
+    # Arrange
+    root, file, sibling, config_file, regex, before = rg_config_case
+    # Act
+    result = _run_owned_rg_config("apply", root, config_file, regex)
+    preserved = [(f.read_bytes(), f.stat().st_ino, f.stat().st_mtime_ns) for f in (sibling, config_file)]
+    # Assert
+    assert (result["error"], file.read_bytes(), preserved) == (None, b"REPLACED\n", before[1:])

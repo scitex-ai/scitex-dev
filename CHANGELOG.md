@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Isolate rename ripgrep discovery from external tool config so quiet or
+  excluding-glob settings cannot silently hide selected content matches.
+
 - Cover Linux non-UTF-8 rename filenames and CLI JSON path round-trips
   with real ripgrep controls; document the verified byte-filename scope.
 
