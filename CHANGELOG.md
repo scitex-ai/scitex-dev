@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Cover actual ripgrep absence with real Git-backed child processes, including
+  sorted fallback results and dirty-tree, non-Git and permission refusals.
+
 - Avoid content writes when literal or regex replacement text is unchanged,
   preserving bytes and timestamps while retaining existing match counts.
 

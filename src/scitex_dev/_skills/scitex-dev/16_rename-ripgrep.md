@@ -27,6 +27,21 @@ to exercise Python fallback. They check sorted discovery, preview IDs, preview
 preservation and application skipping the first or middle sorted file. These
 controls do not establish complete regex or traversal equivalence.
 
+Actual ripgrep absence is covered separately by the `missing_rg_safety`
+controls in `tests/scitex_dev/rename/test_safety.py`. Real child processes have
+Git available and no `rg` on their PATH; both executable lookup and the owning
+backend's detected absence are asserted. No availability predicate is replaced.
+The controls call the owning Git/safety checks and public preview/application
+APIs in literal and regex modes with clean, dirty, non-Git and readonly fixtures.
+
+With this tool profile, sorted Python discovery and preview IDs remain available.
+Preview preserves bytes, inodes, modification times and modes. Clean application
+honors the middle content skip ID; dirty, non-Git and readonly application
+requests are refused by the existing checks and preserve fixture state. These
+Linux/Git fixtures qualify actual absence for this scope, not complete backend
+ignore/traversal equivalence or every environment. CLI application covers the
+full selected set; content skip IDs are checked through the Python API.
+
 The programmatic command passes `--no-config`, so `RIPGREP_CONFIG_PATH` does
 not change its selection or filename output. A personal config containing
 `--quiet` can suppress filenames even when ripgrep exits successfully; an
@@ -62,5 +77,5 @@ This concerns filename bytes, not arbitrary non-UTF-8 file contents.
 These cases establish scoped filename framing, not a general path-confinement
 policy or support for every byte sequence/platform/tool version. Full ignore,
 traversal and regex-dialect equivalence need separate evidence. Without optional
-ripgrep, these backend controls are unavailable; Python fallback success does not
-qualify them. See [bulk rename](15_rename.md) for guards and result handling.
+ripgrep, the ripgrep-specific controls are unavailable; passing fallback controls
+does not qualify real-ripgrep behavior. See [bulk rename](15_rename.md) for guards and result handling.
