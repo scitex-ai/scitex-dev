@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Show install-integrity findings before staleness warnings in full drift
+  reports, retaining interpreter identity and existing diagnostic hints.
+
 - Correct drift-report guidance and help for committed Git references, missing
   baselines, independent install findings and incomplete observation coverage.
 

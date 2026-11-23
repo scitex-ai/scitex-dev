@@ -319,10 +319,9 @@ def render_matrix(matrix: DriftMatrix) -> str:
 def render_report(matrix: DriftMatrix) -> str:
     """Full human report: title, grid, summary, per-drift detail.
 
-    The critical-package banner (if any) prints FIRST, ahead of the
-    matrix — it is the loudest signal in the report and must not depend
-    on a reader scanning the whole per-layer table to notice it (see
-    ``_package_watch`` module docstring, 2026-07-12 incident).
+    Install-integrity findings print FIRST because they invalidate version
+    comparisons. The critical-package staleness banner follows, ahead of
+    the matrix, so neither finding depends on scanning the table.
 
     A BLIND-LAYER banner prints next, for the same reason. When layers 5/6
     collected nothing, the ``img`` / ``overlay`` columns render ``-`` for
@@ -333,6 +332,12 @@ def render_report(matrix: DriftMatrix) -> str:
     read after the conclusion has already formed.
     """
     lines: list[str] = []
+    integrity_banner = render_untrustworthy_install_banner(
+        list(matrix.untrustworthy_installs)
+    )
+    if integrity_banner:
+        lines.append(integrity_banner)
+        lines.append("")
     banner = render_package_drift_banner(list(matrix.package_drift_warnings))
     if banner:
         lines.append(banner)

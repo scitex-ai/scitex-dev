@@ -49,9 +49,10 @@ That comparison presumes the installed version string can be BELIEVED —
 a ``.dist-info`` can outlive the code it describes, and comparing against
 such a fossil is wrong in BOTH directions (false "stale", false "ok").
 ``_untrustworthy_installs.check_untrustworthy_installs`` answers that
-prior question over the same ``CRITICAL_PACKAGES`` list and renders an
-even louder banner, because "I cannot tell what you are running"
-invalidates every version-based line of this report for that package.
+prior question over every registered ecosystem package in this interpreter.
+``render_report`` places its integrity banner before the staleness banner,
+because an untrustworthy install invalidates version-based comparisons
+for the affected package.
 
 Architecture — a pure core + a thin collector
 ----------------------------------------------
