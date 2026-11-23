@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Clarify that ecosystem auditor warning aliases already exist and are
+  separate from the linter MCP severity choices and aggregate reporting floor.
+
 - Validate MCP linter severity choices consistently with the linter CLI;
   invalid strings now fail argument validation rather than silently filtering.
 

@@ -30,9 +30,12 @@ Both severity arguments advertise and accept exactly `error`, `warning` and
 MCP calls reject other strings during argument validation instead of silently
 using an unfiltered file threshold or an empty catalog. File validation defaults
 to `info`; the catalog's omitted or null severity retains its unfiltered behavior.
-These are the current linter choices; this does not resolve alias conventions
-on the separate ecosystem audit commands. Category filters retain their existing
-exact-string behavior. Owning real-client controls are the `severity_contract`
+These linter choices are separate from the ecosystem audit commands, whose
+existing `SeverityChoice` accepts both `warn` and `warning`. The
+[owning audit guide](../../../_skills/scitex-dev/39_interface-audit.md) lists the
+seven commands and explains the separate unresolved wrapper reporting-floor gap.
+Alias parsing does not change audit findings, defaults or exit policies.
+Category filters retain their existing exact-string behavior. Owning real-client controls are the `severity_contract`
 cases in `tests/scitex_dev/linter/_mcp/tools/test_lint.py`.
 
 
