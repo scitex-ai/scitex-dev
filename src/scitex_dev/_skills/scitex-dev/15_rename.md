@@ -69,6 +69,7 @@ scitex-dev rename-symbols --root /owned/checkout --dry-run --json -- --version r
 
 Python takes strings directly. Traversal, exclusions and fallback are unchanged.
 Real-backend controls: `tests/scitex_dev/rename/test_filters.py`.
+Filename handling: [guide](16_rename-ripgrep.md).
 Without optional ripgrep, that test scope is unavailable. Fallback success does
 not qualify ripgrep or complete traversal/ignore/regex-dialect equivalence.
 

@@ -10,6 +10,7 @@ falls back to Python glob + read_text otherwise.
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 from pathlib import Path
@@ -85,7 +86,7 @@ def _rg_find_content_matches(directory: str, config: RenameConfig) -> list[Path]
     if not _RG_PATH:
         return None
 
-    cmd = [_RG_PATH, "--files-with-matches", "--no-messages"]
+    cmd = [_RG_PATH, "--files-with-matches", "--null", "--no-messages"]
 
     # Scope as glob filter
     if config.scope:
@@ -115,14 +116,14 @@ def _rg_find_content_matches(directory: str, config: RenameConfig) -> list[Path]
     import subprocess  # noqa: E402 — local import to survive auto-linter
 
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        proc = subprocess.run(cmd, capture_output=True, timeout=60)
         if proc.returncode > 1:  # 1 = no matches (ok), >1 = error
             return None
         # Sort to guarantee deterministic ordering across preview / execute
         # passes. ripgrep with --threads >1 returns matches as workers
         # complete, so iteration order depends on FS racing — that drifted
         # the content `file_id` between passes and broke `skip_ids`.
-        paths = sorted(Path(line) for line in proc.stdout.strip().splitlines() if line)
+        paths = sorted(Path(os.fsdecode(name)) for name in proc.stdout.split(b"\0") if name)
         return paths
     except (subprocess.TimeoutExpired, OSError):
         return None

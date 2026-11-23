@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Preserve newline and carriage-return filenames in ripgrep rename discovery
+  by consuming raw NUL-delimited paths.
+
 - Bind rename search patterns explicitly for ripgrep so option-shaped
   strings remain pattern data in literal and regex discovery.
 
