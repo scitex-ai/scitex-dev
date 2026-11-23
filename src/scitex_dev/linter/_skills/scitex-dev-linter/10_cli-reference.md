@@ -20,7 +20,31 @@ scitex-dev linter list-rules-all --category stats --json
 For completed validation, exit 0 means no reported findings, 1 means reported
 warning/info findings, and 2 means reported errors. Missing paths exit 2;
 no collected files can exit 0 without evaluating a file. Read the result's
-`_meta` coverage as well as the exit status.
+`_meta` coverage as well as the exit status. Missing paths and empty selections
+return before building that JSON object, so those paths do not provide `_meta`.
+
+Coverage metadata reports the skip facts recorded by `_health.skipped_categories`:
+`plugin_missing` for an empty IO/path tier when `scitex_io` is not importable,
+and `requires_gate` for rule evaluations dropped because their declared
+requirement is unavailable. `_meta.skipped_category_count` counts these records;
+`skipped_categories` contains them, and `all_rules_ran` is true exactly when
+that record list is empty. The quiet-notice setting does not suppress these
+recorded facts. Missing optional coverage does not itself change the exit code.
+
+An empty record list is not a complete coverage guarantee. For example, an
+importable `scitex_io` with zero registered IO/path rules is not reported by the
+current missing-plugin predicate. Before any plugin-load record, it also emits
+no missing-plugin record. These unreported coverage gaps remain unresolved.
+The metadata is process-global, including accumulated `requires_gate` counts;
+it is not a per-file inventory, and it does not establish that every installed
+provider or every rule evaluated. Human clean output is qualified with
+`ON THE RULES THAT RAN` when the recorded list is nonempty.
+
+Sources: `_health.py` and `_cmd_check.py::_do_check`. Owning controls:
+`tests/scitex_dev/linter/test__health.py`, `test__cmd_check_skip_verdict.py` and
+`test__health_corpus_provenance.py`. Some absent-provider verdict controls skip
+when `scitex_io` is importable; retain those skips as incomplete coverage rather
+than treating a passing installed-provider arm as proof of the absent arm.
 
 `--severity` is a minimum reporting filter, defaulting to `info`; catalog
 `--severity` filters exact metadata values. The validation filter remains

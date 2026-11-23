@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Clarify linter validation coverage metadata, early-return JSON limits and
+  unreported provider gaps without changing the health verdict or guards.
+
 - Enforce the existing new-only refusal for direct Python file-gate calls and the compatibility re-export, preserving full-severity normal validation.
 
 
