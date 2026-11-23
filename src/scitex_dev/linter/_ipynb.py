@@ -6,9 +6,10 @@ like `NB001`: raw-matplotlib in code cell) to follow in a dedicated
 checker class.
 
 Uses stdlib `json` — no nbformat dependency. Each code cell is linted
-independently by reusing `lint_source`; the reported filepath is
-suffixed `::cell-N` so downstream tooling can parse cell locations
-back.
+independently by reusing `lint_source`. Its internal filepath label is
+suffixed `::cell-N`, which is visible in opt-in parser errors. Returned
+Issue values have cell-relative lines but no filepath or cell identity;
+per-cell attribution in normal finding output remains unresolved.
 """
 
 from __future__ import annotations
@@ -47,7 +48,9 @@ def lint_ipynb(path: Path, config=None, *, raise_input_errors: bool = False) -> 
     """Lint a Jupyter notebook by extracting code cells and running
     `lint_source` on each. Returns a flat list of Issue objects.
 
-    Issue filepaths are of the form ``"/path/to/notebook.ipynb::cell-N"``.
+    The checker receives ``"/path/to/notebook.ipynb::cell-N"`` as a parse
+    label. Returned Issue values retain cell-relative line numbers but do not
+    carry that label; formatters use the separately supplied outer filepath.
     Opt in with ``raise_input_errors`` to expose read/JSON, extractable-cell
     structure and Python AST errors; this is not complete nbformat validation.
     """

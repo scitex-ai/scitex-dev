@@ -75,3 +75,25 @@ Owning extraction and real-finding controls live in
 `tests/scitex_dev/linter/test__md.py`. This does not extend fence recognition or
 establish full CommonMark validation; tab-prefixed fences retain their earlier
 behavior.
+
+## Finding locations and parser labels
+
+`checker.Issue` stores `rule`, `line`, `col` and `source_line`; it has no
+filepath, notebook-cell index or document-block index. `formatter.to_json`
+labels the result with the outer `file` argument and does not add unit identity
+to issue rows. Plain text formatting likewise uses its supplied outer filepath.
+
+Notebook finding lines are relative to each code cell, so two different cells
+can produce findings with the same outer filename and line number. Reliable
+per-cell attribution remains an unresolved output-contract gap. Markdown and
+reST handlers shift finding lines to physical document lines; columns and source
+lines describe the extracted Python after handler indentation removal.
+
+The internal `::cell-N` and `::block-N` labels are passed to Python parsing,
+so opt-in syntax errors can identify the code unit. Their parser line/column
+location is relative to that extracted unit, not shifted to document lines.
+These error labels are separate from the normal finding payload. The owning
+source is `_issue.py`, `_ipynb.py`, `_md.py`, `_rst.py` and `formatter.py`. Existing
+controls in `tests/scitex_dev/linter/test__dispatch.py`, `test__md.py` and
+`_mcp/tools/test_lint.py` cover extraction, document lines and parser error
+boundaries; complete per-cell output attribution is not established by them.

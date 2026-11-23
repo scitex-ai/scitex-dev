@@ -3,8 +3,9 @@
 and lint each one.
 
 Mirrors the shape of ``_ipynb.py``. Each fenced block is linted as if
-it were its own file; the reported filepath is suffixed
-``::block-N`` so downstream tooling can map back to source.
+it were its own file, with an internal ``::block-N`` parser label.
+Returned Issue values have document line numbers but no filepath or
+block identity; formatters use the separately supplied outer filepath.
 
 Structural rules (missing main guard, missing module docstring, etc.)
 do not apply to README snippets, so the same skip set used for
@@ -59,7 +60,10 @@ def _iter_python_blocks(text: str):
 def lint_md(path: Path, config=None, *, raise_input_errors: bool = False) -> list:
     """Lint a markdown file's fenced ``python`` blocks.
 
-    Issue filepaths are tagged ``"/path/to/README.md::block-N"``.
+    The checker receives ``"/path/to/README.md::block-N"`` as a parse
+    label, visible in opt-in syntax errors with block-relative locations.
+    Returned Issue lines are shifted into the document; the block label is
+    not retained in Issue values or normal formatter output.
     ``raise_input_errors`` exposes read and extracted AST errors for supported
     closed fences; it does not validate Markdown or non-Python blocks.
     """

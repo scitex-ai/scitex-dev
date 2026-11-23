@@ -81,7 +81,10 @@ def _iter_python_blocks(text: str):
 def lint_rst(path: Path, config=None, *, raise_input_errors: bool = False) -> list:
     """Lint Python ``code-block`` directives inside an RST file.
 
-    Issue filepaths are tagged ``"/path/to/index.rst::block-N"``.
+    The checker receives ``"/path/to/index.rst::block-N"`` as a parse
+    label, visible in opt-in syntax errors with block-relative locations.
+    Returned Issue lines are shifted into the document; the block label is
+    not retained in Issue values or normal formatter output.
     ``raise_input_errors`` exposes read and extracted Python AST errors;
     recognized directives are extraction, not complete document validation.
     """

@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Clarify linter finding locations versus parser labels; record the unresolved notebook cell-attribution gap.
+
+
 - Preserve nested Python indentation when linting supported space-indented Markdown fences; keep original document line numbers.
 
 
