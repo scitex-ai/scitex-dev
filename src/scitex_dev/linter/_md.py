@@ -39,10 +39,17 @@ def _iter_python_blocks(text: str):
     """Yield ``(block_index, fence_line, body)`` for each python fence.
 
     ``fence_line`` is 1-indexed and points at the line *after* the
-    opening fence so issue line numbers map back to source.
+    opening fence so issue line numbers map back to source. For space-indented
+    fences, remove up to the opening indentation from each content line while
+    preserving Python indentation beyond it.
     """
     for idx, match in enumerate(_FENCE_RE.finditer(text)):
         body = match.group(3)
+        # CommonMark removes up to the opening fence's spaces, not all
+        # common indentation. Preserve the legacy tab-prefixed behavior.
+        if "\t" not in match.group(1):
+            indent = len(match.group(1))
+            body = re.sub(rf"^ {{0,{indent}}}", "", body, flags=re.MULTILINE)
         # Lines before the body — the fence opens on its own line, so
         # body's first character is on (lines_before_match + 2).
         lines_before = text.count("\n", 0, match.start())

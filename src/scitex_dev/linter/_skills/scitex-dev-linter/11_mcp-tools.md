@@ -72,3 +72,13 @@ failure it exits 1 and reports an error instead of returning guessed tool names.
 This remains a registration check, not an execution or external-client check.
 CLI catalog and real invalid-setting controls live in
 `tests/scitex_dev/linter/test__cmd_mcp.py`.
+
+For supported closed backtick `python`/`py` fences whose opening line has up to
+three leading spaces, `_md._iter_python_blocks` removes up to that many spaces
+from each code line before parsing, following the [CommonMark indentation
+rule](https://spec.commonmark.org/0.31.2/#fenced-code-blocks). Additional Python
+indentation is preserved; reported issue lines still point into the document.
+Owning extraction and real-finding controls live in
+`tests/scitex_dev/linter/test__md.py`. This does not extend fence recognition or
+establish full CommonMark validation; tab-prefixed fences retain their earlier
+behavior.

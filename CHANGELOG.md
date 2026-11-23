@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Preserve nested Python indentation when linting supported space-indented Markdown fences; keep original document line numbers.
+
+
 ### Fixed
 
 - Add opt-in file/source input-error propagation through owning handlers and

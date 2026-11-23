@@ -65,3 +65,13 @@ source, but the current Dev distribution declares no `flake8.extension` entry
 point. Its automatic plugin integration remains an unresolved gap; class
 availability alone is not installed flake8 acceptance. See
 [11_mcp-tools.md](11_mcp-tools.md) for MCP wrappers.
+
+For supported closed backtick `python`/`py` fences whose opening line has up to
+three leading spaces, `_md._iter_python_blocks` removes up to that many spaces
+from each code line before parsing, following the [CommonMark indentation
+rule](https://spec.commonmark.org/0.31.2/#fenced-code-blocks). Additional Python
+indentation is preserved; reported issue lines still point into the document.
+Owning extraction and real-finding controls live in
+`tests/scitex_dev/linter/test__md.py`. This does not extend fence recognition or
+establish full CommonMark validation; tab-prefixed fences retain their earlier
+behavior.
