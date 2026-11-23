@@ -153,6 +153,22 @@ scitex dev rename-symbols 'alpha_(\w+)' 'beta_\1' --root /path/to/checkout --reg
 Replace the example path with the intended checkout and inspect the preview
 before applying. Standalone bootstrap: `scitex-dev rename-symbols`.
 
+The CLI treats a returned `RenameResult.error` as an operation failure in text,
+quiet and JSON modes, exiting 1. Text and quiet modes emit the error on stderr.
+JSON keeps the standard Result envelope: `success` is false, `error` contains the
+refusal and `data` preserves the full rename result, including its `error` field.
+Successful JSON keeps the result under `data` and exits 0. JSON takes priority
+when combined with `--quiet`; successful quiet summaries retain their format.
+
+This covers returned refusals such as dirty/non-Git roots and occupied rename
+destinations. Unexpected exceptions keep the existing wrapper's classifications
+and exit policy. A dry run remains a preview plan whose collision records can be
+inspected before application; this change does not make those plan records a
+live refusal. Source: `_cli/_rename.py` and the shared Result formatter.
+The `rename_verdict` controls in `tests/scitex_dev/_cli/test__rename.py` exercise
+all four output-mode combinations with real guarded and successful fixtures.
+
+
 `--allow-dirty` explicitly bypasses the uncommitted-change check; it is not a
 restoration mechanism. Swapping search and replacement does not generally undo
 an operation: `alpha beta` becomes `beta beta`, then `alpha alpha` on a reverse

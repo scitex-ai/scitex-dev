@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Propagate returned rename refusals to text/JSON CLI failure verdicts
+  and exit 1, retaining the rename result in the JSON data envelope.
+
 - Expand regex rename preview snippets from the original match so
   lookarounds, capture groups and zero-width replacements match application.
 
