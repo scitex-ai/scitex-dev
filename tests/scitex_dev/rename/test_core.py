@@ -2252,7 +2252,7 @@ class TestIO:
             calls.append((argv, input_data))
 
         write_text(f, "hello", use_sudo=True, runner=_runner)
-        assert calls[0][0] == ["tee", str(f)]
+        assert calls[0][0] == ["tee", "--", str(f)]
 
     def test_rename_path_sudo_calls_subprocess(self, tmp_path):
         # Arrange

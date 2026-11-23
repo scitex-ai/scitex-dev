@@ -42,7 +42,7 @@ def write_text(
     if not use_sudo:
         path.write_text(content, errors="surrogateescape")
         return
-    (runner or _sudo_run)(["tee", str(path)], input_data=content.encode(errors="surrogateescape"))
+    (runner or _sudo_run)(["tee", "--", str(path)], input_data=content.encode(errors="surrogateescape"))
 
 
 def rename_path(src: Path, dst: Path, use_sudo: bool = False, *, runner=None) -> None:

@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Pass piped writer paths after a tee option separator so leading-hyphen
+  filenames are written as intended; retain existing exact-dash behavior.
+
 - Pass piped rm/rmdir paths after an option separator so relative names such
   as --help and --version are removed as intended.
 
