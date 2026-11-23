@@ -15,6 +15,18 @@ be interpreted as separate matching files. Results remain sorted for stable
 preview/application IDs. Existing exclusions, 60-second timeout and fallback
 on backend failure remain unchanged.
 
+The Python fallback in `rename/filters.py::find_matching_files` also returns
+sorted paths, for content and non-content queries. This gives both discovery
+routes the same path order when they select the same files, including the order
+used to assign content IDs such as `c-000` and `c-001`. IDs are not persistent
+identities: adding/removing selected paths or changing selection can shift them.
+
+The `fallback_order` controls in `tests/scitex_dev/rename/test_filters.py` use
+three file creation orders and a real unsupported-lookbehind ripgrep failure
+to exercise Python fallback. They check sorted discovery, preview IDs, preview
+preservation and application skipping the first or middle sorted file. These
+controls do not establish complete regex or traversal equivalence.
+
 The programmatic command passes `--no-config`, so `RIPGREP_CONFIG_PATH` does
 not change its selection or filename output. A personal config containing
 `--quiet` can suppress filenames even when ripgrep exits successfully; an

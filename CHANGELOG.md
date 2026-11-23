@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Sort Python fallback rename candidates so preview content IDs and skip
+  requests use the same path order as ripgrep for the same selected files.
+
 - Isolate rename ripgrep discovery from external tool config so quiet or
   excluding-glob settings cannot silently hide selected content matches.
 

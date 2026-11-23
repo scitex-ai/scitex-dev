@@ -282,3 +282,93 @@ def test_rg_config_apply_uses_rename_configuration(rg_config_case):
     preserved = [(f.read_bytes(), f.stat().st_ino, f.stat().st_mtime_ns) for f in (sibling, config_file)]
     # Assert
     assert (result["error"], file.read_bytes(), preserved) == (None, b"REPLACED\n", before[1:])
+
+
+@pytest.fixture(params=[["z.txt", "a.txt", "m.txt"], ["a.txt", "m.txt", "z.txt"], ["m.txt", "z.txt", "a.txt"]])
+def fallback_order_case(request, tmp_path):
+    assert _RG_PATH is not None, "This cohort requires an actual installed ripgrep backend"
+    root = tmp_path / "owned-repo"
+    root.mkdir()
+    files = [root / name for name in request.param]
+    for file in files:
+        file.write_bytes(b"prefix:needle\n")
+    outside = tmp_path / "outside.txt"
+    outside.write_bytes(b"unrelated\n")
+    for args in [["init"], ["config", "user.name", "Owned fallback order fixture"], ["config", "user.email", "owned@example.invalid"], ["add", "."], ["commit", "-m", "owned fallback order fixture"]]:
+        subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True, timeout=10)
+    before = [(f.read_bytes(), f.stat().st_ino, f.stat().st_mtime_ns) for f in [*files, outside]]
+    return root, files, outside, before
+
+
+def test_fallback_order_real_regex_failure_signal(fallback_order_case):
+    # Arrange
+    root, _, _, _ = fallback_order_case
+    config = RenameConfig(r"(?<=prefix:)needle", "REPLACED", regex=True)
+    # Act
+    files = _rg_find_content_matches(str(root), config)
+    # Assert
+    assert files is None
+
+
+def test_fallback_order_plain_discovery_is_sorted(fallback_order_case):
+    # Arrange
+    from scitex_dev.rename.filters import find_matching_files
+
+    root, _, _, _ = fallback_order_case
+    config = RenameConfig(r"(?<=prefix:)needle", "REPLACED", regex=True)
+    # Act
+    files = find_matching_files(str(root), config)
+    # Assert
+    assert files == [root / "a.txt", root / "m.txt", root / "z.txt"]
+
+
+def test_fallback_order_content_discovery_is_sorted(fallback_order_case):
+    # Arrange
+    from scitex_dev.rename.filters import find_matching_files
+
+    root, _, _, _ = fallback_order_case
+    config = RenameConfig(r"(?<=prefix:)needle", "REPLACED", regex=True)
+    # Act
+    files = find_matching_files(str(root), config, need_content_match=True)
+    # Assert
+    assert files == [root / "a.txt", root / "m.txt", root / "z.txt"]
+
+
+def test_fallback_order_preview_assigns_sorted_ids(fallback_order_case):
+    # Arrange
+    root, _, _, _ = fallback_order_case
+    # Act
+    result = preview_rename(r"(?<=prefix:)needle", "REPLACED", directory=str(root), regex=True)
+    # Assert
+    assert [(entry["id"], entry["file"]) for entry in result.contents] == [("c-000", str(root / "a.txt")), ("c-001", str(root / "m.txt")), ("c-002", str(root / "z.txt"))]
+
+
+def test_fallback_order_preview_preserves_fixture(fallback_order_case):
+    # Arrange
+    root, files, outside, before = fallback_order_case
+    # Act
+    preview_rename(r"(?<=prefix:)needle", "REPLACED", directory=str(root), regex=True)
+    after = [(f.read_bytes(), f.stat().st_ino, f.stat().st_mtime_ns) for f in [*files, outside]]
+    # Assert
+    assert after == before
+
+
+def test_fallback_order_apply_skip_keeps_first_sorted_file(fallback_order_case):
+    # Arrange
+    root, _, outside, before = fallback_order_case
+    # Act
+    result = execute_rename(r"(?<=prefix:)needle", "REPLACED", directory=str(root), regex=True, skip_ids=["c-000"])
+    outside_after = (outside.read_bytes(), outside.stat().st_ino, outside.stat().st_mtime_ns)
+    # Assert
+    assert (result.error, (root / "a.txt").read_bytes(), (root / "m.txt").read_bytes(), (root / "z.txt").read_bytes(), outside_after) == (None, b"prefix:needle\n", b"prefix:REPLACED\n", b"prefix:REPLACED\n", before[-1])
+
+
+
+def test_fallback_order_apply_skip_keeps_second_sorted_file(fallback_order_case):
+    # Arrange
+    root, _, outside, before = fallback_order_case
+    # Act
+    result = execute_rename(r"(?<=prefix:)needle", "REPLACED", directory=str(root), regex=True, skip_ids=["c-001"])
+    outside_after = (outside.read_bytes(), outside.stat().st_ino, outside.stat().st_mtime_ns)
+    # Assert
+    assert (result.error, (root / "a.txt").read_bytes(), (root / "m.txt").read_bytes(), (root / "z.txt").read_bytes(), outside_after) == (None, b"prefix:REPLACED\n", b"prefix:needle\n", b"prefix:REPLACED\n", before[-1])

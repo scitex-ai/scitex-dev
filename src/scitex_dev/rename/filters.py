@@ -179,7 +179,7 @@ def find_matching_files(
                 continue
         matching.append(path)
 
-    return matching
+    return sorted(matching)
 
 
 def is_django_protected_line(line: str, pattern: str) -> bool:
