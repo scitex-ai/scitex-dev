@@ -100,8 +100,11 @@ boundaries; complete per-cell output attribution is not established by them.
 
 For recognized reST Python directives, `_rst._iter_python_blocks` skips an
 option-looking colon line only while it is indented beyond the directive
-marker. A nonblank line at that marker's indentation or less ends that scan,
-so a following field-list body is not analyzed as directive Python. This
+marker and precedes the first blank separator. That separator ends options;
+a colon-prefixed code line after it is retained and can trigger a Python AST
+error in opt-in mode. A nonblank line at the marker's indentation or less also
+ends the option scan, so a following field-list body is not analyzed as
+directive Python. This
 respects the [directive block indentation boundary](https://docutils.sourceforge.io/docs/ref/rst/restructuredtext.html#directives);
 it does not validate directive arguments, option syntax, nested reST or an
 empty directive. Owning boundary and real-option/body controls are in

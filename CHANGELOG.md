@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- End reST directive options at the blank separator so colon-prefixed code is retained and opt-in syntax errors remain visible.
+
+
 - Stop reST directive-option scanning at dedented fields so unrelated field bodies are not linted as Python.
 
 

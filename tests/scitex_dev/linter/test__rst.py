@@ -51,3 +51,41 @@ def test_indented_options_and_directive_body_keep_findings_and_lines(real_direct
     issues = lint_file(str(file), raise_input_errors=True)
     # Assert
     assert [(issue.rule.id, issue.line) for issue in issues] == [("STX-NET001", expected_line)]
+
+
+@pytest.fixture(params=[(directive, indent, options) for directive in ["code-block", "code", "sourcecode", "ipython"] for indent in [0, 4] for options in [False, True]])
+def rst_content_separator_case(request, tmp_path):
+    directive, indent, options = request.param
+    prefix = " " * indent
+    option = prefix + "    :linenos:\n" if options else ""
+    text = prefix + ".. " + directive + ":: python\n" + option + "\n" + prefix + "    :not_python:\n"
+    file = tmp_path / "content.rst"
+    file.write_text(text)
+    return file, text, 4 if options else 3
+
+
+def test_content_separator_retains_colon_prefixed_code(rst_content_separator_case):
+    # Arrange
+    _, text, start_line = rst_content_separator_case
+    # Act
+    blocks = list(_iter_python_blocks(text))
+    # Assert
+    assert blocks == [(0, start_line, ":not_python:\n")]
+
+
+def test_content_separator_optin_does_not_hide_invalid_python(rst_content_separator_case):
+    # Arrange
+    file, _, _ = rst_content_separator_case
+    # Act
+    # Assert
+    with pytest.raises(ValueError, match="::block-0:1:"):
+        lint_file(str(file), raise_input_errors=True)
+
+
+def test_content_separator_preserves_default_syntax_error_behavior(rst_content_separator_case):
+    # Arrange
+    file, _, _ = rst_content_separator_case
+    # Act
+    issues = lint_file(str(file))
+    # Assert
+    assert issues == []

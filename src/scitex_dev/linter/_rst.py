@@ -34,7 +34,8 @@ def _iter_python_blocks(text: str):
 
     ``start_line`` is 1-indexed and points at the first body line so
     issue line numbers map back to source. Option scanning stops at a
-    nonblank line dedented to the directive level or beyond.
+    nonblank line dedented to the directive level or beyond, or at the first
+    blank separator. Later colon-prefixed lines belong to code content.
     """
     lines = text.splitlines(keepends=True)
     block_idx = 0
@@ -46,17 +47,16 @@ def _iter_python_blocks(text: str):
             continue
         directive_indent = len(m.group("indent"))
         i += 1
-        # Skip directive options (``:linenos:`` etc.) and the mandatory
-        # blank line that separates the directive from the body.
+        # Options precede the blank separator. Colon-prefixed lines after
+        # that separator are code content, not additional directive options.
         while i < len(lines):
             stripped = lines[i].strip()
             line_indent = len(lines[i]) - len(lines[i].lstrip(" \t"))
-            if not stripped or (
-                stripped.startswith(":") and line_indent > directive_indent
-            ):
-                i += 1
-                continue
-            break
+            if not stripped.startswith(":") or line_indent <= directive_indent:
+                break
+            i += 1
+        while i < len(lines) and not lines[i].strip():
+            i += 1
         # Capture body: contiguous lines indented strictly more than
         # the directive itself (blank lines preserved within the block).
         body_start = i
