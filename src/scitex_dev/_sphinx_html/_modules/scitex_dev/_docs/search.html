@@ -80,8 +80,10 @@
 <span class="c1"># -*- coding: utf-8 -*-</span>
 <span class="sd">"""Unified search across the SciTeX ecosystem.</span>
 
-<span class="sd">Searches Python APIs, CLI commands, MCP tools, and documentation pages</span>
-<span class="sd">across all installed scitex packages.</span>
+<span class="sd">Searches shallow API introspection, console-script metadata, selected MCP</span>
+<span class="sd">source text and docs manifest metadata in the legacy local package mapping.</span>
+<span class="sd">It does not enumerate CLI subcommands, verify MCP registration or search page</span>
+<span class="sd">bodies. API introspection and package-root fallback can execute imports.</span>
 
 <span class="sd">Query syntax (Google-like):</span>
 <span class="sd">    search("save figure")           # match any term</span>
@@ -94,7 +96,7 @@
 
 <span class="sd">    search("save figure")                      # search everything</span>
 <span class="sd">    search("ttest", scope="api")               # Python API only</span>
-<span class="sd">    search("docs", scope="cli")                # CLI subcommands only</span>
+<span class="sd">    search("docs", scope="cli")                # Console-script metadata</span>
 <span class="sd">    search("stats -internal", scope="mcp")     # MCP tools, excluding "internal"</span>
 <span class="sd">"""</span>
 
@@ -258,12 +260,12 @@
     <span class="n">max_results</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span>
     <span class="n">fuzzy</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
-<span class="w">    </span><span class="sd">"""Search across the SciTeX ecosystem.</span>
+<span class="w">    </span><span class="sd">"""Search the local API, CLI metadata, MCP source and docs metadata indexes.</span>
 
 <span class="sd">    Query syntax:</span>
 <span class="sd">        "save figure"     → match any term</span>
 <span class="sd">        '"exact phrase"'  → match exact phrase</span>
-<span class="sd">        "+required term"  → term must appear</span>
+<span class="sd">        "+required term"  → term must match (fuzzy by default)</span>
 <span class="sd">        "-excluded"       → results with this term are removed</span>
 
 <span class="sd">    Args:</span>
@@ -365,7 +367,7 @@
     <span class="n">targets</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]],</span>
     <span class="n">fuzzy</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
-<span class="w">    </span><span class="sd">"""Search documentation pages."""</span>
+<span class="w">    </span><span class="sd">"""Search manifest page names/titles and package descriptions."""</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">.docs</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_docs</span>
 
     <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
@@ -466,7 +468,7 @@
     <span class="n">targets</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]],</span>
     <span class="n">fuzzy</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
-<span class="w">    </span><span class="sd">"""Search CLI subcommands via console_scripts entry points."""</span>
+<span class="w">    </span><span class="sd">"""Search console-script names/targets without loading or walking commands."""</span>
     <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="k">try</span><span class="p">:</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">importlib.metadata</span><span class="w"> </span><span class="kn">import</span> <span class="n">entry_points</span>
@@ -507,7 +509,7 @@
     <span class="n">targets</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]],</span>
     <span class="n">fuzzy</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
-<span class="w">    </span><span class="sd">"""Search MCP tool names and descriptions."""</span>
+<span class="w">    </span><span class="sd">"""Search def/docstring text in selected files; registration is unchecked."""</span>
     <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
 
     <span class="k">for</span> <span class="n">pkg_name</span><span class="p">,</span> <span class="n">module_name</span> <span class="ow">in</span> <span class="n">targets</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
