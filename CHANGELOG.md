@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Avoid content writes when literal or regex replacement text is unchanged,
+  preserving bytes and timestamps while retaining existing match counts.
+
 - Sort Python fallback rename candidates so preview content IDs and skip
   requests use the same path order as ripgrep for the same selected files.
 

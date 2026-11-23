@@ -423,3 +423,74 @@ def test_regex_context_apply_keeps_whole_file_semantics(_regex_preview_context_c
     result = execute_rename(pattern, replacement, directory=str(root), regex=True)
     # Assert
     assert (result.error, file.read_text()) == (None, expected)
+
+
+import os
+import subprocess
+from scitex_dev import execute_rename
+
+
+@pytest.fixture(params=[
+    (False, "needle", "needle", b"needle\n", b"needle\n", False, 1),
+    (True, "(needle)", r"\1", b"needle\n", b"needle\n", False, 1),
+    (False, "needle", "needle", b"needle\r\n", b"needle\r\n", False, 1),
+    (True, "needle", r"\g<0>", b"needle\r\n", b"needle\r\n", False, 1),
+    (False, "needle", "changed", b"needle\n", b"changed\n", False, 1),
+    (True, "(needle)", r"\1-changed", b"needle\n", b"needle-changed\n", False, 1),
+    (False, "needle", "changed", b"unrelated\n", b"unrelated\n", False, 0),
+    (True, "(needle)", "changed", b"needle\n", b"needle\n", True, 1),
+])
+def content_noop_case(request, tmp_path):
+    regex, pattern, replacement, body, expected, skipped, matches = request.param
+    root = tmp_path / "owned-repo"
+    root.mkdir()
+    file = root / "owned.txt"
+    file.write_bytes(body)
+    sibling = root / "other.txt"
+    sibling.write_bytes(b"unrelated\n")
+    for args in [["init"], ["config", "user.name", "Owned unchanged-text fixture"], ["config", "user.email", "owned@example.invalid"], ["add", "."], ["commit", "-m", "owned unchanged-text fixture"]]:
+        subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True, timeout=10)
+    # A known old mtime makes a needless write observable without sleeping.
+    os.utime(file, ns=(1700000000000000000, 1700000000000000000))
+    assert not subprocess.check_output(["git", "-C", str(root), "status", "--porcelain"], timeout=10)
+    before = [(f.read_bytes(), f.stat().st_ino, f.stat().st_mtime_ns) for f in (file, sibling)]
+    options = {"directory": str(root), "regex": regex, "skip_ids": ["c-000"] if skipped else []}
+    return file, sibling, pattern, replacement, options, expected, matches, before
+
+
+def test_content_noop_preview_retains_match_counts(content_noop_case):
+    # Arrange
+    _, _, pattern, replacement, options, _, matches, _ = content_noop_case
+    # Act
+    result = preview_rename(pattern, replacement, **options)
+    # Assert
+    assert (result.summary["content_files"], result.summary["content_matches"]) == (int(matches > 0), matches)
+
+
+def test_content_noop_preview_preserves_bytes_and_metadata(content_noop_case):
+    # Arrange
+    file, sibling, pattern, replacement, options, _, _, before = content_noop_case
+    # Act
+    preview_rename(pattern, replacement, **options)
+    after = [(f.read_bytes(), f.stat().st_ino, f.stat().st_mtime_ns) for f in (file, sibling)]
+    # Assert
+    assert after == before
+
+
+def test_content_noop_application_preserves_unchanged_file(content_noop_case):
+    # Arrange
+    file, sibling, pattern, replacement, options, expected, _, before = content_noop_case
+    # Act
+    result = execute_rename(pattern, replacement, **options)
+    sibling_after = (sibling.read_bytes(), sibling.stat().st_ino, sibling.stat().st_mtime_ns)
+    # Assert
+    assert (result.error, file.read_bytes(), file.stat().st_ino, file.stat().st_mtime_ns == before[0][2], sibling_after) == (None, expected, before[0][1], expected == before[0][0], before[1])
+
+
+def test_content_noop_application_retains_match_counts(content_noop_case):
+    # Arrange
+    _, _, pattern, replacement, options, _, matches, _ = content_noop_case
+    # Act
+    result = execute_rename(pattern, replacement, **options)
+    # Assert
+    assert (result.summary["content_files"], result.summary["content_matches"]) == (int(matches > 0), matches)

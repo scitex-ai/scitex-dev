@@ -93,14 +93,7 @@ These reports describe matched, selected files, not every excluded path or
 unreadable file. Preview line details are capped at twenty records per file.
 Regex mode uses whole-file replacement without these literal-mode source/Django
 line protections; it is not an equivalent way to inspect protected literals.
-Regex preview expands replacement strings from the original match, preserving
-lookaround context, captured groups and zero-width insertion semantics. A snippet
-shows the matched text and that match's replacement, not the complete changed
-line or file. Each file reports at most twenty snippets, with `before` and
-`after` each limited to two hundred characters; the total match count and live
-whole-file replacement are not truncated. The `regex_context` controls in
-`tests/scitex_dev/rename/test_steps.py` compare explicit expected snippets,
-preview file preservation and actual applications in real clean Git fixtures.
+See [content details](15_rename-content.md) for regex snippets and unchanged-text writes.
 
 The owning checks are in `tests/scitex_dev/rename/test_steps.py` and
 `tests/scitex_dev/_cli/test__rename.py`.

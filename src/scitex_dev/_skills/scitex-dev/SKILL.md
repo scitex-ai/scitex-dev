@@ -38,7 +38,7 @@ interfaces:
 - [12_config.md](12_config.md) — Environment-local discovery, skills/MCP opt-outs, override precedence and skill destinations
 - [13_versions.md](13_versions.md) — list_versions, check_versions, get_mismatches, fix_mismatches
 - [14_ecosystem.md](14_ecosystem.md) — Package registry, sync_local, sync_all, sync_host, pull_local
-- [15_rename.md](15_rename.md) — bulk_rename, preview_rename, execute_rename
+- [15_rename.md](15_rename.md), [15_rename-content.md](15_rename-content.md)
 - [16_rename-ripgrep.md](16_rename-ripgrep.md) — Filenames
 - [16_docs-search.md](16_docs-search.md) — get_docs, build_docs, search_docs, search
 - [17_test-runner.md](17_test-runner.md) — TestConfig and local pytest selection

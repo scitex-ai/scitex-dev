@@ -115,7 +115,7 @@ def _regex_replace_content(
 
     new_content = _replace(content, config)
 
-    if not config.dry_run and not skip_entire_file:
+    if not config.dry_run and not skip_entire_file and new_content != content:
         _write_text(file_path, new_content, config.use_sudo)
 
     entry: dict[str, Any] = {
@@ -216,7 +216,9 @@ def _literal_replace_content(
         return None
 
     if matches and not config.dry_run and not skip_entire_file:
-        _write_text(file_path, "\n".join(new_lines), config.use_sudo)
+        new_content = "\n".join(new_lines)
+        if new_content != content:
+            _write_text(file_path, new_content, config.use_sudo)
 
     entry: dict[str, Any] = {
         "id": file_id,
