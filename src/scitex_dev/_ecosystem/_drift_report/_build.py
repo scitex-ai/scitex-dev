@@ -433,14 +433,18 @@ def render_report(matrix: DriftMatrix) -> str:
 
 
 def render_quiet(matrix: DriftMatrix) -> str:
-    """One-line summary."""
+    """One-line counts for every existing non-clean finding category."""
     total = len(matrix.packages)
     consistent = len(matrix.consistent_packages)
     warnings = len(matrix.package_drift_warnings)
+    unjudgeable = len(matrix.unjudgeable)
+    untrustworthy = len(matrix.untrustworthy_installs)
     return (
         f"drift: {consistent}/{total} packages consistent; "
         f"{len(matrix.drifting)} drifting"
+        + (f"; {unjudgeable} NOT JUDGEABLE" if unjudgeable else "")
         + (f"; {warnings} critical package(s) behind fleet-current" if warnings else "")
+        + (f"; {untrustworthy} untrustworthy install(s)" if untrustworthy else "")
         + ("" if matrix.sac_available else " (sac layers 5/6 unavailable)")
     )
 

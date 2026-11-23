@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Include missing-reference and install-integrity finding counts in quiet
+  drift reports without changing model verdicts or JSON output.
+
 - Show install-integrity findings before staleness warnings in full drift
   reports, retaining interpreter identity and existing diagnostic hints.
 

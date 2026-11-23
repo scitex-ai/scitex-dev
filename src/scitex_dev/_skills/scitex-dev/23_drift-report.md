@@ -70,14 +70,16 @@ The CLI's normal completed-report exit is 1 if any of these are present:
 
 Otherwise it exits 0. This is the model's current verdict, not proof that every
 host/layer/package was checked; unexpected collection errors remain separate.
-The full human report names NOT JUDGEABLE rows. Quiet output omits that count;
-its consistency/drift counts are not the complete verdict. JSON carries row
-references/consistency/cells and the two independent warning lists. The current
-JSON summary also omits a dedicated unjudgeable count. Full human output
-includes install-integrity details and the interpreter path before the
-staleness banner and matrix. Quiet output still omits those details; consult
-JSON or the full report. The remaining count/quiet display gaps are limitations,
-not evidence of a clean install.
+The full human report names NOT JUDGEABLE rows. Quiet output appends nonzero
+`NOT JUDGEABLE` and `untrustworthy install(s)` counts alongside the existing
+drifting and critical-staleness counts. These are distinct finding categories,
+not additional package rows. Consistent-only text and unavailable-container
+notes retain their existing format. JSON carries row references/consistency/
+cells and the two independent warning lists; its summary still omits a
+dedicated unjudgeable count. Full human output includes integrity details and
+the interpreter path before staleness and the matrix. Quiet output gives counts,
+not affected-package details or hints; use full output or JSON for those. Neither
+quiet counts nor the JSON summary establish complete collection coverage.
 
 ## Independent interpreter checks
 
@@ -117,7 +119,8 @@ Source: `_ecosystem/_drift_report/{_collect,_refs,_model,_build,_sac}.py`,
 `_cli/ecosystem/_cmds/_drift_report.py`, and `_ecosystem_jobs/_provider.py`.
 Existing controls: `tests/scitex_dev/_ecosystem/_drift_report/` (including real
 Git repositories in `test__refs.py` and full-report composition controls in
-`test__build_integrity_banner.py`), CLI registration/help in
+`test__build_integrity_banner.py` and quiet finding counts in
+`test__build_quiet_findings.py`), CLI registration/help in
 `tests/scitex_dev/_cli/ecosystem/_cmds/test__drift_report.py`, and job declarations
 in `tests/scitex_dev/_ecosystem_jobs/test__provider.py`. Some collection and
 install controls use declared injected probes. Pure assembly/renderer tests,
