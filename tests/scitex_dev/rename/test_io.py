@@ -206,3 +206,41 @@ mkdir(Path(name),parents=parents=='True',use_sudo=piped=='True',runner=real_runn
     subprocess.run([sys.executable, "-I", "-c", code, name, str(piped), str(parents)], cwd=root, check=True, capture_output=True, timeout=15)
     # Assert
     assert ((root / name).is_dir(), _byte_fixture_state(protected)) == (True, before)
+
+
+@pytest.fixture(params=[(piped, position, name) for piped in [False, True] for position in ["source", "destination"] for name in ["ordinary", "--help", "--version", "-x"]])
+def move_operand_case(request, tmp_path):
+    piped, position, name = request.param
+    root = tmp_path / "owned-move"
+    root.mkdir()
+    source_name = name if position == "source" else "source.txt"
+    destination_name = name if position == "destination" else "destination.txt"
+    source = root / source_name
+    source.write_bytes(b"owned move payload\n")
+    sibling = root / "other.txt"
+    sibling.write_bytes(b"unrelated sibling\n")
+    outside = tmp_path / "outside.txt"
+    outside.write_bytes(b"unrelated outside\n")
+    before = (_byte_fixture_state([source])[0], _byte_fixture_state([sibling, outside]))
+    yield root, piped, source_name, destination_name, [sibling, outside], before
+
+
+def test_move_operand_literal_paths_and_sentinels(move_operand_case):
+    # Arrange
+    import sys
+    root, piped, source_name, destination_name, protected, before = move_operand_case
+    code = """
+from pathlib import Path
+import subprocess,sys
+from scitex_dev.rename.io import rename_path
+source,destination,piped=sys.argv[1:]
+def real_runner(args):
+    subprocess.run(args,check=True,capture_output=True,timeout=10)
+rename_path(Path(source),Path(destination),use_sudo=piped=='True',runner=real_runner if piped=='True' else None)
+"""
+    # Act
+    subprocess.run([sys.executable, "-I", "-c", code, source_name, destination_name, str(piped)], cwd=root, check=True, capture_output=True, timeout=15)
+    destination = root / destination_name
+    observed_destination = _byte_fixture_state([destination])[0] if destination.exists() else None
+    # Assert
+    assert ((root / source_name).exists(), observed_destination, _byte_fixture_state(protected)) == (False, before[0], before[1])

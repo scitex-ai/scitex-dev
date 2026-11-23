@@ -50,7 +50,7 @@ def rename_path(src: Path, dst: Path, use_sudo: bool = False, *, runner=None) ->
     if not use_sudo:
         src.rename(dst)
         return
-    (runner or _sudo_run)(["mv", str(src), str(dst)])
+    (runner or _sudo_run)(["mv", "--", str(src), str(dst)])
 
 
 def unlink_path(path: Path, use_sudo: bool = False, *, runner=None) -> None:

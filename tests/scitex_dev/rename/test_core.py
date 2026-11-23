@@ -2262,7 +2262,7 @@ class TestIO:
         dst = tmp_path / "new.txt"
         calls: list[list[str]] = []
         rename_path(src, dst, use_sudo=True, runner=lambda argv: calls.append(argv))
-        assert calls == [["mv", str(src), str(dst)]]
+        assert calls == [["mv", "--", str(src), str(dst)]]
 
     def test_mkdir_sudo_with_parents(self, tmp_path):
         # Arrange

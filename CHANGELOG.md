@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Pass piped mv source and destination paths after an option separator so
+  leading-hyphen names are moved as intended.
+
 - Pass piped mkdir paths after an option separator, with or without -p,
   so leading-hyphen directory names are created as intended.
 
