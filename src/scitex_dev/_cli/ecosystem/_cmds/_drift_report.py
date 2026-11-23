@@ -5,8 +5,8 @@
 Thin CLI surface (mirrors ``_versions.py``'s ``register(ecosystem)`` and
 ``validate-versions``' option conventions). All logic lives in the
 ``scitex_dev._ecosystem._drift_report`` engine package; this module only
-wires options, prints, and sets the observe-mode exit code (0 = no drift,
-1 = drift), so it is usable as a scheduled gate.
+wires options, prints, and sets the completed-report exit code from
+DriftMatrix.has_drift, including missing baselines and install findings.
 """
 
 import json
@@ -23,19 +23,18 @@ def register(ecosystem):
         help_spec=CliHelp(
             summary="Report version drift across all 8 layers, package x layer.",
             description=(
-                "Layers: PyPI, GitHub (release tag), each host's develop "
-                "checkout, container base image + agent overlay (via "
-                "`sac versions --json`), CI (not-collected in v1), and "
-                "the editable/installed version. The SSoT is "
-                "`pyproject.toml` on the local develop checkout; any "
-                "cell that disagrees is flagged with `*`. Also runs an "
-                "independent critical-package check (scitex-todo, "
-                "scitex-agent-container, scitex-dev) against THIS "
-                "interpreter's installs, falling back to PyPI when no "
-                "local checkout exists, and prints a LOUD banner ahead "
-                "of the matrix when one is behind (closes the silent "
-                "gap that let a container run scitex-todo 0.7.28 "
-                "unnoticed, 2026-07-12). Exit 1 iff drift is detected.",
+                "Layers: PyPI, reachable tag at origin/main (fallback main), "
+                "selected host checkouts, base-image + agent-overlay via "
+                "`sac versions --json`, CI (not collected), and the current "
+                "interpreter's installed version. The version reference is "
+                "committed pyproject.toml at develop (fallback origin/develop), "
+                "not the working tree. Independent critical-package staleness "
+                "and registry-wide install-integrity checks still run with "
+                "matrix filters. Exit 1 on drifting rows, missing reference "
+                "versions, critical staleness or untrustworthy installs; "
+                "otherwise 0. Unknown cells can leave coverage incomplete. "
+                "Use --json for install-integrity details; full/quiet human "
+                "renderers do not currently include those details."
             ),
             examples=(
                 Example("{prog} ecosystem drift-report", "Full matrix report."),
@@ -93,5 +92,5 @@ def register(ecosystem):
         else:
             click.echo(render_report(matrix))
 
-        # Observe-mode exit semantics (mirrors validate-versions): drift → 1.
+        # Completed-report verdict includes missing baselines and install findings.
         ctx.exit(1 if matrix.has_drift else 0)
