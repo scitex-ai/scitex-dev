@@ -458,7 +458,7 @@ def find_runner_host(
     hosts_path: str | Path | None = None,
     include_packaged_floor: bool = True,
 ) -> HostRecord | None:
-    """Return the first registered machine that serves ``labels``, else ``None``.
+    """Return the first declared match, or ``None`` for empty/unserved labels.
 
     "Serves" is GitHub's dispatch rule — a runner matches when its own
     label set CONTAINS every requested label (see
@@ -481,7 +481,7 @@ def find_runner_host(
     for host in list_hosts(hosts_path=hosts_path):
         if host.serves(wanted):
             return host
-    if not include_packaged_floor:
+    if not include_packaged_floor or not wanted:
         return None
     for name, declared in packaged_default_runner_destinations():
         if wanted <= declared:

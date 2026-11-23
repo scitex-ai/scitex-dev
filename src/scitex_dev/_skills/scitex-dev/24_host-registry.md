@@ -125,6 +125,16 @@ Controls: `tests/scitex_dev/hosts/test__dhcp_registry_errors.py` and
 `tests/scitex_dev/hosts/test__dhcp.py`. These are owned-fixture declaration
 checks, not permission to apply networking or proof of a live DHCP lease.
 
+## Runner declaration lookup
+
+`find_runner_host(labels, hosts_path=...)` returns a declared match, not a
+capacity or liveness result. Empty label requests return `None`, matching
+`HostRecord.serves([])`, even with the packaged floor enabled. Normal selected
+registry validation still runs. Nonempty local matches, packaged-floor
+membership and the explicit floor opt-out retain their behavior.
+Controls: `tests/scitex_dev/hosts/test__registry_empty_labels.py`,
+`test__registry_runner_labels.py` and `test__registry_runner_floor.py`.
+
 ## Scope note
 
 This module owns registry records and path/locality resolution, not whether

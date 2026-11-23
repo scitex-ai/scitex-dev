@@ -19,6 +19,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 - Preserve existing dangling host-registry links during first-use seeding by
   creating missing files exclusively instead of writing through link targets.
 
+- Return no runner declaration for empty label requests with the packaged floor
+  enabled, while retaining registry validation and nonempty matching behavior.
+
 ### Fixed
 
 - Validate host kinds as strings before set membership, so list/mapping values
