@@ -4,7 +4,7 @@ The standalone "scitex-linter" package was merged into scitex-dev in
 2026-06; the linter is now invoked as `scitex-dev linter`. The legacy
 `[tool.scitex-linter]` pyproject key and `SCITEX_LINTER_*` env-var
 prefix are still read for back-compat (a `DeprecationWarning` is
-emitted), and the canonical names are `[tool.scitex_dev.linter]` +
+emitted), and the canonical names are `[tool.scitex-dev.linter]` +
 `SCITEX_DEV_LINTER_*`.
 """
 

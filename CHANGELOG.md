@@ -12,6 +12,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Correct linter configuration help and environment guidance to name actual
+  TOML/environment readers and retain unsupported YAML/severity gaps explicitly.
+
 - Require literal IPv4 strings for direct host requested-address construction,
   matching YAML validation instead of accepting integers, bytes or address objects.
 - Propagate registry failures while generating DHCP request declarations, so
