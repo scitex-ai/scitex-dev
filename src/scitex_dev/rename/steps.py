@@ -78,7 +78,7 @@ def rename_file_contents(config: RenameConfig, directory: str) -> list[dict[str,
         file_id = f"c-{i:03d}"
 
         try:
-            content = file_path.read_text(errors="replace")
+            content = file_path.read_text(errors="surrogateescape")
         except (OSError, UnicodeDecodeError):
             continue
 

@@ -10,7 +10,7 @@ tags: [scitex-dev-rename-content]
 ## Regex text selection
 
 Regex content selection and replacement both use Python `re.DOTALL` on text
-read with `Path.read_text(errors="replace")`, including universal-newline
+read with `Path.read_text(errors="surrogateescape")`, including universal-newline
 normalization. A match such as `needle\n` can therefore select CRLF text, and
 line anchors apply to the normalized text. A raw ripgrep regex search is not an
 authoritative filter for these Python operations.
@@ -63,5 +63,28 @@ preserves CRLF bytes in these identity cases. This does not establish general
 newline/encoding preservation for nonidentity changes. Existing Git, dirty-tree
 and permission preflight checks still run before content application. This is
 not qualification of sudo writes or every filesystem/platform.
+
+## Undecodable bytes in selected text
+
+Content selection and application use `surrogateescape` for decoding, and the
+local/piped content writers use it when encoding. In a UTF-8 locale, an invalid
+byte such as `0xff` is carried as a surrogate code point and written back as the
+same byte. An ASCII token edit can therefore preserve surrounding undecodable
+bytes. Valid Unicode, including a genuine `U+FFFD`, retains its normal meaning.
+The default encoding choice remains unchanged; no other encoding is guessed.
+
+The byte controls in `tests/scitex_dev/rename/test_io.py` cover ordinary ASCII,
+valid Unicode and replacement-character text, invalid prefix/suffix bytes,
+truncated UTF-8 and multiple undecodable bytes. They assert exact writer output,
+preview preservation and literal/regex application bytes in real clean Git
+fixtures. The piped-writer adapter uses real unprivileged `tee` through the
+supported runner argument; it does not qualify sudo authentication or transport.
+
+Literal preview records can contain escaped surrogate code points. Python and
+CLI JSON round-trips are scoped evidence; cross-language client handling is
+unverified. Existing line-ending normalization still applies to actual changes.
+These LF/UTF-8-locale cases do not establish general binary/encoding support,
+arbitrary-regex byte semantics, or uniform NUL-file eligibility across backends.
+Git, dirty-tree and permission guards remain active; no privilege policy changes.
 
 See [bulk rename](15_rename.md) for operation guards and result handling.

@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Round-trip undecodable bytes through rename text reads and content writers
+  so selected token edits do not replace surrounding bytes with Unicode markers.
+
 - Match regex rename candidates with Python on the same normalized text as
   replacement, using ripgrep for candidate listing and existing ignore rules.
 

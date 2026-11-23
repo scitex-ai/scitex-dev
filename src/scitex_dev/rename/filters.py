@@ -136,7 +136,7 @@ def _rg_find_content_matches(
 def _matches_python_regex(path: Path, pattern: str) -> bool:
     """Match the same decoded, newline-normalized text used by replacement."""
     try:
-        return re.search(pattern, path.read_text(errors="replace"), re.DOTALL) is not None
+        return re.search(pattern, path.read_text(errors="surrogateescape"), re.DOTALL) is not None
     except (OSError, UnicodeDecodeError):
         return False
 
@@ -182,7 +182,7 @@ def find_matching_files(
             continue
         if need_content_match:
             try:
-                content = path.read_text(errors="replace")
+                content = path.read_text(errors="surrogateescape")
                 if config.regex:
                     if not re.search(config.pattern, content, re.DOTALL):
                         continue
