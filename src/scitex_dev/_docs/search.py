@@ -18,7 +18,7 @@ Usage:
 
     search("save figure")                      # search everything
     search("ttest", scope="api")               # Python API only
-    search("docs", scope="cli")                # CLI subcommands only
+    search("docs", scope="cli")                # Console-script metadata
     search("stats -internal", scope="mcp")     # MCP tools, excluding "internal"
 """
 
@@ -280,7 +280,7 @@ def _search_docs(
     targets: dict[str, Optional[str]],
     fuzzy: bool = True,
 ) -> list[dict[str, Any]]:
-    """Search documentation pages."""
+    """Search manifest page names/titles and package descriptions."""
     from .docs import get_docs
 
     results = []
