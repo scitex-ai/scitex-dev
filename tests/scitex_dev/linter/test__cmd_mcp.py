@@ -118,3 +118,58 @@ def test_mcp_doctor_retains_failed_check_exit(doctor_case):
     result = CliRunner().invoke(main_group, ["mcp", "doctor"], env=environment)
     # Assert
     assert result.exit_code == code
+
+
+@pytest.fixture(params=[(as_json, verbose) for as_json in [False, True] for verbose in range(4)])
+def catalog_case(request):
+    from scitex_dev._ecosystem._mcp import get_tools_sync
+    from scitex_dev.linter._server import mcp
+
+    as_json, verbose = request.param
+    tools = sorted(get_tools_sync(mcp))
+    flags = ["-v"] * verbose + (["--json"] if as_json else [])
+    return as_json, flags, tools
+
+
+def test_mcp_catalog_matches_actual_registered_tools(catalog_case):
+    # Arrange
+    as_json, flags, names = catalog_case
+    # Act
+    result = CliRunner().invoke(main_group, ["mcp", "list-tools", *flags])
+    actual = json.loads(result.stdout) if as_json else {
+        "count_matches": f"Tools: {len(names)}" in result.stdout,
+        "names_present": all(f"  {name}" in result.stdout for name in names),
+    }
+    expected = {"tools": names} if as_json else {"count_matches": True, "names_present": True}
+    # Assert
+    assert (result.exit_code, actual, result.stderr) == (0, expected, "")
+
+
+@pytest.fixture(params=[[], ["-vvv"]])
+def failed_catalog_case(request, tmp_path):
+    import os
+    import subprocess
+    import sys
+
+    environment = dict(os.environ, FASTMCP_LOG_LEVEL="SCITEX_OWNED_INVALID_LEVEL", SCITEX_DIR=str(tmp_path / "runtime"))
+    args = [sys.executable, "-I", "-m", "scitex_dev", "linter", "mcp", "list-tools", *request.param]
+    return subprocess, args, environment
+
+
+def test_mcp_catalog_json_exposes_real_settings_failure(failed_catalog_case):
+    # Arrange
+    subprocess, args, environment = failed_catalog_case
+    # Act
+    result = subprocess.run([*args, "--json"], env=environment, capture_output=True, text=True, timeout=30)
+    payload = json.loads(result.stdout)
+    # Assert
+    assert (result.returncode, payload.get("tools"), "SCITEX_OWNED_INVALID_LEVEL" in payload.get("error", "")) == (1, [], True)
+
+
+def test_mcp_catalog_text_exposes_real_settings_failure(failed_catalog_case):
+    # Arrange
+    subprocess, args, environment = failed_catalog_case
+    # Act
+    result = subprocess.run(args, env=environment, capture_output=True, text=True, timeout=30)
+    # Assert
+    assert (result.returncode, result.stdout, "Unable to load linter MCP tools:" in result.stderr, "SCITEX_OWNED_INVALID_LEVEL" in result.stderr) == (1, "", True, True)

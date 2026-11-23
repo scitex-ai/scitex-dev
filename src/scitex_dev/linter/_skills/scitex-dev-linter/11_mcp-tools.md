@@ -46,3 +46,10 @@ Reader and resource-validation errors stay visible through MCP instead of being
 misreported as a missing Dev installation. Actual in-memory skill-call controls
 live alongside the registration tests in
 `tests/scitex_dev/linter/_mcp/tools/test_lint.py`.
+
+The server's instructions describe both lint and skill tools. The CLI
+`linter mcp list-tools` inspects that actual registry; on import or inspection
+failure it exits 1 and reports an error instead of returning guessed tool names.
+This remains a registration check, not an execution or external-client check.
+CLI catalog and real invalid-setting controls live in
+`tests/scitex_dev/linter/test__cmd_mcp.py`.

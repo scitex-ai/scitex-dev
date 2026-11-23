@@ -73,8 +73,12 @@ scitex-dev skills get scitex-dev-linter SKILL --owner scitex-dev --json
 Skill commands belong to Dev's root skills group, not a `linter skills` group.
 Owner selection can include several namespaces of the same distribution.
 
-MCP `list-tools` can fall back to known tool names if server loading fails; that
-output alone does not prove tools are loaded. `doctor` checks the FastMCP import,
+MCP `list-tools` inspects the loaded server registry. Loading or introspection
+failure exits 1 and reports a diagnostic on stderr. In JSON mode it also emits
+`{"tools": [], "error": "..."}`; it never substitutes hard-coded names after a
+failure. Success keeps `{"tools": ["..."]}` with sorted actual names. A registry
+with no tools has an empty list, not a fallback catalog. Registry inspection
+does not execute the tool bodies or prove a live server/client connection. `doctor` checks the FastMCP import,
 registration-module import, CLI lookup and builtin rule count. A successful
 registration import reports availability, not a registered or fixed tool count.
 These prerequisites do not establish a live server/client round trip.
@@ -97,8 +101,9 @@ registration module can pass while the separate FastMCP dependency check fails.
 The builtin rule count is not a provider-coverage report, and this command does
 not load the linter server to count its registered tools.
 
-Source: `_cmd_mcp.py`. Complete doctor JSON/text/exit controls, informational
-output, no-op flags, path quoting and owned file-preservation controls live in
+Source: `_cmd_mcp.py`. Complete doctor JSON/text/exit controls, actual registered catalogs and real
+settings-error controls, informational output, no-op flags, path quoting and
+owned file-preservation controls live in
 `tests/scitex_dev/linter/test__cmd_mcp.py`.
 Actual tool contracts are in [11_mcp-tools.md](11_mcp-tools.md). Verify a configured
 server, client and hook profile separately.

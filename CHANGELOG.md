@@ -12,6 +12,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Report linter MCP catalog loading failures instead of returning a successful
+  hard-coded fallback, and include existing skill tools in server instructions.
+
 - Emit structured linter MCP doctor prerequisite results while preserving
   failed-check exits; report registration imports without an invented tool count.
 

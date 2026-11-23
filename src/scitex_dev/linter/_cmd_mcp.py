@@ -129,37 +129,24 @@ def register(main_group):
         "--json", "as_json", is_flag=True, default=False, help="Output as JSON."
     )
     def mcp_list_tools(verbose, as_json):
-        _KNOWN_TOOLS = ["linter_check", "linter_check_source", "linter_list_rules"]
-        tools = []
         try:
             from ._server import mcp as mcp_server
             from .._ecosystem._mcp import get_tools_sync
 
             tools = list(get_tools_sync(mcp_server).values())
-        except Exception:
-            pass
+        except Exception as exc:
+            message = f"Unable to load linter MCP tools: {exc}"
+            click.echo(message, err=True)
+            if as_json:
+                click.echo(json.dumps({"tools": [], "error": message}, indent=2))
+            sys.exit(1)
 
         if as_json:
-            if not tools:
-                click.echo(json.dumps({"tools": _KNOWN_TOOLS}, indent=2))
-            else:
-                click.echo(
-                    json.dumps(
-                        {
-                            "tools": [
-                                t.name for t in sorted(tools, key=lambda t: t.name)
-                            ]
-                        },
-                        indent=2,
-                    )
-                )
+            click.echo(json.dumps({
+                "tools": [t.name for t in sorted(tools, key=lambda t: t.name)],
+            }, indent=2))
             return
 
-        if not tools:
-            click.echo(f"SciTeX Linter MCP\nTools: {len(_KNOWN_TOOLS)}\n")
-            for n in _KNOWN_TOOLS:
-                click.echo(f"  {n}")
-            return
         C = sys.stdout.isatty()
         g, w, cy, y, dm, r = (
             ("\033[92m", "\033[1;37m", "\033[96m", "\033[93m", "\033[2m", "\033[0m")
