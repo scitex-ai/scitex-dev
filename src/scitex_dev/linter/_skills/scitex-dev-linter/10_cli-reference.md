@@ -34,15 +34,30 @@ compatibility aliases; use `validate-files` in new commands.
 
 ```bash
 scitex-dev linter format-files /owned/project/tool.py --check
-scitex-dev linter format-files /owned/project/tool.py --dry-run --diff
+scitex-dev linter format-files /owned/project/tool.py --dry-run --diff --json
 ```
 
 `--check` writes nothing and exits 1 if changes are needed; `--dry-run` writes
 nothing and normally exits 0 even when changes are proposed. `--diff` prints a
 diff but does not independently disable writing: without `--check` or
-`--dry-run`, formatting applies changes. The accepted `--json` option currently
-still produces line-oriented output; structured formatting output remains an
-implementation gap. Sources: `_cmds/_format.py` and `_format_runner.py`.
+`--dry-run`, formatting applies changes. With both preview flags, `--check`
+still determines the exit code.
+
+`--json` emits one stdout object with `path`, the `check`, `dry_run` and `diff`
+flags, `files`, `summary` and `error`. Each selected file has `file`, `changed`,
+`written` and `diff` fields; clean files are included. The summary counts
+selected files, proposed changes and actual writes separately. Requested Python
+diffs are strings for changed files; other rows, including notebooks, use null.
+Notebook formatting still applies to code cells; notebook diffs are unavailable.
+A missing path emits an empty result with an error and exits 2; no selected
+files emits an empty result with a null error and exits 0. Existing diagnostics
+for these cases remain on stderr. File read, parse and write exceptions remain
+visible failures rather than successful result objects; formatting is sequential
+and does not promise rollback of earlier writes.
+
+Sources: `_cmds/_format.py` and `_format_runner.py`. Behavioral evidence:
+`tests/scitex_dev/linter/test__format_runner.py` exercises complete JSON objects,
+exit codes, notebook metadata and preview/apply file effects through the CLI.
 
 ## MCP and skill discovery
 

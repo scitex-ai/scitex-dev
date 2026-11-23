@@ -12,6 +12,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Emit structured formatter JSON with selected-file results, proposed changes,
+  actual writes and optional Python diffs, preserving text output and exit codes.
+
 - Connect linter MCP skill list/get to the installed canonical namespace and
   owning reader, preserving selection policy and visible reader failures.
 
