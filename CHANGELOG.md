@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Treat an empty SCITEX_DEV_CONFIG as unset so load_config reads the same
+  default file reported by get_config_path and the exposure snapshot.
+
 - Make piped symlink creation refuse occupied destinations with GNU ln -T,
   avoiding implicit creation inside a directory or directory symlink.
 

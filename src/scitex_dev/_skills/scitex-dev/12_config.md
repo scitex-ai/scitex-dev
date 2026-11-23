@@ -32,11 +32,11 @@ visible; do not silently substitute another package or checkout.
 
 `SCITEX_DIR` relocates the shared `.scitex` root. The legacy
 `~/.scitex/dev_config.yaml` is a fallback only when the preferred file is absent.
-A default path can exist as a convention without the file having been created.
+A selected path need not exist.
 
-An existing project-local `.scitex/dev/config.yaml` wins over the user default
-through the shared config path resolver; explicit paths and `SCITEX_DEV_CONFIG`
-still take priority over that default selection.
+Within a Git project, an existing `.scitex/dev/config.yaml` wins over user
+defaults. An explicit `config_path` or nonempty `SCITEX_DEV_CONFIG` overrides
+that selection; an empty `SCITEX_DEV_CONFIG` uses defaults.
 
 1. Ecosystem defaults (`cli_enabled`, `skills_enabled` and `mcp_enabled` default to true).
 2. Matching `packages` entries in the selected YAML file.
@@ -131,9 +131,9 @@ when diagnosing behavior. Compare exported skills with their owning package's
 projection manifest and hashes. A source edit, a published version, a generated
 store, and an agent loading that store are separate observations.
 
-Configuration tests use isolated files and CLI commands. They do not certify
-every documentation example; the read-only verifier reports its static scope
-and unverified cases separately from behavioral execution.
+`tests/scitex_dev/_core/test_config_empty_override.py` covers empty/absent
+overrides, explicit paths and user/project/legacy selection. Config/CLI tests
+and static verification do not certify every documentation example.
 
 See [36_skill-registry.md](36_skill-registry.md) for ownership/projection checks,
 [41_agent-setup.md](41_agent-setup.md) for setup and protocol qualification, and
