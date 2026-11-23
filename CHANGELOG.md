@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Track Markdown fence state to preserve longer/tilde and EOF Python blocks while ignoring Python-looking fences inside non-Python blocks.
+
+
 - Match complete Python/py language tags in Markdown and reST instead of parsing prefix lookalikes as Python.
 
 

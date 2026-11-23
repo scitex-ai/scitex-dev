@@ -39,8 +39,8 @@ handler read/JSON errors, invalid extractable notebook-cell structure and AST
 syntax errors in extracted Python units become tool errors. Existing Python
 and CLI callers keep their default behavior unless they opt in.
 
-This checks the handlers' supported extraction: notebook code cells, closed
-Markdown Python fences and recognized reST Python directives. Notebook magics
+This checks the handlers' supported extraction: notebook code cells,
+Markdown Python fences (including code continuing through EOF) and recognized reST Python directives. Notebook magics
 or other non-Python cell syntax can fail AST parsing. Other languages and
 non-code cells are not analyzed, and this is not full nbformat, CommonMark or
 reST validation. No extracted Python units can still yield an empty result;
@@ -73,15 +73,27 @@ This remains a registration check, not an execution or external-client check.
 CLI catalog and real invalid-setting controls live in
 `tests/scitex_dev/linter/test__cmd_mcp.py`.
 
-For supported closed backtick `python`/`py` fences whose opening line has up to
-three leading spaces, `_md._iter_python_blocks` removes up to that many spaces
-from each code line before parsing, following the [CommonMark indentation
-rule](https://spec.commonmark.org/0.31.2/#fenced-code-blocks). Additional Python
-indentation is preserved; reported issue lines still point into the document.
-Owning extraction and real-finding controls live in
-`tests/scitex_dev/linter/test__md.py`. This does not extend fence recognition or
-establish full CommonMark validation; tab-prefixed fences retain their earlier
-behavior.
+## Markdown fence extraction
+
+`_md._iter_python_blocks` tracks backtick and tilde fence runs of at least
+three characters. A closer uses the same character, at least the opening
+length, and only trailing spaces or tabs. A Python fence without a closer
+continues through EOF. These boundaries follow the [CommonMark fenced-block
+rules](https://spec.commonmark.org/0.31.2/#fenced-code-blocks).
+
+Only complete case-insensitive `python`/`py` language tags select Python.
+Other fenced blocks are tracked but their contents are not analyzed, so a
+Python-looking opener inside one stays literal text. Backtick info strings
+containing a backtick are not accepted as openers. Whitespace-separated metadata
+remains accepted after a supported language tag.
+
+For an opening indented up to three spaces, the scanner removes up to that
+many spaces per content line while preserving additional Python indentation.
+Finding lines map into the document. Existing tab-prefixed behavior remains,
+but tab columns, list/blockquote containers and full Markdown validation are
+not established. No Python content is compiled or executed. Owning extraction,
+syntax-error and real-finding controls are in
+`tests/scitex_dev/linter/test__md.py`.
 
 ## Finding locations and parser labels
 
@@ -116,15 +128,6 @@ respects the [directive block indentation boundary](https://docutils.sourceforge
 it does not validate directive arguments, option syntax, nested reST or an
 empty directive. Owning boundary and real-option/body controls are in
 `tests/scitex_dev/linter/test__rst.py`.
-
-For those supported triple-backtick openings, a closing fence uses at least
-three backticks followed only by spaces or tabs and the line ending (or end
-of input). A backtick-prefixed line with other trailing text stays in the code
-body; this prevents Python multiline strings from being truncated. Owning
-controls for body preservation, findings and accepted closing forms are in
-`tests/scitex_dev/linter/test__md.py`. This does not add tilde or longer opening
-fences, container-aware parsing, unclosed-fence handling or full CommonMark
-validation.
 
 Markdown info strings and recognized reST directive arguments select Python
 only when the complete first language token is `python` or `py`

@@ -149,3 +149,87 @@ def test_language_tag_md_keeps_complete_tags_and_metadata(md_language_tag_valid_
     issues = lint_file(md_language_tag_valid_case, raise_input_errors=True)
     # Assert
     assert [(issue.rule.id, issue.line) for issue in issues] == [("STX-NET001", 3)]
+
+
+@pytest.fixture(params=[(marker, closed, indent) for marker, closed in [("```", True), ("````", True), ("~~~", True), ("~~~~", True), ("```", False), ("~~~", False)] for indent in [0, 2]])
+def fence_scan_python_case(request, tmp_path):
+    marker, closed, indent = request.param
+    prefix = " " * indent
+    code = 'import requests\nrequests.get("https://owned.invalid")\n'
+    text = prefix + marker + "python\n" + "".join(prefix + line for line in code.splitlines(keepends=True))
+    if closed:
+        text += prefix + marker + "\n"
+    file = tmp_path / "python.md"
+    file.write_text(text)
+    return file, text, code
+
+
+def test_fence_scan_python_body_is_retained(fence_scan_python_case):
+    # Arrange
+    _, text, code = fence_scan_python_case
+    # Act
+    blocks = list(_iter_python_blocks(text))
+    # Assert
+    assert blocks == [(0, 2, code)]
+
+
+def test_fence_scan_python_findings_have_document_lines(fence_scan_python_case):
+    # Arrange
+    file, _, _ = fence_scan_python_case
+    # Act
+    issues = lint_file(str(file), raise_input_errors=True)
+    # Assert
+    assert [(issue.rule.id, issue.line) for issue in issues] == [("STX-NET001", 3)]
+
+
+@pytest.fixture(params=[(marker, tag, indent) for marker, tag in [("````", "text"), ("~~~", "bash"), ("```", "text"), ("~~~", "")] for indent in [0, 2]])
+def fence_scan_foreign_case(request, tmp_path):
+    marker, tag, indent = request.param
+    prefix = " " * indent
+    text = prefix + marker + tag + "\n" + prefix + "```python\n" + prefix + "def broken(\n" + prefix + "```\n" + prefix + marker + "\n"
+    file = tmp_path / "foreign.md"
+    file.write_text(text)
+    return file, text
+
+
+def test_fence_scan_foreign_body_has_no_python_units(fence_scan_foreign_case):
+    # Arrange
+    _, text = fence_scan_foreign_case
+    # Act
+    blocks = list(_iter_python_blocks(text))
+    # Assert
+    assert blocks == []
+
+
+def test_fence_scan_foreign_body_is_not_parsed_as_python(fence_scan_foreign_case):
+    # Arrange
+    file, _ = fence_scan_foreign_case
+    # Act
+    issues = lint_file(str(file), raise_input_errors=True)
+    # Assert
+    assert issues == []
+
+
+@pytest.fixture(params=[(marker, indent) for marker in ["```", "````", "~~~", "~~~~"] for indent in [0, 2]])
+def fence_scan_invalid_eof_case(request, tmp_path):
+    marker, indent = request.param
+    prefix = " " * indent
+    file = tmp_path / "invalid-eof.md"
+    file.write_text(prefix + marker + "py\n" + prefix + "def broken(\n")
+    return str(file)
+
+
+def test_fence_scan_eof_exposes_optin_python_syntax_error(fence_scan_invalid_eof_case):
+    # Arrange
+    # Act
+    # Assert
+    with pytest.raises(ValueError, match="::block-0:1:"):
+        lint_file(fence_scan_invalid_eof_case, raise_input_errors=True)
+
+
+def test_fence_scan_eof_keeps_default_syntax_error_policy(fence_scan_invalid_eof_case):
+    # Arrange
+    # Act
+    issues = lint_file(fence_scan_invalid_eof_case)
+    # Assert
+    assert issues == []
