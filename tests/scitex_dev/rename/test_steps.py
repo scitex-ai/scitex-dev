@@ -368,3 +368,58 @@ def test_relative_directory_target_checks_preflight_before_writes(_relative_targ
     preserved = (info.st_ino, info.st_mtime_ns) == (after.st_ino, after.st_mtime_ns)
     # Assert
     assert (refused, _directory_collision_state(root.parent) == expected, preserved) == (blocked, True, blocked)
+
+
+@pytest.fixture(params=[
+    (r"(?<=prefix:)alpha", "beta", "prefix:alpha suffix\n", "alpha", "beta", "prefix:beta suffix\n"),
+    (r"alpha(?= suffix)", "beta", "prefix:alpha suffix\n", "alpha", "beta", "prefix:beta suffix\n"),
+    (r"(?P<word>alpha)(?= suffix)", r"\g<word>-beta", "prefix:alpha suffix\n", "alpha", "alpha-beta", "prefix:alpha-beta suffix\n"),
+    (r"(?<=prefix:)(a)(lpha)", r"\2-\1", "prefix:alpha suffix\n", "alpha", "lpha-a", "prefix:lpha-a suffix\n"),
+    (r"(?=alpha)", "MARK", "prefix:alpha suffix\n", "", "MARK", "prefix:MARKalpha suffix\n"),
+    (r"(alpha)", r"\1-beta", "prefix:alpha suffix\n", "alpha", "alpha-beta", "prefix:alpha-beta suffix\n"),
+    (r"^(alpha)", "beta", "alpha suffix\n", "alpha", "beta", "beta suffix\n"),
+    (r"(?<=prefix:)alpha", r"\n", "prefix:alpha suffix\n", "alpha", "\n", "prefix:\n suffix\n"),
+])
+def _regex_preview_context_case(request, tmp_path):
+    import subprocess
+
+    pattern, replacement, body, before, after, expected = request.param
+    root = tmp_path / "owned-repo"
+    root.mkdir()
+    file = root / "owned.txt"
+    file.write_text(body)
+    for args in [["init"], ["config", "user.name", "Owned regex fixture"], ["config", "user.email", "owned@example.invalid"], ["add", "."], ["commit", "-m", "owned regex fixture"]]:
+        subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True, timeout=10)
+    info = file.stat()
+    return root, file, pattern, replacement, body, before, after, expected, (file.read_bytes(), info.st_ino, info.st_mtime_ns)
+
+
+def test_regex_context_preview_uses_original_match(_regex_preview_context_case):
+    # Arrange
+    root, _, pattern, replacement, _, before, after, _, _ = _regex_preview_context_case
+    # Act
+    result = preview_rename(pattern, replacement, directory=str(root), regex=True)
+    entry = result.contents[0]
+    # Assert
+    assert (entry["matches"], entry["lines"][0]["before"], entry["lines"][0]["after"]) == (1, before, after)
+
+
+def test_regex_context_preview_never_rewrites_file(_regex_preview_context_case):
+    # Arrange
+    root, file, pattern, replacement, _, _, _, _, before = _regex_preview_context_case
+    # Act
+    preview_rename(pattern, replacement, directory=str(root), regex=True)
+    info = file.stat()
+    # Assert
+    assert (file.read_bytes(), info.st_ino, info.st_mtime_ns) == before
+
+
+def test_regex_context_apply_keeps_whole_file_semantics(_regex_preview_context_case):
+    # Arrange
+    from scitex_dev import execute_rename
+
+    root, file, pattern, replacement, _, _, _, expected, _ = _regex_preview_context_case
+    # Act
+    result = execute_rename(pattern, replacement, directory=str(root), regex=True)
+    # Assert
+    assert (result.error, file.read_text()) == (None, expected)

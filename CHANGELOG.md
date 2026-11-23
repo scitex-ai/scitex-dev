@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Expand regex rename preview snippets from the original match so
+  lookarounds, capture groups and zero-width replacements match application.
+
 - Apply directory destination preflight to relative-path patterns as well
   as basenames, matching execution for literal and regex renames.
 

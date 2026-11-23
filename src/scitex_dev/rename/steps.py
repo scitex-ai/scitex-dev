@@ -131,9 +131,7 @@ def _regex_replace_content(
             if len(snippets) >= 20:
                 break
             matched_text = m.group()
-            replaced_text = re.sub(
-                config.pattern, config.replacement, matched_text, flags=re.DOTALL
-            )
+            replaced_text = m.expand(config.replacement)
             snippets.append(
                 {
                     "id": f"{file_id}-M{len(snippets)}",
