@@ -116,6 +116,16 @@ outputs; they are not static documentation checks. The wrapper invokes
 are absent. Strict CI checks, selected content assertions and source/version
 binding remain separate evidence. Neither a build nor a correct local HTML/JSON
 file establishes which artifact an installed wheel or live host serves.</p>
+<p><strong>Displayed API defaults</strong></p>
+<p>The project’s Sphinx configuration preserves source expressions in displayed
+function defaults. For example, <code class="docutils literal notranslate"><span class="pre">rotate_all</span></code> shows <code class="docutils literal notranslate"><span class="pre">source_path=CREDENTIALS_PATH</span></code>
+instead of the documentation builder’s absolute home path. In the owning
+<code class="docutils literal notranslate"><span class="pre">src/scitex_dev/_creds/_rotate.py</span></code>, that constant is computed at module import
+from <code class="docutils literal notranslate"><span class="pre">Path.home()</span> <span class="pre">/</span> <span class="pre">&quot;.claude&quot;</span> <span class="pre">/</span> <span class="pre">&quot;.credentials.json&quot;</span></code>. The display setting does
+not change the runtime default or credential access behavior. The bundled
+signature is checked by
+<code class="docutils literal notranslate"><span class="pre">tests/integration/test_sphinx_source_defaults.py</span></code>; source, generated output,
+installed resources and live serving still need their separate checks.</p>
 <p><strong>CLI boundaries</strong></p>
 <p><code class="docutils literal notranslate"><span class="pre">scitex-dev</span> <span class="pre">docs</span> <span class="pre">get</span> <span class="pre">[PAGE_NAME]</span></code> reads Dev’s pages. Its positional argument is
 not a package selector. Use the owning leaf’s corresponding page commands for
