@@ -120,8 +120,19 @@ for h in hits:
 
 ## search
 
-Unified search across Python APIs, CLI commands, MCP tools, and docs pages.
-Supports Google-like query syntax.
+Search uses four local indexes (`_docs/search.py`):
+- `docs`: manifest page names/titles and package description, not page bodies.
+- `api`: shallow exported members and class methods from package introspection;
+  submodules are described without recursive traversal.
+- `cli`: matching `console_scripts` names/targets, without loading entry points
+  or enumerating their subcommands.
+- `mcp`: def/docstring text in non-underscore `*.py` files directly under
+  `_mcp_tools`, `mcp` or `_mcp`; this heuristic does not check tool registration.
+
+API introspection and package-root fallback can execute import initialization.
+Hits do not establish successful invocation or live availability. Complete
+subcommand/tool coverage remains unresolved. Controls: `test_search.py` under
+`tests/scitex_dev/_docs`; query syntax supports the following operators.
 
 ```python
 from scitex_dev import search
@@ -139,11 +150,12 @@ search(query: 'str', scope: 'Scope' = 'all', package: 'Optional[str]' = None, pa
 |---|---|
 | `save figure` | match any term (OR) |
 | `"save figure"` | exact phrase match (3x weight) |
-| `+ttest statistics` | `ttest` required (must appear) |
+| `+ttest statistics` | `ttest` must match; fuzzy by default |
 | `stats -deprecated` | exclude results containing "deprecated" |
 | `+save "to disk"` | required term + exact phrase |
 
-Score weights: phrase=3.0, required=2.0, optional=1.0, fuzzy=0.5.
+Score weights: phrase=3.0, required=2.0 (including fuzzy required matches),
+optional exact=1.0, optional fuzzy=0.5. `fuzzy=False` disables fuzzy term matches.
 
 ```python
 # Search all scopes
@@ -158,7 +170,7 @@ results = search("stats -deprecated", scope="mcp")
 # Exact phrase match
 results = search('"session decorator"')
 
-# Required term
+# Required match (fuzzy by default)
 results = search("+load csv")
 
 # Scoped to single package
@@ -168,7 +180,7 @@ results = search("save", scope="api", package="scitex-io")
 ## CLI
 
 ```bash
-# Search across all packages
+# Search the local legacy package mapping
 scitex-dev docs search "save figure"
 scitex-dev docs search "ttest" --scope api
 scitex-dev docs search "stats" --scope mcp --max-results 5
