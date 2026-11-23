@@ -87,7 +87,9 @@ Signature reference (internal injection hooks omitted; not an invocation):
 build_docs(package: 'Optional[str]' = None, output_dir: 'Optional[Path]' = None, formats: 'Optional[list[str]]' = None) -> 'dict[str, Any]'
 ```
 
-Requires `sphinx` (`pip install scitex-dev[docs]`).
+Requires `sphinx` (`pip install scitex-dev[docs]`). Results map each builder to
+an output-path string or an `error` dict; inspect every entry. Other formats can
+succeed after one fails. See `docs/documentation-builds.md` in the source guide.
 
 ```python
 # Build all
@@ -187,10 +189,11 @@ scitex-dev docs search "stats" --scope mcp --max-results 5
 scitex-dev docs search '"session decorator"'
 scitex-dev docs search "save figure" --json
 
-# Docs commands
+# Dev's own pages; get takes a PAGE_NAME, not a package selector
 scitex-dev docs list
-scitex-dev docs get scitex-io
-scitex-dev docs get scitex-io --format html
-scitex-dev docs search "save figure"
-scitex-dev docs build scitex-io
+scitex-dev docs get
+scitex-dev docs get --help
 ```
+
+`docs get` is bound to the CLI's owning package. Build through Python
+`build_docs`; this Dev CLI has no `docs build` command.

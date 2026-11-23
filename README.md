@@ -238,6 +238,9 @@ console-script declarations and selected MCP source text. It does not enumerate
 CLI subcommands or verify MCP registration. See the
 [search index scope](src/scitex_dev/_skills/scitex-dev/16_docs-search.md#search).
 
+`build_docs` returns per-format output paths or errors; a returned path alone
+does not accept the content. See [build and CLI boundaries](docs/documentation-builds.md).
+
 > Discover and install skills through `scitex-dev dev skills list/get/install`.
 > Python discovery/export helpers are public in `scitex_dev.ecosystem`:
 > `list_skills`, `get_skill` and `export_skills`; the root module does not
