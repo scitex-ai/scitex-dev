@@ -32,3 +32,17 @@ an external MCP server or consuming client is enabled.
 Owning controls: `tests/scitex_dev/linter/_mcp/tools/test_lint.py` and
 `tests/scitex_dev/linter/test__emit.py`. Configure and verify the intended server
 and client separately before relying on these tool names.
+
+## Skill tools on the full server
+
+The full server calls `_mcp/tools/__init__.py::register_all_tools`, adding
+`linter_skills_list()` and `linter_skills_get(name=None)` to the three lint tools.
+They use the installed `scitex-dev-linter` namespace owned by `scitex-dev`,
+through the same owning skill reader as Dev's CLI. The list result has `success`
+and `skills`; get returns `success`, `name` and `content` when available, or a
+not-found result. Omitting `name` selects the index. Owner-level selection and
+knob opt-outs apply to content; these are separate from server-tool registration.
+Reader and resource-validation errors stay visible through MCP instead of being
+misreported as a missing Dev installation. Actual in-memory skill-call controls
+live alongside the registration tests in
+`tests/scitex_dev/linter/_mcp/tools/test_lint.py`.

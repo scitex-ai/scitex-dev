@@ -42,6 +42,8 @@ A returned catalog or an empty issue list is not complete-environment acceptance
 Configuration readers and the unresolved CLI severity-field gap are documented
 in [04_cli-reference.md](04_cli-reference.md).
 
-The distribution declares an STX flake8 extension at
-`scitex_dev.linter.flake8_plugin:SciTeXFlake8Checker`; using it also requires a
-flake8 installation. See [11_mcp-tools.md](11_mcp-tools.md) for MCP wrappers.
+`scitex_dev.linter.flake8_plugin:SciTeXFlake8Checker` is an adapter class in
+source, but the current Dev distribution declares no `flake8.extension` entry
+point. Its automatic plugin integration remains an unresolved gap; class
+availability alone is not installed flake8 acceptance. See
+[11_mcp-tools.md](11_mcp-tools.md) for MCP wrappers.

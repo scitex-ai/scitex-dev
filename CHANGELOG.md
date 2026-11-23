@@ -12,6 +12,12 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Connect linter MCP skill list/get to the installed canonical namespace and
+  owning reader, preserving selection policy and visible reader failures.
+
+- Align the remaining linter installation, quick-start, rule-catalog and command
+  guides with installed interfaces, exit behavior and explicit output gaps.
+
 - Declare the existing linter skill namespace under its scitex-dev owner so
   installed metadata discovery can list and retrieve the nested guides.
 
