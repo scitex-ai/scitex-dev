@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Classify auditor output lines against declared `audit.skip-rules`.
 
 ``audit-all`` captures each sub-auditor's stdout/stderr, so masking is
