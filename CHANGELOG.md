@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Bind rename search patterns explicitly for ripgrep so option-shaped
+  strings remain pattern data in literal and regex discovery.
+
 - Propagate returned rename refusals to text/JSON CLI failure verdicts
   and exit 1, retaining the rename result in the JSON data envelope.
 

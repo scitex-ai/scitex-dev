@@ -97,9 +97,10 @@ def _rg_find_content_matches(directory: str, config: RenameConfig) -> list[Path]
 
     # Regex vs fixed string
     if config.regex:
-        cmd += ["--multiline", "--multiline-dotall", config.pattern]
+        cmd += ["--multiline", "--multiline-dotall"]
     else:
-        cmd += ["--fixed-strings", config.pattern]
+        cmd += ["--fixed-strings"]
+    cmd.append("--regexp=" + config.pattern)
 
     # Exclude patterns
     for exc in parse_csv_config(config.path_excludes):

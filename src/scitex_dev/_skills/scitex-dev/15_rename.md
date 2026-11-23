@@ -58,6 +58,20 @@ and conflicts before treating an operation as successful. Definitions are in
 `rename/config.py`; preview, application and configuration dispatch are in
 `rename/core.py`.
 
+## Option-shaped patterns
+
+Ripgrep binds literal/regex patterns as data, including `--version` and `--help`.
+End CLI options before such arguments:
+
+```bash
+scitex-dev rename-symbols --root /owned/checkout --dry-run --json -- --version renamed_version
+```
+
+Python takes strings directly. Traversal, exclusions and fallback are unchanged.
+Real-backend controls: `tests/scitex_dev/rename/test_filters.py`.
+Without optional ripgrep, that test scope is unavailable. Fallback success does
+not qualify ripgrep or complete traversal/ignore/regex-dialect equivalence.
+
 ## Protected content remains visible
 
 Literal mode replaces matching text inside ordinary quoted strings too; it is
