@@ -101,9 +101,13 @@ def _pre_check_safety(
             continue
         if should_exclude_path(path, config):
             continue
-        if _contains(path.name, config):
-            new_name = _replace(path.name, config)
-            new_path = path.parent / new_name
+        relative_path = str(path.relative_to(root))
+        if _contains(path.name, config) or _contains(relative_path, config):
+            if _contains(path.name, config):
+                new_name = _replace(path.name, config)
+                new_path = path.parent / new_name
+            else:
+                new_path = root / _replace(relative_path, config)
             if (new_path.exists() or new_path.is_symlink()) and new_path != path:
                 if new_path.is_symlink():
                     collision_type = "symlink"

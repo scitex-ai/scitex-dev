@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Apply directory destination preflight to relative-path patterns as well
+  as basenames, matching execution for literal and regex renames.
+
 - Reject non-directory directory-rename destinations before content writes;
   preview distinguishes real-directory merges from symlink/file collisions.
 

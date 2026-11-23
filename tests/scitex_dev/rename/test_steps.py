@@ -311,3 +311,60 @@ def test_directory_target_refusal_precedes_all_content_writes(_directory_target_
     expected = state not in ["directory", "absent"]
     # Assert
     assert unchanged == expected
+
+
+@pytest.fixture(params=[(regex, state) for regex in [False, True] for state in ["dangling", "link-file", "link-directory", "file", "directory", "absent"]])
+def _relative_target_case(request, tmp_path):
+    import subprocess
+
+    regex, state = request.param
+    root, outside = tmp_path / "repo", tmp_path / "outside"
+    root.mkdir()
+    outside.mkdir()
+    (outside / "keep.txt").write_text("KEEP = 1\n")
+    (root / "notes.txt").write_text("alpha/pkg\n")
+    (root / "alpha").mkdir()
+    (root / "beta").mkdir()
+    source, target = root / "alpha/pkg", root / "beta/pkg"
+    source.mkdir()
+    (source / "module.txt").write_text("VALUE = 1\n")
+    if state == "dangling":
+        target.symlink_to("../../missing")
+    elif state == "link-file":
+        target.symlink_to("../../outside/keep.txt")
+    elif state == "link-directory":
+        target.symlink_to("../../outside")
+    elif state == "file":
+        target.write_text("DESTINATION = 2\n")
+    elif state == "directory":
+        target.mkdir()
+        (target / "keep.txt").write_text("DESTINATION = 2\n")
+    for args in [["init"], ["config", "user.name", "Owned relative fixture"], ["config", "user.email", "owned@example.invalid"], ["add", "."], ["commit", "-m", "owned relative fixture"]]:
+        subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True, timeout=10)
+    before = _directory_collision_state(tmp_path)
+    expected = dict(before)
+    blocked = state not in ["directory", "absent"]
+    if not blocked:
+        expected["repo/beta/pkg"] = expected.pop("repo/alpha/pkg")
+        expected["repo/beta/pkg/module.txt"] = expected.pop("repo/alpha/pkg/module.txt")
+        expected["repo/notes.txt"] = ("file", "beta/pkg\n")
+    pattern, replacement = (r"alpha/(pkg)", r"beta/\1") if regex else ("alpha/pkg", "beta/pkg")
+    return root, regex, pattern, replacement, blocked, expected
+
+
+def test_relative_directory_target_checks_preflight_before_writes(_relative_target_case):
+    # Arrange
+    from scitex_dev import execute_rename
+
+    root, regex, pattern, replacement, blocked, expected = _relative_target_case
+    info = (root / "notes.txt").stat()
+    # Act
+    try:
+        result = execute_rename(pattern, replacement, directory=str(root), regex=regex)
+    except OSError:
+        result = None
+    after = (root / "notes.txt").stat()
+    refused = bool(result and result.error and "Collisions detected" in result.error)
+    preserved = (info.st_ino, info.st_mtime_ns) == (after.st_ino, after.st_mtime_ns)
+    # Assert
+    assert (refused, _directory_collision_state(root.parent) == expected, preserved) == (blocked, True, blocked)

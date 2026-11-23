@@ -100,7 +100,7 @@ Owning controls: `tests/scitex_dev/rename/test_steps.py` exercises dangling,
 regular and absent destinations with real clean Git repositories, and
 `test_core.py` retains the existing collision and directory-merge controls.
 
-For directory basename renames, an occupied destination is mergeable only when
+For directory basename and relative-path renames, an occupied destination is mergeable only when
 it is a real directory rather than a symlink. Regular-file destinations and
 symlinks to missing targets, files or directories cause live preflight to refuse
 before any content replacement. This prevents a destination-directory symlink
@@ -111,9 +111,18 @@ destination in `target_exists`; its `merged` flag is true only for a real direct
 The `directory_target` controls in `tests/scitex_dev/rename/test_steps.py` cover
 all six destination states with real clean Git repositories and owned sibling
 symlink targets. They check the source, destination and sibling contents. These
-are basename preflight checks, not general symlink-ancestry confinement or
-coverage of relative-path patterns, concurrent changes or direct internal step
-calls without orchestration.
+are destination preflight checks, not general symlink-ancestry confinement,
+concurrent-change protection or direct internal step safety without orchestration.
+
+Directory preflight uses the same destination calculation as execution: a
+basename match takes priority; otherwise the pattern is applied to the path
+relative to the selected root. This includes literal paths such as `alpha/pkg`
+and regex replacements with capture groups. Non-directory destinations for
+those relative-path matches are refused before content changes, while real
+directory merges and absent destinations keep their existing behavior.
+The `relative_directory_target` controls in
+`tests/scitex_dev/rename/test_steps.py` use both pattern modes across all six
+destination states with owned sibling targets and real clean Git repositories.
 
 
 
