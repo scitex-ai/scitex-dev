@@ -102,3 +102,41 @@ def test_link_operand_literal_target_and_sentinels(link_operand_case):
     symlink_to(link, target, use_sudo=piped, runner=_real_unprivileged_ln if piped else None)
     # Assert
     assert (os.readlink(link), _byte_fixture_state(protected)) == (target, before)
+
+
+@pytest.fixture(params=[(operation, piped, name) for operation in ["unlink", "rmdir"] for piped in [False, True] for name in ["ordinary", "--help", "--version", "-x"]])
+def removal_operand_case(request, tmp_path):
+    operation, piped, name = request.param
+    root = tmp_path / "owned-removal"
+    root.mkdir()
+    victim = root / name
+    if operation == "unlink":
+        victim.write_bytes(b"owned removal target\n")
+    else:
+        victim.mkdir()
+    sibling = root / "other.txt"
+    sibling.write_bytes(b"unrelated sibling\n")
+    outside = tmp_path / "outside.txt"
+    outside.write_bytes(b"unrelated outside\n")
+    before = _byte_fixture_state([sibling, outside])
+    yield root, victim, operation, piped, name, [sibling, outside], before
+
+
+def test_removal_operand_literal_path_and_sentinels(removal_operand_case):
+    # Arrange
+    import sys
+    root, victim, operation, piped, name, protected, before = removal_operand_case
+    code = """
+from pathlib import Path
+import subprocess,sys
+from scitex_dev.rename.io import unlink_path,rmdir
+operation,name,piped=sys.argv[1:]
+def real_runner(args):
+    subprocess.run(args,check=True,capture_output=True,timeout=10)
+fn=unlink_path if operation=='unlink' else rmdir
+fn(Path(name),use_sudo=piped=='True',runner=real_runner if piped=='True' else None)
+"""
+    # Act
+    subprocess.run([sys.executable, "-I", "-c", code, operation, name, str(piped)], cwd=root, check=True, capture_output=True, timeout=15)
+    # Assert
+    assert (victim.exists() or victim.is_symlink(), _byte_fixture_state(protected)) == (False, before)

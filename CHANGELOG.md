@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Pass piped rm/rmdir paths after an option separator so relative names such
+  as --help and --version are removed as intended.
+
 - Pass piped symlink targets after an option separator so leading-hyphen target
   text is preserved, including names such as --help and --version.
 

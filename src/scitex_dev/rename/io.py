@@ -58,7 +58,7 @@ def unlink_path(path: Path, use_sudo: bool = False, *, runner=None) -> None:
     if not use_sudo:
         path.unlink()
         return
-    (runner or _sudo_run)(["rm", str(path)])
+    (runner or _sudo_run)(["rm", "--", str(path)])
 
 
 def mkdir(
@@ -80,7 +80,7 @@ def rmdir(path: Path, use_sudo: bool = False, *, runner=None) -> None:
     if not use_sudo:
         path.rmdir()
         return
-    (runner or _sudo_run)(["rmdir", str(path)])
+    (runner or _sudo_run)(["rmdir", "--", str(path)])
 
 
 def symlink_to(link: Path, target: str, use_sudo: bool = False, *, runner=None) -> None:
