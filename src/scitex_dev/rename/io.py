@@ -84,11 +84,11 @@ def rmdir(path: Path, use_sudo: bool = False, *, runner=None) -> None:
 
 
 def symlink_to(link: Path, target: str, use_sudo: bool = False, *, runner=None) -> None:
-    """Create a symlink, optionally via sudo."""
+    """Create a symlink; piped target text is an operand, not an option."""
     if not use_sudo:
         link.symlink_to(target)
         return
-    (runner or _sudo_run)(["ln", "-s", target, str(link)])
+    (runner or _sudo_run)(["ln", "-s", "--", target, str(link)])
 
 
 # EOF

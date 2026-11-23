@@ -71,3 +71,34 @@ def test_byte_pipeline_changes_only_selected_token(byte_pipeline_case):
     sibling_after = _byte_fixture_state([sibling])[0]
     # Assert
     assert (result.error, result.summary["content_matches"], file.read_bytes(), sibling_after) == (None, 1, body.replace(b"needle", b"CHANGED"), before[1])
+
+
+_LINK_OPERAND_TARGETS = ["plain-target", "-target", "--help", "--version", "-s", "with space", "greek-α", "line\nbreak"]
+
+
+def _real_unprivileged_ln(args):
+    from pathlib import Path
+    subprocess.run(args, cwd=Path(args[-1]).parent, check=True, capture_output=True, timeout=10)
+
+
+@pytest.fixture(params=[(piped, target) for piped in [False, True] for target in _LINK_OPERAND_TARGETS])
+def link_operand_case(request, tmp_path):
+    piped, target = request.param
+    file = tmp_path / target
+    file.write_bytes(b"owned target sentinel\n")
+    sibling = tmp_path / "other.txt"
+    sibling.write_bytes(b"unrelated sibling\n")
+    link = tmp_path / "owned-link"
+    before = _byte_fixture_state([file, sibling])
+    yield link, target, piped, [file, sibling], before
+
+
+def test_link_operand_literal_target_and_sentinels(link_operand_case):
+    # Arrange
+    import os
+    from scitex_dev.rename.io import symlink_to
+    link, target, piped, protected, before = link_operand_case
+    # Act
+    symlink_to(link, target, use_sudo=piped, runner=_real_unprivileged_ln if piped else None)
+    # Assert
+    assert (os.readlink(link), _byte_fixture_state(protected)) == (target, before)

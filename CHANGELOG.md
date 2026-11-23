@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Pass piped symlink targets after an option separator so leading-hyphen target
+  text is preserved, including names such as --help and --version.
+
 - Preserve symlink inode and modification time when target replacement is
   unchanged, retaining selected-target reporting and deliberate target updates.
 
