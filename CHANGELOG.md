@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Add permanent actual-missing-ripgrep content regression controls for NUL
+  exclusion, empty text and literal/regex matches, linked from the content guide.
+
 - Exclude NUL-bearing input from content edits consistently across literal,
   regex and missing-ripgrep paths; retain path renames and empty-text matching.
 

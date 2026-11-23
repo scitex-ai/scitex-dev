@@ -110,3 +110,84 @@ def test_missing_rg_safety_application_and_refusals(missing_rg_safety_case):
     expected = ([b"prefix:REPLACED\n", b"prefix:needle\n", b"prefix:REPLACED\n"], before[1], before[-1]) if state == "clean" else before
     # Assert
     assert (valid, observed) == (True, expected)
+
+
+_FALLBACK_LATE_NUL = b"needle\n" + b"x" * 65536 + b"\0\n"
+_FALLBACK_CONTENT_INPUTS = [(b"\0needle\n", b"\0needle\n", 0), (b"needle\0tail\n", b"needle\0tail\n", 0), (_FALLBACK_LATE_NUL, _FALLBACK_LATE_NUL, 0), (b"needle\n", b"CHANGED\n", 1)]
+
+
+def _fallback_content_call(operation, root, bin_dir, regex, pattern):
+    code = """
+import dataclasses,json,shutil,sys
+from scitex_dev import preview_rename,execute_rename
+from scitex_dev.rename.config import RenameConfig
+from scitex_dev.rename.filters import _RG_PATH,find_matching_files
+operation,root,options=sys.argv[1:];options=json.loads(options)
+data={'rg':_RG_PATH,'which_rg':shutil.which('rg'),'git':shutil.which('git')}
+if operation=='discovery':
+    data['result']=list(map(str,find_matching_files(root,RenameConfig(options['pattern'],'CHANGED',regex=options['regex']),need_content_match=True)))
+else:
+    fn=preview_rename if operation=='preview' else execute_rename
+    data['result']=dataclasses.asdict(fn(options['pattern'],'CHANGED',directory=root,regex=options['regex']))
+print(json.dumps(data))
+"""
+    options = json.dumps({"regex": regex, "pattern": pattern})
+    result = subprocess.run([sys.executable, "-c", code, operation, str(root), options], env={**os.environ, "PATH": str(bin_dir)}, check=True, capture_output=True, timeout=15)
+    return json.loads(result.stdout)
+
+
+@pytest.fixture(params=[(regex, body, "needle", expected, matches) for regex in [False, True] for body, expected, matches in _FALLBACK_CONTENT_INPUTS] + [(True, b"", "^$", b"CHANGED", 1), (False, b"", "needle", b"", 0), (False, b"\0needle\n", "\0", b"\0needle\n", 0), (True, b"\0needle\n", r"\x00", b"\0needle\n", 0), (True, b"\0needle\n", "\0", b"\0needle\n", 0), (True, b"needle\n", "needle|\0", b"CHANGED\n", 1)])
+def fallback_content_case(request, tmp_path):
+    regex, body, pattern, expected, matches = request.param
+    git = shutil.which("git")
+    assert git is not None, "Actual Git remains required for live rename safety"
+    bin_dir = tmp_path / "tools"
+    bin_dir.mkdir()
+    (bin_dir / "git").symlink_to(Path(git).resolve())
+    root = tmp_path / "owned-repo"
+    root.mkdir()
+    file = root / "owned.txt"
+    file.write_bytes(body)
+    sibling = root / "other.txt"
+    sibling.write_bytes(b"unrelated\n")
+    (root / "archive").mkdir()
+    archive = root / "archive" / "excluded.txt"
+    archive.write_bytes(body)
+    outside = tmp_path / "outside.txt"
+    outside.write_bytes(body)
+    for args in [["init"], ["config", "user.name", "Owned fallback content fixture"], ["config", "user.email", "owned@example.invalid"], ["add", "."], ["commit", "-m", "owned fallback content fixture"]]:
+        subprocess.run([git, "-C", str(root), *args], check=True, capture_output=True, timeout=10)
+    protected = [sibling, archive, outside]
+    before = _missing_rg_state([file, *protected])
+    yield root, bin_dir, file, protected, regex, pattern, expected, matches, before
+
+
+def test_fallback_content_actual_absent_rg_discovery(fallback_content_case):
+    # Arrange
+    root, bin_dir, file, _, regex, pattern, _, matches, _ = fallback_content_case
+    # Act
+    payload = _fallback_content_call("discovery", root, bin_dir, regex, pattern)
+    # Assert
+    assert (payload["rg"], payload["which_rg"], payload["git"], payload["result"]) == (None, None, str(bin_dir / "git"), [str(file)] if matches else [])
+
+
+def test_fallback_content_preview_preserves_all_metadata(fallback_content_case):
+    # Arrange
+    root, bin_dir, file, protected, regex, pattern, _, matches, before = fallback_content_case
+    # Act
+    payload = _fallback_content_call("preview", root, bin_dir, regex, pattern)
+    result = payload["result"]
+    after = _missing_rg_state([file, *protected])
+    # Assert
+    assert (payload["rg"], payload["which_rg"], payload["git"], result["summary"]["content_matches"], bool(result["contents"]), after) == (None, None, str(bin_dir / "git"), matches, bool(matches), before)
+
+
+def test_fallback_content_application_bytes_and_exclusions(fallback_content_case):
+    # Arrange
+    root, bin_dir, file, protected, regex, pattern, expected, matches, before = fallback_content_case
+    # Act
+    payload = _fallback_content_call("apply", root, bin_dir, regex, pattern)
+    result = payload["result"]
+    after = _missing_rg_state([file, *protected])
+    # Assert
+    assert (payload["rg"], payload["which_rg"], payload["git"], result["error"], result["summary"]["content_matches"], after[0][0], after[1:], after == before) == (None, None, str(bin_dir / "git"), None, matches, expected, before[1:], expected == before[0][0])

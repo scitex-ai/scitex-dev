@@ -103,6 +103,14 @@ and preserves bytes/inodes/mtimes; application makes no content write. A literal
 NUL pattern has no eligible match. A regex containing a NUL alternative can still
 match ordinary text through its other alternative.
 
+The `fallback_content` controls in `tests/scitex_dev/rename/test_safety.py`
+exercise those content cases in child processes whose PATH contains only real
+Git. Each asserts that ripgrep is absent, checks discovery or preview/application,
+and verifies excluded bytes plus sibling/archive/outside metadata. Empty-regex
+and ordinary-text edits are positive controls. JSON carries actual NUL patterns
+into the Python API; OS command arguments cannot contain a literal NUL.
+These fixtures do not qualify fallback Git-ignore behavior or concurrent changes.
+
 This rule concerns content input. Existing path-renaming behavior and the low-level
 writer remain available independently; a NUL-bearing file can still have its name
 renamed without editing its bytes. The rule is not a complete binary-format or
