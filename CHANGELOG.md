@@ -12,6 +12,11 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Return no runner declaration for empty label requests with the packaged floor
+  enabled, while retaining registry validation and nonempty matching behavior.
+
+### Fixed
+
 - Validate host kinds as strings before set membership, so list/mapping values
   report registry validation errors instead of leaking unhashable-type failures.
 
