@@ -52,6 +52,7 @@ Resolution chain per package (fastest to slowest):
 2. Sphinx `_build/` available (existing build)
 3. Introspect from available docstrings/signatures (can still fail for unavailable dependencies or providers)
 
+Manifest reads preserve object fields; non-object JSON falls back to safe discovery. Schema checks remain separate; controls: `tests/scitex_dev/_core/test_manifest_object.py`.
 ```python
 # Manifest overview of all packages
 manifests = get_docs()

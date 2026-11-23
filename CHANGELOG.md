@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Reject non-object documentation manifests so normal safe overview discovery
+  can run; preserve valid object fields and existing file-containment rules.
+
 - Correct audit-all severity help and guidance: the wrapper currently forwards
   the option only to audit-cli; a uniform reporting floor remains unresolved.
 
