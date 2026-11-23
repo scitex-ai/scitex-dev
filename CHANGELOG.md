@@ -14,6 +14,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 - Require literal IPv4 strings for direct host requested-address construction,
   matching YAML validation instead of accepting integers, bytes or address objects.
+- Propagate registry failures while generating DHCP request declarations, so
+  malformed or unreadable input cannot silently appear to have no applicable hosts.
 
 ### Fixed
 
