@@ -22,6 +22,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 - Return no runner declaration for empty label requests with the packaged floor
   enabled, while retaining registry validation and nonempty matching behavior.
 
+- Correct quick-start doctor statuses, diagnostic disclosure and skipped-check
+  scope, and distinguish registry listing from opt-in version queries.
+
 ### Fixed
 
 - Validate host kinds as strings before set membership, so list/mapping values
