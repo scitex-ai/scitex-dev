@@ -64,9 +64,11 @@ def unlink_path(path: Path, use_sudo: bool = False, *, runner=None) -> None:
 def mkdir(
     path: Path, parents: bool = False, use_sudo: bool = False, *, runner=None
 ) -> None:
-    """Create directory, optionally via sudo."""
+    """Create directory or accept an existing one, optionally via sudo."""
     if not use_sudo:
         path.mkdir(parents=parents, exist_ok=True)
+        return
+    if not parents and path.is_dir():
         return
     cmd = ["mkdir"]
     if parents:

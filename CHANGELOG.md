@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Accept a visible existing directory in piped mkdir with parents=False,
+  matching local exist_ok behavior while retaining file/link refusals.
+
 - Pass piped mv source and destination paths after an option separator so
   leading-hyphen names are moved as intended.
 

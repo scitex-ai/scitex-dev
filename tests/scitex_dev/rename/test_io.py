@@ -244,3 +244,71 @@ rename_path(Path(source),Path(destination),use_sudo=piped=='True',runner=real_ru
     observed_destination = _byte_fixture_state([destination])[0] if destination.exists() else None
     # Assert
     assert ((root / source_name).exists(), observed_destination, _byte_fixture_state(protected)) == (False, before[0], before[1])
+
+
+def _existing_mkdir_snapshot(paths):
+    import os
+    import stat
+    rows = []
+    for path in paths:
+        info = path.lstat()
+        data = os.readlink(path) if path.is_symlink() else (path.read_bytes() if path.is_file() else None)
+        rows.append((data, info.st_ino, info.st_mtime_ns, stat.S_IMODE(info.st_mode)))
+    return rows
+
+
+@pytest.fixture(params=[(piped, parents, kind) for piped in [False, True] for parents in [False, True] for kind in ["empty-directory", "nonempty-directory", "directory-link", "file", "file-link", "dangling-link"]])
+def mkdir_existing_case(request, tmp_path):
+    piped, parents, kind = request.param
+    root = tmp_path / "owned-existing"
+    root.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    directory = outside / "directory"
+    directory.mkdir()
+    sentinel = directory / "sentinel.txt"
+    sentinel.write_bytes(b"owned outside directory content\n")
+    file = outside / "file.txt"
+    file.write_bytes(b"owned outside file content\n")
+    missing = outside / "missing"
+    destination = root / "--help"
+    protected = [outside, directory, sentinel, file]
+    if kind in ["empty-directory", "nonempty-directory"]:
+        destination.mkdir()
+        if kind == "nonempty-directory":
+            child = destination / "child.txt"
+            child.write_bytes(b"owned preserved child\n")
+            protected.append(child)
+    elif kind == "file":
+        destination.write_bytes(b"owned preserved destination file\n")
+    else:
+        destination.symlink_to({"directory-link": directory, "file-link": file, "dangling-link": missing}[kind])
+    sibling = root / "other.txt"
+    sibling.write_bytes(b"unrelated sibling\n")
+    paths = [destination, sibling, *protected]
+    before = _existing_mkdir_snapshot(paths)
+    yield root, piped, parents, kind in ["empty-directory", "nonempty-directory", "directory-link"], paths, missing, before
+
+
+def test_mkdir_existing_directory_acceptance_and_refusals(mkdir_existing_case):
+    # Arrange
+    import json
+    import sys
+    root, piped, parents, accepted, paths, missing, before = mkdir_existing_case
+    code = """
+from pathlib import Path
+import json,subprocess,sys
+from scitex_dev.rename.io import mkdir
+piped,parents=sys.argv[1:]
+def real_runner(args):
+    subprocess.run(args,check=True,capture_output=True,timeout=10)
+error=None
+try:mkdir(Path('--help'),parents=parents=='True',use_sudo=piped=='True',runner=real_runner if piped=='True' else None)
+except (OSError,subprocess.CalledProcessError) as exc:error=type(exc).__name__
+print(json.dumps({'error':error}))
+"""
+    # Act
+    result = subprocess.run([sys.executable, "-I", "-c", code, str(piped), str(parents)], cwd=root, check=True, capture_output=True, timeout=15)
+    payload = json.loads(result.stdout)
+    # Assert
+    assert (payload["error"] is None, _existing_mkdir_snapshot(paths), missing.exists()) == (accepted, before, False)
