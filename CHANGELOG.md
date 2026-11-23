@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Clarify inert docs-provider catalogs versus cached legacy discovery and
+  import-capable docs resolution; document duplicate-name and runtime limits.
+
 - **Linter:** ignore package-relative `scipy` names in the engine compatibility
   path for `STX-I002`; preserve absolute-import selection, availability and
   ownership gates. This matches the leaf-provider correction in Stats PR 219.
