@@ -64,6 +64,8 @@ dependencies = [
     # always have it transitively; a clean `uv` venv does not, which is why it
     # only ever failed in CI.
     "packaging>=23.2",
+    # Static documentation fence context uses CommonMark block tokens.
+    "markdown-it-py>=3.0.0",
     # SECOND INSTANCE OF THE DEFECT DIRECTLY ABOVE, found 2026-08-10 by
     # scitex-hub reporting that `scitex-dev[cli-audit]` provisions nothing.
     # It does not, but that extra was empty on purpose (its contents became

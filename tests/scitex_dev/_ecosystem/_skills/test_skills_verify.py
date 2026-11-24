@@ -313,3 +313,39 @@ def test_unindented_fence_does_not_hide_invalid_python_indentation(tmp_path):
     assert report["status"] == "needs_update" and any(
         "IndentationError" in issue for issue in report["issues"]
     )
+
+
+@pytest.mark.parametrize("marker", ["```", "~~~"])
+@pytest.mark.parametrize(
+    "container_text",
+    [
+        "- entry\n\n  {marker}python\n  from owned import absent\n  {marker}\n",
+        "1. entry\n\n   {marker}python\n   from owned import absent\n   {marker}\n",
+        "> {marker}python\n> from owned import absent\n> {marker}\n",
+        "<div>\n{marker}python\nfrom owned import absent\n{marker}\n</div>\n",
+    ],
+    ids=["bullet", "ordered", "quote", "html"],
+)
+@pytest.mark.parametrize(
+    "following_root,status,blocks,unverified",
+    [
+        ("", "incomplete", 0, True),
+        ("\n```python\nfrom owned import public\n```\n", "ok", 1, False),
+    ],
+    ids=["container-only", "following-root"],
+)
+def test_markdown_container_fences_stay_outside_top_level_scope(
+    tmp_path, marker, container_text, following_root, status, blocks, unverified
+):
+    # Arrange: only a later root fence can contribute checked scope.
+    text = container_text.format(marker=marker) + following_root
+    root = _project(tmp_path, readme=text)
+    # Act
+    report = verify_docs_and_skills(root)
+    # Assert: nested examples neither create findings nor count as checked.
+    assert (
+        report["status"], report["issues"],
+        report["checked_scope"]["python_blocks"],
+        len(report["checked_scope"]["imports"]),
+        bool(report["unverified"]),
+    ) == (status, [], blocks, blocks, unverified), report

@@ -10,6 +10,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Fix static documentation verification to select root-level CommonMark fences;
+  list/quote and HTML contexts no longer create false Python findings or passes.
+  Declare the parser dependency and retain unclosed-fence errors.
+
 - Correct Sphinx unified-search scope: console-script metadata, manifest metadata and source-text heuristics do not enumerate CLI subcommands, search page bodies or verify MCP registration.
 
 - Decode percent-escaped editable source paths before metadata-first documentation root lookup, avoiding unnecessary target imports; cover encoded src/flat paths with real child-process controls.
