@@ -41,31 +41,24 @@ _LIMITATIONS = [
 
 
 def _python_blocks(text: str):
-    """Yield code and source line for closed Python fences only."""
-    fence = None
-    code = []
-    start = 0
-    indent = 0
-    for line_no, line in enumerate(text.splitlines(), 1):
-        if fence is None:
-            match = re.match(r"^ {0,3}(`{3,}|~{3,})([^`~]*)$", line)
-            if match:
-                fence = match[1]
-                indent = len(line) - len(line.lstrip(" "))
-                language = match[2].strip().lower()
-                start = line_no + 1 if language in {"python", "py"} else 0
-                code = []
-        elif re.fullmatch(
-            r" {0,3}" + re.escape(fence[0]) + "{" + str(len(fence)) + r",}\s*", line
-        ):
-            if start:
-                yield start, "\n".join(code)
-            fence = None
-        elif start:
-            leading = len(line) - len(line.lstrip(" "))
-            code.append(line[min(indent, leading) :])
-    if fence is not None and start:
-        raise ValueError(f"unclosed Python fence at line {start - 1}")
+    """Yield closed root-level CommonMark Python fences without executing code."""
+    from markdown_it import MarkdownIt
+
+    lines = text.splitlines()
+    for token in MarkdownIt("commonmark").parse(text):
+        if token.type != "fence" or token.level != 0:
+            continue
+        if token.info.strip().lower() not in {"python", "py"}:
+            continue
+        first, end = token.map
+        closing = lines[end - 1] if end > first + 1 else ""
+        pattern = (
+            r" {0,3}" + re.escape(token.markup[0])
+            + "{" + str(len(token.markup)) + r",}\s*"
+        )
+        if re.fullmatch(pattern, closing) is None:
+            raise ValueError(f"unclosed Python fence at line {first + 1}")
+        yield first + 2, token.content
 
 
 def _readme_version(root: Path, documents: dict[Path, str]):

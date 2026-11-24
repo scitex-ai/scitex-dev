@@ -121,8 +121,8 @@ def install_mcp_client_config(
             stream.write((json.dumps(merged, indent=2) + "\n").encode())
             stream.flush()
             os.fsync(stream.fileno())
-        _, current, _ = _read_config(path)
-        if current != original:
+        _, current, current_mode = _read_config(path)
+        if current != original or current_mode != mode:
             raise ValueError("MCP config changed during installation; no replacement written")
         os.replace(temporary, path)
         temporary = None

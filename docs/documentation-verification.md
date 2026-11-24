@@ -20,7 +20,10 @@ root; missing/unreadable files, invalid UTF-8, malformed Python fences and
 unreadable/unparseable referenced source are reported as failures.
 
 Top-level closed Markdown fences labeled exactly `python` or `py` are parsed
-with Python's AST. Fences nested in lists/quotes are outside this parser's scope.
+with Python's AST. CommonMark block tokens select root-level fences; fences nested in lists or
+quotes, and fence-like text in HTML blocks, are outside the checked scope.
+A document containing only these excluded contexts remains `incomplete` with
+no checked Python blocks.
 Imports referring to local `src/` modules are checked for an existing parsable
 module and direct function/class definition or source submodule. Explicit
 top-level `from` re-exports are followed through local source, including aliases

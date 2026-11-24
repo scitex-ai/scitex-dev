@@ -120,3 +120,47 @@ class TestGetSphinxSource:
         # Assert
         result = get_sphinx_source("os")
         assert result is None
+
+
+@pytest.fixture(params=[(layout, label, adapter) for layout in ['src', 'flat'] for label in ['plain', 'with space', 'percent%name', 'hash#name', 'café-東京', 'encoded%20literal'] for adapter in ['fast', 'public']])
+def editable_uri_case(request, tmp_path):
+    import json
+
+    layout, label, adapter = request.param
+    project = tmp_path / label
+    module = 'owned_docs_fixture'
+    package = project / ('src' if layout == 'src' else '') / module
+    package.mkdir(parents=True)
+    (package / '__init__.py').write_text("from pathlib import Path\nPath(__file__).with_name('imported.txt').write_text('target imported')\n")
+    metadata = tmp_path / 'metadata'
+    dist = metadata / 'owned_docs_fixture-0.1.dist-info'
+    dist.mkdir(parents=True)
+    (dist / 'METADATA').write_text('Metadata-Version: 2.1\nName: owned-docs-fixture\nVersion: 0.1\n')
+    (dist / 'direct_url.json').write_text(json.dumps({'url': project.as_uri(), 'dir_info': {'editable': True}}))
+    protected = [package / '__init__.py', dist / 'METADATA', dist / 'direct_url.json']
+    before = [(f.read_bytes(), f.stat().st_ino, f.stat().st_mtime_ns) for f in protected]
+    yield adapter, metadata, package, module, protected, before
+
+
+def test_editable_file_uri_roots_are_decoded_without_importing_target(editable_uri_case):
+    import json
+    import subprocess
+    import sys
+
+    # Arrange
+    adapter, metadata, package, module, protected, before = editable_uri_case
+    code = """
+from pathlib import Path
+import json,sys
+from scitex_dev._core.discovery import _get_package_root_fast,get_package_root
+metadata,package,module,adapter=sys.argv[1:];package=Path(package)
+sys.path[:0]=[metadata,str(package.parent)]
+root=(_get_package_root_fast if adapter=='fast' else get_package_root)(module)
+print(json.dumps({'root':str(root) if root is not None else None,'imported':(package/'imported.txt').exists(),'loaded':module in sys.modules}))
+"""
+    # Act
+    completed = subprocess.run([sys.executable, '-I', '-c', code, str(metadata), str(package), module, adapter], cwd=metadata.parent, capture_output=True, check=True, timeout=15)
+    outcome = json.loads(completed.stdout)
+    after = [(f.read_bytes(), f.stat().st_ino, f.stat().st_mtime_ns) for f in protected]
+    # Assert
+    assert (outcome, after) == ({'root': str(package), 'imported': False, 'loaded': False}, before)

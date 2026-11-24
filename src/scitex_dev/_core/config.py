@@ -220,7 +220,7 @@ def _load_config(config_path, knob_state, *, strict=False) -> DevConfig:
     """Internal resolver using one caller-owned state snapshot."""
     # Determine config path
     if config_path is None:
-        config_path = os.getenv("SCITEX_DEV_CONFIG")
+        config_path = os.getenv("SCITEX_DEV_CONFIG") or None
     if config_path is None:
         config_path = _get_default_config_path()
     else:

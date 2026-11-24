@@ -78,8 +78,14 @@ still differ. These primitives do not load credentials or launch tools.
 
 Config merge preserves foreign settings, refuses a conflicting same-name server
 and invalid/symlink destinations, and reports no existing values. Writes use a
-same-directory atomic replacement and a persistent per-file lock. Writers using
-this installer serialize; other editors must coordinate to exclude all races.
+same-directory atomic replacement and a persistent per-file lock. Before
+replacement, it rechecks the original bytes and permission mode; a detected change
+refuses without replacing the config. Writers using this installer serialize;
+other editors must coordinate to exclude all races.
+The `config_mode` controls in `tests/scitex_dev/mcp_setup/test___init__.py` use
+owned files and the standard tempfile audit event to check mode-change refusal,
+stable-mode preservation, dry-run behavior and temporary-file cleanup through
+the Python primitive and CLI. These do not establish general race safety.
 Dry runs create neither config, parent directory nor lock. This writer uses POSIX file locks. The JSON adapter is
 not a universal installer for every client's TOML/YAML or approval format.
 
@@ -90,9 +96,14 @@ scitex dev mcp list-tools --json
 
 Doctor returns nonzero for dependency/import or empty-catalog failures. A catalog
 check does not establish that a client loaded or authorized the server. Qualify
-stdio separately with initialize and tools/list before claiming protocol readiness;
-stdout must carry protocol JSON, while diagnostics go to stderr. Business tool
-execution needs its own appropriate tests.
+stdio in the selected client's protocol mode before claiming readiness. Legacy
+handshake clients use `initialize` and `notifications/initialized`; modern clients
+may use `server/discover` with a per-request version/capability envelope. Inspect
+the installed SDK/server's supported revisions rather than assuming its newest
+revision uses the legacy handshake. Record the negotiated revision and verify
+`tools/list`, protocol-only stdout and clean exit on stdin EOF; diagnostics belong
+on stderr. Passing one mode does not qualify the other or a real agent's loading,
+approvals or authorization. Business tool execution needs its own tests.
 
 ## Skills setup
 

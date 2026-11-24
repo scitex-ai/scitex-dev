@@ -1,29 +1,35 @@
 ---
 description: |
-  [TOPIC] Quick Start
-  [DETAILS] Basic linter usage — check files, list rules.
-tags: [scitex-dev-linter-quick-start]
+  [TOPIC] Inspect linter rules
+  [DETAILS] Use installed Rule metadata and canonical validation commands;
+  catalog reads do not establish rule execution or complete coverage.
+tags: [scitex-dev-linter-rule-walkthrough]
 ---
 
-# Quick Start
+# Inspect the current rules
 
 ```python
 from scitex_dev.linter import list_rules
 
-# List all available rules
 rules = list_rules()
-for r in rules:
-    print(f"{r.id}: {r.description}")
+for rule in rules:
+    print(rule.id, rule.severity, rule.category, rule.message)
 
-# Filter by category
 io_rules = list_rules(category="io")
-stats_rules = list_rules(category="stats")
-plot_rules = list_rules(category="plot")
 ```
+
+`Rule` has `id`, `severity`, `category`, `message`, `suggestion`, `requires` and
+`scope` fields. It does not provide a `description` field. Category matching
+uses exact category strings, not a rule-ID prefix.
 
 ```bash
-# CLI
-scitex-dev linter check src/
-scitex-dev linter check src/my_script.py
-scitex-dev linter list-rules
+scitex-dev linter list-rules-all --json
+scitex-dev linter list-rules-all --category io --json
+scitex-dev linter validate-files /owned/project/tool.py --json
 ```
+
+Use `list-rules` for engine built-ins and `list-rules-all` for the catalog
+including installed providers. Neither listing is a finding report; requirements
+and scopes still affect which checks run on a file. Read validation's skipped
+coverage and failures separately. Source: `linter/__init__.py`,
+`_rules/_base.py`, `_cmds/_rules.py` and `_emit.py`.

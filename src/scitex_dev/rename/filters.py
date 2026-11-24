@@ -10,6 +10,7 @@ falls back to Python glob + read_text otherwise.
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 from pathlib import Path
@@ -79,13 +80,16 @@ def matches_scope(path: Path, config: RenameConfig) -> bool:
     return fnmatch.fnmatch(path.name, config.scope)
 
 
-def _rg_find_content_matches(directory: str, config: RenameConfig) -> list[Path] | None:
-    """Use ripgrep to find files containing the pattern. Returns None on failure."""
+def _rg_find_content_matches(
+    directory: str, config: RenameConfig, *, files_only: bool = False
+) -> list[Path] | None:
+    """Search with ripgrep, or list candidate paths. Returns None on failure."""
 
     if not _RG_PATH:
         return None
 
-    cmd = [_RG_PATH, "--files-with-matches", "--no-messages"]
+    mode = "--files" if files_only else "--files-with-matches"
+    cmd = [_RG_PATH, "--no-config", mode, "--null", "--no-messages"]
 
     # Scope as glob filter
     if config.scope:
@@ -95,11 +99,13 @@ def _rg_find_content_matches(directory: str, config: RenameConfig) -> list[Path]
     if not config.recursive:
         cmd += ["--max-depth", "1"]
 
-    # Regex vs fixed string
-    if config.regex:
-        cmd += ["--multiline", "--multiline-dotall", config.pattern]
-    else:
-        cmd += ["--fixed-strings", config.pattern]
+    # File listing preserves traversal/ignore rules without filtering regex text.
+    if not files_only:
+        if config.regex:
+            cmd += ["--multiline", "--multiline-dotall"]
+        else:
+            cmd += ["--fixed-strings"]
+        cmd.append("--regexp=" + config.pattern)
 
     # Exclude patterns
     for exc in parse_csv_config(config.path_excludes):
@@ -114,17 +120,32 @@ def _rg_find_content_matches(directory: str, config: RenameConfig) -> list[Path]
     import subprocess  # noqa: E402 — local import to survive auto-linter
 
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        proc = subprocess.run(cmd, capture_output=True, timeout=60)
         if proc.returncode > 1:  # 1 = no matches (ok), >1 = error
             return None
         # Sort to guarantee deterministic ordering across preview / execute
         # passes. ripgrep with --threads >1 returns matches as workers
         # complete, so iteration order depends on FS racing — that drifted
         # the content `file_id` between passes and broke `skip_ids`.
-        paths = sorted(Path(line) for line in proc.stdout.strip().splitlines() if line)
+        paths = sorted(Path(os.fsdecode(name)) for name in proc.stdout.split(b"\0") if name)
         return paths
     except (subprocess.TimeoutExpired, OSError):
         return None
+
+
+def _read_content_text(path: Path) -> str | None:
+    """Read eligible content text; NUL-bearing or unreadable input is excluded."""
+    try:
+        content = path.read_text(errors="surrogateescape")
+    except (OSError, UnicodeDecodeError):
+        return None
+    return None if "\0" in content else content
+
+
+def _matches_python_regex(path: Path, pattern: str) -> bool:
+    """Match the same eligible, newline-normalized text used by replacement."""
+    content = _read_content_text(path)
+    return content is not None and re.search(pattern, content, re.DOTALL) is not None
 
 
 def find_matching_files(
@@ -132,12 +153,16 @@ def find_matching_files(
 ) -> list[Path]:
     """Find files matching the filtering criteria.
 
-    Uses ripgrep for content matching when available (much faster),
-    falls back to Python glob + read_text.
+    Ripgrep searches literal text or lists regex candidates. Python regex
+    matching uses the same text decoding as replacement. Falls back to glob.
     """
-    # Fast path: ripgrep for content matching
+    # A literal NUL cannot match eligible text and cannot be passed in argv.
+    if need_content_match and not config.regex and "\0" in config.pattern:
+        return []
+
+    # Keep ripgrep traversal; Python owns regex text semantics.
     if need_content_match:
-        rg_results = _rg_find_content_matches(directory, config)
+        rg_results = _rg_find_content_matches(directory, config, files_only=config.regex)
         if rg_results is not None:
             # Apply Python-level filters rg can't handle. Extension filtering
             # only kicks in when no explicit `scope` glob is set — same as
@@ -148,6 +173,11 @@ def find_matching_files(
                 if not p.is_symlink()
                 and not should_exclude_path(p, config)
                 and (config.scope or matches_include_extensions(p, config))
+                and (
+                    _matches_python_regex(p, config.pattern)
+                    if config.regex
+                    else _read_content_text(p) is not None
+                )
             ]
 
     # Fallback: Python glob
@@ -166,18 +196,17 @@ def find_matching_files(
         if not config.scope and not matches_include_extensions(path, config):
             continue
         if need_content_match:
-            try:
-                content = path.read_text(errors="replace")
-                if config.regex:
-                    if not re.search(config.pattern, content, re.DOTALL):
-                        continue
-                elif config.pattern not in content:
+            content = _read_content_text(path)
+            if content is None:
+                continue
+            if config.regex:
+                if not re.search(config.pattern, content, re.DOTALL):
                     continue
-            except (OSError, UnicodeDecodeError):
+            elif config.pattern not in content:
                 continue
         matching.append(path)
 
-    return matching
+    return sorted(matching)
 
 
 def is_django_protected_line(line: str, pattern: str) -> bool:

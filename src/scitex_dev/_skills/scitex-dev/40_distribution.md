@@ -28,6 +28,16 @@ installed, reachable and enabled leaf providers in Dev's current environment.
 See [12_config.md](12_config.md) for owner-level opt-outs and effective state;
 installation does not enable disabled tools or override selection policy.
 
+An owner may declare skill namespaces rooted in different modules. Dev declares
+`scitex-dev-linter` at `scitex_dev.linter`, whose existing resources live under
+`linter/_skills/scitex-dev-linter/`. Its owning distribution remains
+`scitex-dev`: the same owner-level opt-out applies to this namespace and Dev’s
+other namespaces. Discovery resolves the resource root from distribution
+metadata without importing the linter. The declaration and package-data path
+are in `pyproject.toml`; installed list/get controls are in
+`tests/scitex_dev/_ecosystem/_skills/test_installed_providers.py`. Verify built
+artifact delivery and consuming-client selection separately.
+
 `--link` links editable source resources. `--clean` refreshes the requested
 managed namespaces through the validated staging projection; foreign and
 unselected content is preserved, and modified managed content is refused rather

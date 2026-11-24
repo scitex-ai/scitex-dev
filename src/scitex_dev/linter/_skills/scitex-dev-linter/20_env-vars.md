@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] Env Vars
-  [DETAILS] Environment variables read by `scitex-dev linter` (engine, formerly `scitex-dev linter`) at import / runtime. Prefix is `SCITEX_DEV_LINTER_` — the legacy `SCITEX_LINTER_` prefix is still accepted for one release with a `DeprecationWarning`. Follows the SCITEX_<MODULE>_* convention — see general/10_arch-environment-variables.md.
+  [DETAILS] Settings read by the linter configuration loader; distinguish rule-ID lists, filename/path classification, command-specific output filters and notice verbosity.
 tags: [scitex-dev-linter-env-vars]
 ---
 
@@ -11,16 +11,30 @@ Canonical prefix: **`SCITEX_DEV_LINTER_`**. The engine accepts the legacy
 `SCITEX_LINTER_` prefix for the soft-migration window (one release) and
 emits a `DeprecationWarning` naming the canonical replacement.
 
-| Variable | Purpose | Default | Type |
-|---|---|---|---|
-| `SCITEX_DEV_LINTER_DISABLE` | Disable the linter entirely (opt-out). | `false` | bool |
-| `SCITEX_DEV_LINTER_ENABLE` | Comma-separated list of rule IDs to force-enable. | unset | string (CSV) |
-| `SCITEX_DEV_LINTER_SEVERITY` | Minimum severity surfaced (`error` / `warning` / `info`). | `warning` | string |
-| `SCITEX_DEV_LINTER_EXCLUDE_DIRS` | Directories skipped during linting (no rules fire on files inside). | unset | string (paths) |
-| `SCITEX_DEV_LINTER_NON_SCRIPT_DIRS` | Directories whose `.py` files are *not* scripts — script-only rules (S001 `@stx.session` decorator, S002 `__main__` guard) are skipped here. Was `SCITEX_LINTER_LIBRARY_DIRS`; the old name was ambiguous against `EXCLUDE_DIRS`. | unset | string (paths) |
-| `SCITEX_DEV_LINTER_LIBRARY_PATTERNS` | Glob patterns matching library files. | `src/**/*.py` | string (glob CSV) |
-| `SCITEX_DEV_LINTER_SCRIPT_DIRS` | Directories classified as "script code" (relaxed ruleset — allows top-level side effects). | unset | string (paths) |
-| `SCITEX_DEV_LINTER_REQUIRED_INJECTED` | Comma-separated names the `@stx.session` injection rule must enforce. | `CONFIG,plt,logger` | string (CSV) |
+`config._load_env` reads the settings below over the selected pyproject table.
+CSV settings replace the corresponding list; they are not Boolean switches.
+Defaults come from `LinterConfig` when no environment or TOML value supplies them.
+
+| Variable | Loader result | Default |
+|---|---|---|
+| `SCITEX_DEV_LINTER_DISABLE` | CSV rule IDs in `config.disable`; not a global off switch | `[]` |
+| `SCITEX_DEV_LINTER_ENABLE` | CSV gate entries in `config.enable`, including `FM` for the figure category | `[]` |
+| `SCITEX_DEV_LINTER_SEVERITY` | `config.severity`; `validate-files` uses its separate `--severity` reporting filter | `info` |
+| `SCITEX_DEV_LINTER_EXCLUDE_DIRS` | CSV excluded-directory names used during file collection | `__pycache__,.git,node_modules,.tox,venv,.venv` |
+| `SCITEX_DEV_LINTER_NON_SCRIPT_DIRS` | CSV library-directory entries for script-only classification | `src,tests,apps,config,docs` |
+| `SCITEX_DEV_LINTER_LIBRARY_PATTERNS` | CSV filename glob patterns; see `LinterConfig.library_patterns` | built-in filename patterns |
+| `SCITEX_DEV_LINTER_SCRIPT_DIRS` | CSV utility-script directory entries, also exempt from script-only classification | `scripts` |
+| `SCITEX_DEV_LINTER_REQUIRED_INJECTED` | CSV session injection names | `CONFIG,plt,COLORS,rngg,logger` |
+
+`SCITEX_DEV_LINTER_DISABLE=true` loads the literal entry `"true"`; it does not
+turn linting off. Rule-ID settings do not bypass mandatory logging-provider
+coverage. `SCITEX_DEV_LINTER_QUIET` separately suppresses eligible notices in
+`_health.py`; it is not a coverage or checker-failure waiver.
+
+`validate-files --severity` defaults to `info`, independently of the loaded
+severity field. Wiring that configuration field to this CLI filter remains an
+unresolved consumption gap. Likewise, the loader does not consume a
+`SCITEX_DEV_LINTER_CONFIG` YAML path. See [configuration limits](04_cli-reference.md#configuration-sources-and-limits).
 
 ## EXCLUDE_DIRS vs NON_SCRIPT_DIRS
 
@@ -42,10 +56,12 @@ The following legacy names are still read but emit a `DeprecationWarning`:
 | `SCITEX_DEV_LINTER_LIBRARY_DIRS` | `SCITEX_DEV_LINTER_NON_SCRIPT_DIRS` |
 | `SCITEX_LINTER_LIBRARY_DIRS` | `SCITEX_DEV_LINTER_NON_SCRIPT_DIRS` |
 
-## Feature flags
+## Coverage controls
 
-- **opt-out:** `SCITEX_DEV_LINTER_DISABLE=true` turns the linter off globally.
-- No opt-in flags.
+List settings and quiet notices have the scopes above; there is no global
+Boolean disable implemented by this loader. Source: `config.py`,
+`_source_helpers.py`, `_collect.py`, `_emit.py` and `_health.py`. Research project
+requirements and mandatory provider checks retain their existing behavior.
 
 ## Audit
 

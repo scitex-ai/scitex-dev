@@ -270,6 +270,8 @@ class HostRecord:
             # lease it had, which looks exactly like "the server ignored
             # our request". Catching it here keeps those two apart.
             try:
+                if not isinstance(self.requested_address, str):
+                    raise ValueError("expected an IPv4 string")
                 ipaddress.IPv4Address(self.requested_address)
             except ValueError as exc:
                 raise HostRegistryError(
@@ -326,9 +328,9 @@ def get_hosts_yaml_path(hosts_path: str | Path | None = None) -> Path:
 
 
 def create_default_hosts_yaml(hosts_path: str | Path | None = None) -> Path:
-    """Seed ``hosts.yaml`` with the known operator hosts if it doesn't exist.
+    """Seed ``hosts.yaml`` only when no filesystem entry occupies its path.
 
-    Idempotent — a no-op when the file already exists. Mirrors
+    Idempotent — existing files and symbolic links stay untouched. Mirrors
     ``scitex_dev._core.config.create_default_config``'s first-run
     seeding pattern for consistency across the package's config
     surfaces.
@@ -337,7 +339,12 @@ def create_default_hosts_yaml(hosts_path: str | Path | None = None) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
         return path
-    path.write_text(_DEFAULT_HOSTS_YAML)
+    try:
+        handle = path.open("x")
+    except FileExistsError:
+        return path
+    with handle:
+        handle.write(_DEFAULT_HOSTS_YAML)
     return path
 
 
@@ -451,7 +458,7 @@ def find_runner_host(
     hosts_path: str | Path | None = None,
     include_packaged_floor: bool = True,
 ) -> HostRecord | None:
-    """Return the first registered machine that serves ``labels``, else ``None``.
+    """Return the first declared match, or ``None`` for empty/unserved labels.
 
     "Serves" is GitHub's dispatch rule — a runner matches when its own
     label set CONTAINS every requested label (see
@@ -474,7 +481,7 @@ def find_runner_host(
     for host in list_hosts(hosts_path=hosts_path):
         if host.serves(wanted):
             return host
-    if not include_packaged_floor:
+    if not include_packaged_floor or not wanted:
         return None
     for name, declared in packaged_default_runner_destinations():
         if wanted <= declared:

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """CLI entry point for `scitex-dev linter` (Click-based, audit-compliant).
 
 Canonical subcommands:
@@ -100,14 +101,14 @@ def _print_help_recursive(ctx: click.Context, _param, value):
             Example("{prog} linter mcp list-tools", "Show the MCP tool surface."),
         ),
         config_resolution=(
-            "Highest -> lowest precedence:",
-            "1. Explicit CLI flags",
-            "2. ./pyproject.toml [tool.scitex_dev.linter] "
-            "(legacy [tool.scitex-linter] still read)",
-            "3. ./config.yaml (project-local)",
-            "4. $SCITEX_DEV_LINTER_CONFIG (path to a YAML file)",
-            "5. ~/.scitex/dev/linter/config.yaml (user-wide)",
-            "6. Built-in defaults",
+            "Settings loader: highest -> lowest precedence:",
+            "1. SCITEX_DEV_LINTER_* environment values (legacy SCITEX_LINTER_* still read)",
+            "2. pyproject.toml [tool.scitex-dev.linter], walking up from the target "
+            "(legacy [tool.scitex-linter] fallback)",
+            "3. Built-in defaults",
+            "Command flags apply as documented; validate-files --severity is a separate output filter.",
+            "Project types are read separately from .scitex/dev/config.yaml.",
+            "YAML linter settings and SCITEX_DEV_LINTER_CONFIG are not read by this loader.",
         ),
     ),
 )

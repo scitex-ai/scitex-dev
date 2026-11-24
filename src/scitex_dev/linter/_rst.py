@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """reStructuredText (`*.rst`) linting — extract Python code-block
 directives and lint each one.
 
@@ -23,7 +24,7 @@ from ._md import _SNIPPET_SKIP_RULES
 
 _DIRECTIVE_RE = re.compile(
     r"^(?P<indent>[ \t]*)\.\. (?:code-block|code|sourcecode|ipython)::"
-    r"[ \t]*(?:python|py)\b[^\n]*\n",
+    r"[ \t]*(?:python|py)(?=[ \t\r\n])[^\n]*\n",
     re.IGNORECASE,
 )
 
@@ -32,7 +33,9 @@ def _iter_python_blocks(text: str):
     """Yield ``(block_index, start_line, body)`` for each python directive.
 
     ``start_line`` is 1-indexed and points at the first body line so
-    issue line numbers map back to source.
+    issue line numbers map back to source. Option scanning stops at a
+    nonblank line dedented to the directive level or beyond, or at the first
+    blank separator. Later colon-prefixed lines belong to code content.
     """
     lines = text.splitlines(keepends=True)
     block_idx = 0
@@ -44,14 +47,16 @@ def _iter_python_blocks(text: str):
             continue
         directive_indent = len(m.group("indent"))
         i += 1
-        # Skip directive options (``:linenos:`` etc.) and the mandatory
-        # blank line that separates the directive from the body.
+        # Options precede the blank separator. Colon-prefixed lines after
+        # that separator are code content, not additional directive options.
         while i < len(lines):
             stripped = lines[i].strip()
-            if not stripped or stripped.startswith(":"):
-                i += 1
-                continue
-            break
+            line_indent = len(lines[i]) - len(lines[i].lstrip(" \t"))
+            if not stripped.startswith(":") or line_indent <= directive_indent:
+                break
+            i += 1
+        while i < len(lines) and not lines[i].strip():
+            i += 1
         # Capture body: contiguous lines indented strictly more than
         # the directive itself (blank lines preserved within the block).
         body_start = i
@@ -77,16 +82,23 @@ def _iter_python_blocks(text: str):
         block_idx += 1
 
 
-def lint_rst(path: Path, config=None) -> list:
+def lint_rst(path: Path, config=None, *, raise_input_errors: bool = False) -> list:
     """Lint Python ``code-block`` directives inside an RST file.
 
-    Issue filepaths are tagged ``"/path/to/index.rst::block-N"``.
+    The checker receives ``"/path/to/index.rst::block-N"`` as a parse
+    label, visible in opt-in syntax errors with block-relative locations.
+    Returned Issue lines are shifted into the document; the block label is
+    not retained in Issue values or normal formatter output.
+    ``raise_input_errors`` exposes read and extracted Python AST errors;
+    recognized directives are extraction, not complete document validation.
     """
     from .checker import lint_source
 
     try:
         text = path.read_text(encoding="utf-8")
     except OSError:
+        if raise_input_errors:
+            raise
         return []
 
     issues: list = []
@@ -94,7 +106,7 @@ def lint_rst(path: Path, config=None) -> list:
         if not body.strip():
             continue
         fake_path = f"{path}::block-{idx}"
-        block_issues = lint_source(body, filepath=fake_path, config=config)
+        block_issues = lint_source(body, filepath=fake_path, config=config, raise_input_errors=raise_input_errors)
         for iss in block_issues:
             if iss.rule.id in _SNIPPET_SKIP_RULES:
                 continue

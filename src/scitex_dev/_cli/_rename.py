@@ -21,10 +21,23 @@ Two ergonomic flags worth knowing:
 from __future__ import annotations
 
 import sys
+from functools import partial
 
 import click
 
 from .._ecosystem.help_spec import CliHelp, Example, SpecCommand
+
+
+def _checked_rename(fn, *, as_json, **kwargs):
+    """Report returned rename refusals through the existing CLI envelope."""
+    data = fn(**kwargs)
+    if data.error:
+        from .._core.types import Result
+        from ._utils import handle_result
+
+        result = Result(success=False, data=data, error=data.error)
+        sys.exit(handle_result(result, as_json=as_json))
+    return data
 
 
 def register(main: click.Group) -> None:
@@ -169,7 +182,7 @@ def register(main: click.Group) -> None:
             from .. import preview_rename
 
             wrap_as_cli(
-                preview_rename,
+                partial(_checked_rename, preview_rename, as_json=as_json),
                 as_json=as_json,
                 pattern=old_name,
                 replacement=new_name,
@@ -181,7 +194,7 @@ def register(main: click.Group) -> None:
             from .. import execute_rename
 
             wrap_as_cli(
-                execute_rename,
+                partial(_checked_rename, execute_rename, as_json=as_json),
                 as_json=as_json,
                 pattern=old_name,
                 replacement=new_name,

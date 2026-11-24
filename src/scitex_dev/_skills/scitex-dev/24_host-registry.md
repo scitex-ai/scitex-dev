@@ -65,12 +65,26 @@ change host-record validation, alias resolution, runner floors or seeding.
 Controls: `tests/scitex_dev/hosts/test__parse_shapes.py` exercises the public
 `list_hosts(hosts_path=...)` API against actual YAML fixture files.
 
+`HostRecord.requested_address` is a literal IPv4 string or `None` (no
+preference). Direct construction rejects numeric values, packed bytes and
+address objects instead of coercing them; YAML loading also rejects non-string
+values. Valid strings and `None` retain their original values in `to_dict()`.
+This field records a desired DHCP request, not an observed address or a lease.
+Controls: `tests/scitex_dev/hosts/test__registry_address_types.py` and
+`tests/scitex_dev/hosts/test__registry_requested_address.py`.
+
 ## Storage: `~/.scitex/dev/hosts.yaml`
 
 A DATA/STATE store (see
 `01_ecosystem/12_local-state-resolution.md`), resolved via
 `local_state.user_path()` so it is never project-shadowed. Seeded on first use
 if the registry does not already exist.
+Missing files are created exclusively. An existing dangling leaf symlink is
+left untouched and its target is not populated; a later read through that link
+still fails instead of silently repairing it. Existing regular files and valid
+links retain their contents. Controls:
+`tests/scitex_dev/hosts/test__registry_seed_links.py`. These controlled entry
+checks do not establish concurrent reader/writer coordination or permissions.
 The seed inventory is maintained in `hosts/_seed.py`; enumerate the live
 registry rather than copying an inventory into a consumer skill.
 Precedence (highest first): explicit `hosts_path=`/`--hosts-file` →
@@ -97,6 +111,29 @@ exceptions are not converted into registry errors. Controls in
 `tests/scitex_dev/_cli/test__hosts_list_errors.py` cover malformed registries,
 text/JSON channels, valid/empty results and an unexpected decoding failure.
 
+
+## DHCP declaration errors
+
+`hosts._dhcp.provide_request_address_specs(hosts_path=...)` propagates
+`HostRegistryError` for malformed registries; an unexpected decoding failure
+also stays visible. A failed registry read must not look like a valid registry
+with no applicable DHCP requests. Valid empty registries and registries with
+only noncompute hosts still yield no request specs. Applicable compute hosts
+retain their packaged requested addresses and existing drop-in content.
+The separate fleet-floor provider still refuses an unscopable compute set.
+Controls: `tests/scitex_dev/hosts/test__dhcp_registry_errors.py` and
+`tests/scitex_dev/hosts/test__dhcp.py`. These are owned-fixture declaration
+checks, not permission to apply networking or proof of a live DHCP lease.
+
+## Runner declaration lookup
+
+`find_runner_host(labels, hosts_path=...)` returns a declared match, not a
+capacity or liveness result. Empty label requests return `None`, matching
+`HostRecord.serves([])`, even with the packaged floor enabled. Normal selected
+registry validation still runs. Nonempty local matches, packaged-floor
+membership and the explicit floor opt-out retain their behavior.
+Controls: `tests/scitex_dev/hosts/test__registry_empty_labels.py`,
+`test__registry_runner_labels.py` and `test__registry_runner_floor.py`.
 
 ## Scope note
 

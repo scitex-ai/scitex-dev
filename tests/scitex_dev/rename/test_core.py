@@ -2252,7 +2252,7 @@ class TestIO:
             calls.append((argv, input_data))
 
         write_text(f, "hello", use_sudo=True, runner=_runner)
-        assert calls[0][0] == ["tee", str(f)]
+        assert calls[0][0] == ["tee", "--", str(f)]
 
     def test_rename_path_sudo_calls_subprocess(self, tmp_path):
         # Arrange
@@ -2262,7 +2262,7 @@ class TestIO:
         dst = tmp_path / "new.txt"
         calls: list[list[str]] = []
         rename_path(src, dst, use_sudo=True, runner=lambda argv: calls.append(argv))
-        assert calls == [["mv", str(src), str(dst)]]
+        assert calls == [["mv", "-T", "--", str(src), str(dst)]]
 
     def test_mkdir_sudo_with_parents(self, tmp_path):
         # Arrange
@@ -2271,7 +2271,7 @@ class TestIO:
         d = tmp_path / "new_dir"
         calls: list[list[str]] = []
         mkdir(d, parents=True, use_sudo=True, runner=lambda argv: calls.append(argv))
-        assert calls == [["mkdir", "-p", str(d)]]
+        assert calls == [["mkdir", "-p", "--", str(d)]]
 
 
 # ===========================================================================

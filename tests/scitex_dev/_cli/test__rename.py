@@ -382,3 +382,84 @@ def test_quiet_reports_zero_matches_cleanly_would_rename_0_files_0_matches_0_col
 
 
 # EOF
+
+
+
+def _rename_verdict_tree_state(base):
+    import os
+
+    return {str(f.relative_to(base)): ("link", os.readlink(f)) if f.is_symlink() else ("directory", "") if f.is_dir() else ("file", f.read_text()) for f in base.rglob("*") if ".git" not in f.parts}
+
+
+@pytest.fixture(params=["dirty", "nonrepo", "file-collision", "directory-link", "clean"])
+def _rename_verdict_case(request, tmp_path):
+    state = request.param
+    root, outside = tmp_path / "repo", tmp_path / "outside"
+    root.mkdir()
+    outside.mkdir()
+    (outside / "keep.txt").write_text("KEEP = 1\n")
+    if state == "directory-link":
+        (root / "alpha_pkg").mkdir()
+        (root / "alpha_pkg/module.txt").write_text("VALUE = 1\n")
+        (root / "beta_pkg").symlink_to("../outside")
+        (root / "notes.txt").write_text("alpha\n")
+    else:
+        (root / "alpha.txt").write_text("alpha\n")
+    if state == "file-collision":
+        (root / "beta.txt").write_text("DESTINATION = 2\n")
+    if state != "nonrepo":
+        _git_init(root)
+        _git_commit(root)
+    if state == "dirty":
+        (root / "alpha.txt").write_text("dirty alpha\n")
+    expected = _rename_verdict_tree_state(tmp_path)
+    if state == "clean":
+        expected["repo/beta.txt"] = ("file", "beta\n")
+        del expected["repo/alpha.txt"]
+    reasons = {"dirty": "Uncommitted changes", "nonrepo": "not inside a git repository", "file-collision": "Collisions detected", "directory-link": "Collisions detected", "clean": ""}
+    return root, state != "clean", reasons[state], expected
+
+
+def _invoke_rename_verdict(case, flags):
+    root, _, _, _ = case
+    result = CliRunner().invoke(main, ["rename-symbols", "alpha", "beta", "--root", str(root), "--yes", *flags])
+    return case, result
+
+
+@pytest.fixture(params=[[], ["--quiet"], ["--json"], ["--json", "--quiet"]])
+def _rename_verdict_outcome(_rename_verdict_case, request):
+    return _invoke_rename_verdict(_rename_verdict_case, request.param)
+
+
+@pytest.fixture(params=[["--json"], ["--json", "--quiet"]])
+def _rename_verdict_json_outcome(_rename_verdict_case, request):
+    return _invoke_rename_verdict(_rename_verdict_case, request.param)
+
+
+def test_rename_verdict_exit_matches_operation_refusal(_rename_verdict_outcome):
+    # Arrange
+    (_, blocked, _, _), result = _rename_verdict_outcome
+    # Act
+    actual = result.exit_code
+    # Assert
+    assert actual == int(blocked)
+
+
+def test_rename_verdict_preserves_refusals_or_applies_exact_change(_rename_verdict_outcome):
+    # Arrange
+    (root, _, _, expected), _ = _rename_verdict_outcome
+    # Act
+    actual = _rename_verdict_tree_state(root.parent)
+    # Assert
+    assert actual == expected
+
+
+def test_rename_verdict_json_reports_domain_error(_rename_verdict_json_outcome):
+    # Arrange
+    import json
+
+    (_, blocked, reason, _), result = _rename_verdict_json_outcome
+    # Act
+    payload = json.loads(result.stdout)
+    # Assert
+    assert (payload["success"], bool(payload.get("error")), reason in str(payload.get("error", "")), bool(payload["data"]["error"])) == (not blocked, blocked, True, blocked)

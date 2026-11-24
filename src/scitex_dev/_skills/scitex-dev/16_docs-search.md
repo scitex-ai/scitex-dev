@@ -22,10 +22,9 @@ that cache. Duplicate names collapse in this dict; ambiguous routing remains
 unresolved, not a stable provider-selection contract. Missing-entry-point hints
 are DEBUG messages, not warnings.
 
-`get_package_root` tries metadata first, then imports a target if no root was
-found. `get_docs` can also import for introspection. Import initialization can
-execute code and non-`ImportError` exceptions can propagate. Use the declaration
-catalog for inert inspection; retrieval is not a no-execution guarantee.
+`get_package_root` reads metadata and imports a target if unresolved. Editable `file:///` paths decode
+escapes once for `src`/flat layouts (spaces, reserved and UTF-8 names). `get_docs` may import for introspection.
+Initialization executes code; non-`ImportError` failures can propagate. Use the inert catalog for inspection.
 
 Owners: `_core/discovery.py`, `doc_providers` and `_docs/docs.py`. Controls:
 `tests/scitex_dev/doc_providers/test___init__.py`,

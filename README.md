@@ -64,9 +64,14 @@ standalone bootstrap CLI.
 
 ### Configuration
 
-Copy [`.env.example`](.env.example) to `.env` (gitignored) at your
-project root, then edit. CLI flags always override env vars. The full
-list (with inline comments) lives in `.env.example`.
+[`.env.example`](.env.example) lists selected settings and their owning readers.
+`load_config()` and `show-config` do not load a project `.env` file; set variables
+in the launching environment or use the selected YAML configuration below.
+Precedence belongs to each reader: an explicit Python `config_path` overrides
+`SCITEX_DEV_CONFIG`, while managed knob state overrides YAML package switches.
+A CLI flag takes priority only when that command connects it to the setting.
+See the [environment guide](src/scitex_dev/_skills/scitex-dev/20_env-vars.md)
+for supported consumers and limits.
 
 <details>
 <summary><strong>Local state directories</strong></summary>

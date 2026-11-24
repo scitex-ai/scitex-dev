@@ -119,10 +119,13 @@ execute examples, validate results/prose or other interfaces,
 or compare installed/exported skills. Inspect `limitations`; `ok` is scoped,
 `incomplete` is not a complete pass, and `needs_update` reports a detected issue.
 
-The current source verifier removes up to the opening fence's indentation from
-each code line, preserving Python indentation within that block. This follows
-the [CommonMark fence indentation rule](https://spec.commonmark.org/0.31.2/#fenced-code-blocks);
-it does not dedent arbitrary invalid Python or implement a full Markdown parser.
+The current verifier uses CommonMark block tokens to select root-level fences;
+fences in lists/quotes and fence-like text in HTML blocks are not checked.
+Only excluded contexts leaves the report `incomplete`, not a scoped pass.
+Fence content follows the
+[CommonMark indentation rule](https://spec.commonmark.org/0.31.2/#fenced-code-blocks),
+preserving Python indentation. This does not dedent invalid Python or validate
+all Markdown/prose semantics.
 Behavioral controls live in
 `tests/scitex_dev/_ecosystem/_skills/test_skills_verify.py`.
 Local re-export controls also live in

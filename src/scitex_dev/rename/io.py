@@ -40,17 +40,17 @@ def write_text(
 ) -> None:
     """Write text to file, optionally via sudo."""
     if not use_sudo:
-        path.write_text(content)
+        path.write_text(content, errors="surrogateescape")
         return
-    (runner or _sudo_run)(["tee", str(path)], input_data=content.encode())
+    (runner or _sudo_run)(["tee", "--", str(path)], input_data=content.encode(errors="surrogateescape"))
 
 
 def rename_path(src: Path, dst: Path, use_sudo: bool = False, *, runner=None) -> None:
-    """Rename (move) a path, optionally via sudo."""
+    """Move to the exact destination path, optionally via sudo."""
     if not use_sudo:
         src.rename(dst)
         return
-    (runner or _sudo_run)(["mv", str(src), str(dst)])
+    (runner or _sudo_run)(["mv", "-T", "--", str(src), str(dst)])
 
 
 def unlink_path(path: Path, use_sudo: bool = False, *, runner=None) -> None:
@@ -58,19 +58,22 @@ def unlink_path(path: Path, use_sudo: bool = False, *, runner=None) -> None:
     if not use_sudo:
         path.unlink()
         return
-    (runner or _sudo_run)(["rm", str(path)])
+    (runner or _sudo_run)(["rm", "--", str(path)])
 
 
 def mkdir(
     path: Path, parents: bool = False, use_sudo: bool = False, *, runner=None
 ) -> None:
-    """Create directory, optionally via sudo."""
+    """Create directory or accept an existing one, optionally via sudo."""
     if not use_sudo:
         path.mkdir(parents=parents, exist_ok=True)
+        return
+    if not parents and path.is_dir():
         return
     cmd = ["mkdir"]
     if parents:
         cmd.append("-p")
+    cmd.append("--")
     cmd.append(str(path))
     (runner or _sudo_run)(cmd)
 
@@ -80,15 +83,15 @@ def rmdir(path: Path, use_sudo: bool = False, *, runner=None) -> None:
     if not use_sudo:
         path.rmdir()
         return
-    (runner or _sudo_run)(["rmdir", str(path)])
+    (runner or _sudo_run)(["rmdir", "--", str(path)])
 
 
 def symlink_to(link: Path, target: str, use_sudo: bool = False, *, runner=None) -> None:
-    """Create a symlink, optionally via sudo."""
+    """Create a symlink at the exact path; piped operands are not options."""
     if not use_sudo:
         link.symlink_to(target)
         return
-    (runner or _sudo_run)(["ln", "-s", target, str(link)])
+    (runner or _sudo_run)(["ln", "-s", "-T", "--", target, str(link)])
 
 
 # EOF

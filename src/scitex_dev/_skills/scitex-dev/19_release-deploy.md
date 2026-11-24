@@ -19,8 +19,16 @@ configuration before installing anything. Preserve dirty authority checkouts,
 user data and unrelated packages; prepare an owned worktree or candidate
 profile for qualification.
 
-Use a normal installation of the declared extras and run `python -m pip check`
-with that profile's interpreter. Do not override dependency pins to make a
+Install the artifact normally with the declared extras required by the selected
+operations. Record the requested extras and actual installed distributions;
+a base-profile import check does not qualify operations that require extras.
+
+Check dependencies in that exact profile. If it contains pip, use
+`/owned/profile/bin/python -m pip check`. A uv-managed profile may have no pip;
+with uv available, use `uv pip check --python /owned/profile/bin/python`.
+Replace the example path with the target interpreter's absolute path. A missing
+pip module is not a successful dependency check; do not accidentally check the
+caller's default environment. Do not override dependency pins to make a
 candidate install. A source-only test or `PYTHONPATH` override does not prove
 that a published wheel supplies the same code and resources.
 
@@ -34,8 +42,12 @@ scitex dev skills list --package scitex-hub --json
 ```
 
 This command's package/JSON options are available in the qualified installed
-CLI. Skill routing and deprecation notices can differ across installed Root
-and Dev versions; inspect actual help for the selected environment.
+CLI. It requires a compatible Root installation. The standalone bootstrap is
+`scitex-dev skills list --package scitex-hub --json`; inspect
+`scitex-dev skills list --help` in the selected environment first. Both routes
+list providers installed and enabled in that interpreter's environment. Empty
+results do not prove that Hub lacks deployment instructions. Skill routing and
+deprecation notices can differ across installed Root and Dev versions.
 
 Read the discovered Hub release/deployment skill before changing a service.
 The legacy `deploy_scitex_hub` helper targets an older layout and is not the

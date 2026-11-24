@@ -61,7 +61,7 @@ def _pre_check_safety(
         if _contains(file_path.name, config):
             new_name = _replace(file_path.name, config)
             new_path = file_path.parent / new_name
-            if new_path.exists() and new_path != file_path:
+            if (new_path.exists() or new_path.is_symlink()) and new_path != file_path:
                 collisions.append({"type": "file", "path": str(new_path)})
             parent = file_path.parent
             if not os.access(parent, os.W_OK):
@@ -82,7 +82,7 @@ def _pre_check_safety(
         if _contains(path.name, config):
             new_name = _replace(path.name, config)
             new_path = path.parent / new_name
-            if new_path.exists() and new_path != path:
+            if (new_path.exists() or new_path.is_symlink()) and new_path != path:
                 collisions.append({"type": "symlink", "path": str(new_path)})
             parent = path.parent
             if not os.access(parent, os.W_OK):
@@ -101,11 +101,21 @@ def _pre_check_safety(
             continue
         if should_exclude_path(path, config):
             continue
-        if _contains(path.name, config):
-            new_name = _replace(path.name, config)
-            new_path = path.parent / new_name
-            if new_path.exists() and new_path != path:
-                collisions.append({"type": "directory", "path": str(new_path)})
+        relative_path = str(path.relative_to(root))
+        if _contains(path.name, config) or _contains(relative_path, config):
+            if _contains(path.name, config):
+                new_name = _replace(path.name, config)
+                new_path = path.parent / new_name
+            else:
+                new_path = root / _replace(relative_path, config)
+            if (new_path.exists() or new_path.is_symlink()) and new_path != path:
+                if new_path.is_symlink():
+                    collision_type = "symlink"
+                elif new_path.is_dir():
+                    collision_type = "directory"
+                else:
+                    collision_type = "file"
+                collisions.append({"type": collision_type, "path": str(new_path)})
             parent = path.parent
             if not os.access(parent, os.W_OK):
                 permission_errors.append(

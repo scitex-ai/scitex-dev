@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """``scitex-dev linter mcp ...`` command group.
 
 Extracted from ``cli.py`` (512-line budget). Registered onto the root
@@ -28,7 +29,7 @@ def register(main_group):
             examples=(
                 Example("{prog} linter mcp start", "Run the MCP server."),
                 Example("{prog} linter mcp list-tools", "Show the exposed tools."),
-                Example("{prog} linter mcp doctor", "Check MCP server health."),
+                Example("{prog} linter mcp doctor", "Check MCP prerequisites."),
             ),
         ),
     )
@@ -78,7 +79,12 @@ def register(main_group):
     )
     def mcp_start(transport, dry_run, yes, as_json):
         if dry_run:
-            click.echo(f"Would start MCP server (transport={transport}).")
+            if as_json:
+                click.echo(json.dumps({
+                    "action": "start", "transport": transport, "dry_run": True,
+                }))
+            else:
+                click.echo(f"Would start MCP server (transport={transport}).")
             return
         try:
             from ._server import run_server
@@ -123,37 +129,24 @@ def register(main_group):
         "--json", "as_json", is_flag=True, default=False, help="Output as JSON."
     )
     def mcp_list_tools(verbose, as_json):
-        _KNOWN_TOOLS = ["linter_check", "linter_check_source", "linter_list_rules"]
-        tools = []
         try:
             from ._server import mcp as mcp_server
             from .._ecosystem._mcp import get_tools_sync
 
             tools = list(get_tools_sync(mcp_server).values())
-        except Exception:
-            pass
+        except Exception as exc:
+            message = f"Unable to load linter MCP tools: {exc}"
+            click.echo(message, err=True)
+            if as_json:
+                click.echo(json.dumps({"tools": [], "error": message}, indent=2))
+            sys.exit(1)
 
         if as_json:
-            if not tools:
-                click.echo(json.dumps({"tools": _KNOWN_TOOLS}, indent=2))
-            else:
-                click.echo(
-                    json.dumps(
-                        {
-                            "tools": [
-                                t.name for t in sorted(tools, key=lambda t: t.name)
-                            ]
-                        },
-                        indent=2,
-                    )
-                )
+            click.echo(json.dumps({
+                "tools": [t.name for t in sorted(tools, key=lambda t: t.name)],
+            }, indent=2))
             return
 
-        if not tools:
-            click.echo(f"SciTeX Linter MCP\nTools: {len(_KNOWN_TOOLS)}\n")
-            for n in _KNOWN_TOOLS:
-                click.echo(f"  {n}")
-            return
         C = sys.stdout.isatty()
         g, w, cy, y, dm, r = (
             ("\033[92m", "\033[1;37m", "\033[96m", "\033[93m", "\033[2m", "\033[0m")
@@ -191,9 +184,9 @@ def register(main_group):
         "doctor",
         cls=SpecCommand,
         help_spec=CliHelp(
-            summary="Check MCP server health.",
+            summary="Check MCP prerequisites.",
             examples=(
-                Example("{prog} linter mcp doctor", "Run the health checks."),
+                Example("{prog} linter mcp doctor", "Check imports, CLI lookup and builtin rules."),
             ),
         ),
     )
@@ -202,10 +195,6 @@ def register(main_group):
     )
     def mcp_doctor(as_json):
         import shutil
-
-        click.echo(f"scitex-dev linter {__version__}\n")
-        click.echo("Health Check")
-        click.echo("=" * 40)
 
         checks = []
         try:
@@ -217,7 +206,7 @@ def register(main_group):
         try:
             from ._mcp.tools import register_all_tools  # noqa: F401
 
-            checks.append(("MCP tools", True, "3 tools"))
+            checks.append(("MCP tools", True, "registration imports available"))
         except Exception as e:
             checks.append(("MCP tools", False, str(e)))
         cli_path = shutil.which("scitex-dev")
@@ -226,11 +215,23 @@ def register(main_group):
         )
         checks.append(("Rules", True, f"{len(ALL_RULES)} rules"))
 
-        all_ok = True
+        all_ok = all(ok for _, ok, _ in checks)
+        if as_json:
+            click.echo(json.dumps({
+                "version": __version__,
+                "checks": [
+                    {"name": name, "ok": ok, "info": info}
+                    for name, ok, info in checks
+                ],
+                "ok": all_ok,
+            }, indent=2))
+            sys.exit(0 if all_ok else 1)
+
+        click.echo(f"scitex-dev linter {__version__}\n")
+        click.echo("Health Check")
+        click.echo("=" * 40)
         for name, ok, info in checks:
             status = "✓" if ok else "✗"
-            if not ok:
-                all_ok = False
             click.echo(f"  {status} {name}: {info}")
         click.echo()
         if all_ok:
@@ -289,20 +290,31 @@ def register(main_group):
         del dry_run, yes  # audit §2 — no-op flags
         import shutil
 
+        cli_path = shutil.which("scitex-dev")
+        if as_json:
+            click.echo(json.dumps({
+                "mcpServers": {
+                    "scitex-dev-linter": {
+                        "command": cli_path or "scitex-dev",
+                        "args": ["linter", "mcp", "start"],
+                    },
+                },
+            }, indent=2))
+            return
+
         click.echo(f"scitex-dev linter {__version__}\n")
         click.echo("Add this to your Claude Desktop config file:\n")
         click.echo(
             "  macOS: ~/Library/Application Support/Claude/claude_desktop_config.json"
         )
         click.echo("  Linux: ~/.config/Claude/claude_desktop_config.json\n")
-        cli_path = shutil.which("scitex-dev")
         if cli_path:
             click.echo(f"Your installation path: {cli_path}\n")
         config = (
             "{\n"
             '  "mcpServers": {\n'
             '    "scitex-dev-linter": {\n'
-            f'      "command": "{cli_path or "scitex-dev"}",\n'
+            f'      "command": {json.dumps(cli_path or "scitex-dev")},\n'
             '      "args": ["linter", "mcp", "start"]\n'
             "    }\n"
             "  }\n"

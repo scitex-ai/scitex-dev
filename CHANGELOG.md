@@ -10,6 +10,187 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Correct the declared Python minimum to 3.10 after FastMCP became a required
+  core dependency; Python 3.9 is rejected by package metadata before resolution.
+
+- Fix static documentation verification to select root-level CommonMark fences;
+  list/quote and HTML contexts no longer create false Python findings or passes.
+  Declare the parser dependency and retain unclosed-fence errors.
+
+- Correct Sphinx unified-search scope: console-script metadata, manifest metadata and source-text heuristics do not enumerate CLI subcommands, search page bodies or verify MCP registration.
+
+- Decode percent-escaped editable source paths before metadata-first documentation root lookup, avoiding unnecessary target imports; cover encoded src/flat paths with real child-process controls.
+
+- Correct configuration onboarding: `.env` alone is not loaded by `load_config`/`show-config`; document reader-specific precedence and remove unused variable suggestions from `.env.example`.
+
+- Refuse replacing MCP client JSON when its permission mode changes during
+  preparation, preserving the external chmod decision and existing contents.
+
+- Clarify mode-specific MCP stdio qualification: legacy initialization versus
+  modern discovery, per-request envelopes, catalog checks and clean EOF exit.
+
+- Treat an empty SCITEX_DEV_CONFIG as unset so load_config reads the same
+  default file reported by get_config_path and the exposure snapshot.
+
+- Make piped symlink creation refuse occupied destinations with GNU ln -T,
+  avoiding implicit creation inside a directory or directory symlink.
+
+- Make piped moves target the exact destination path with GNU mv -T,
+  avoiding accidental nesting or destination-directory symlink traversal.
+
+- Clarify deployment dependency checks for uv profiles without pip, required
+  extras and standalone installed-provider discovery.
+
+- Accept a visible existing directory in piped mkdir with parents=False,
+  matching local exist_ok behavior while retaining file/link refusals.
+
+- Pass piped mv source and destination paths after an option separator so
+  leading-hyphen names are moved as intended.
+
+- Pass piped mkdir paths after an option separator, with or without -p,
+  so leading-hyphen directory names are created as intended.
+
+- Pass piped writer paths after a tee option separator so leading-hyphen
+  filenames are written as intended; retain existing exact-dash behavior.
+
+- Pass piped rm/rmdir paths after an option separator so relative names such
+  as --help and --version are removed as intended.
+
+- Pass piped symlink targets after an option separator so leading-hyphen target
+  text is preserved, including names such as --help and --version.
+
+- Preserve symlink inode and modification time when target replacement is
+  unchanged, retaining selected-target reporting and deliberate target updates.
+
+- Add permanent actual-missing-ripgrep content regression controls for NUL
+  exclusion, empty text and literal/regex matches, linked from the content guide.
+
+- Exclude NUL-bearing input from content edits consistently across literal,
+  regex and missing-ripgrep paths; retain path renames and empty-text matching.
+
+- Round-trip undecodable bytes through rename text reads and content writers
+  so selected token edits do not replace surrounding bytes with Unicode markers.
+
+- Match regex rename candidates with Python on the same normalized text as
+  replacement, using ripgrep for candidate listing and existing ignore rules.
+
+- Cover actual ripgrep absence with real Git-backed child processes, including
+  sorted fallback results and dirty-tree, non-Git and permission refusals.
+
+- Avoid content writes when literal or regex replacement text is unchanged,
+  preserving bytes and timestamps while retaining existing match counts.
+
+- Sort Python fallback rename candidates so preview content IDs and skip
+  requests use the same path order as ripgrep for the same selected files.
+
+- Isolate rename ripgrep discovery from external tool config so quiet or
+  excluding-glob settings cannot silently hide selected content matches.
+
+- Cover Linux non-UTF-8 rename filenames and CLI JSON path round-trips
+  with real ripgrep controls; document the verified byte-filename scope.
+
+- Preserve newline and carriage-return filenames in ripgrep rename discovery
+  by consuming raw NUL-delimited paths.
+
+- Bind rename search patterns explicitly for ripgrep so option-shaped
+  strings remain pattern data in literal and regex discovery.
+
+- Propagate returned rename refusals to text/JSON CLI failure verdicts
+  and exit 1, retaining the rename result in the JSON data envelope.
+
+- Expand regex rename preview snippets from the original match so
+  lookarounds, capture groups and zero-width replacements match application.
+
+- Apply directory destination preflight to relative-path patterns as well
+  as basenames, matching execution for literal and regex renames.
+
+- Reject non-directory directory-rename destinations before content writes;
+  preview distinguishes real-directory merges from symlink/file collisions.
+
+- Refuse file/symlink basename renames onto dangling destination symlinks
+  during preflight and report those occupied paths in preview.
+
+- Clarify that ecosystem auditor warning aliases already exist and are
+  separate from the linter MCP severity choices and aggregate reporting floor.
+
+- Validate MCP linter severity choices consistently with the linter CLI;
+  invalid strings now fail argument validation rather than silently filtering.
+
+- Clarify linter validation coverage metadata, early-return JSON limits and
+  unreported provider gaps without changing the health verdict or guards.
+
+- Enforce the existing new-only refusal for direct Python file-gate calls and the compatibility re-export, preserving full-severity normal validation.
+
+
+- Track Markdown fence state to preserve longer/tilde and EOF Python blocks while ignoring Python-looking fences inside non-Python blocks.
+
+
+- Match complete Python/py language tags in Markdown and reST instead of parsing prefix lookalikes as Python.
+
+
+- Require Markdown closing fences to end after backticks and whitespace, preserving backtick-prefixed Python string content.
+
+
+- End reST directive options at the blank separator so colon-prefixed code is retained and opt-in syntax errors remain visible.
+
+
+- Stop reST directive-option scanning at dedented fields so unrelated field bodies are not linted as Python.
+
+
+- Clarify linter finding locations versus parser labels; record the unresolved notebook cell-attribution gap.
+
+
+- Preserve nested Python indentation when linting supported space-indented Markdown fences; keep original document line numbers.
+
+
+### Fixed
+
+- Add opt-in file/source input-error propagation through owning handlers and
+  enable it for MCP, preserving default callers and valid findings.
+
+- Reject AST syntax errors at the MCP source-string boundary with location
+  diagnostics while preserving shared checker and parseable-source behavior.
+
+- Reject missing and non-regular MCP lint file targets instead of returning empty
+  findings, and describe actual dispatch/provider and syntax-check limits.
+
+- Report linter MCP catalog loading failures instead of returning a successful
+  hard-coded fallback, and include existing skill tools in server instructions.
+
+- Emit structured linter MCP doctor prerequisite results while preserving
+  failed-check exits; report registration imports without an invented tool count.
+
+- Honor JSON output for linter MCP installation snippets and start previews,
+  and escape executable paths in text-mode configuration snippets.
+
+- Emit structured formatter JSON with selected-file results, proposed changes,
+  actual writes and optional Python diffs, preserving text output and exit codes.
+
+- Connect linter MCP skill list/get to the installed canonical namespace and
+  owning reader, preserving selection policy and visible reader failures.
+
+- Align the remaining linter installation, quick-start, rule-catalog and command
+  guides with installed interfaces, exit behavior and explicit output gaps.
+
+- Declare the existing linter skill namespace under its scitex-dev owner so
+  installed metadata discovery can list and retrieve the nested guides.
+
+- Correct linter configuration help and environment guidance to name actual
+  TOML/environment readers and retain unsupported YAML/severity gaps explicitly.
+
+- Require literal IPv4 strings for direct host requested-address construction,
+  matching YAML validation instead of accepting integers, bytes or address objects.
+- Propagate registry failures while generating DHCP request declarations, so
+  malformed or unreadable input cannot silently appear to have no applicable hosts.
+- Preserve existing dangling host-registry links during first-use seeding by
+  creating missing files exclusively instead of writing through link targets.
+
+- Return no runner declaration for empty label requests with the packaged floor
+  enabled, while retaining registry validation and nonempty matching behavior.
+
+- Correct quick-start doctor statuses, diagnostic disclosure and skipped-check
+  scope, and distinguish registry listing from opt-in version queries.
+
 ### Fixed
 
 - Validate host kinds as strings before set membership, so list/mapping values

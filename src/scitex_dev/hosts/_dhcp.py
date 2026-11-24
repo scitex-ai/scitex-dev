@@ -294,10 +294,7 @@ def _request_address_hosts(
     from ._registry import list_hosts
 
     wanted = _seed.packaged_default_requested_addresses()
-    try:
-        records = {r.name: r for r in list_hosts(hosts_path=hosts_path)}
-    except Exception:
-        records = {}
+    records = {r.name: r for r in list_hosts(hosts_path=hosts_path)}
     out: list[tuple[str, str]] = []
     for name in sorted(wanted):
         addr = wanted[name]

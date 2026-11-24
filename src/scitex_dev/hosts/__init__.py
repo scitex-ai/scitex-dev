@@ -48,12 +48,13 @@ that asked for these labels?"::
 
     from scitex_dev.hosts import find_runner_host
 
-    find_runner_host(["self-hosted", "Linux", "X64", "scitex-ci"])  # -> spartan
-    find_runner_host(["self-hosted", "scitex-agentic"])             # -> None
+    destination = find_runner_host(["self-hosted", "Linux", "X64", "scitex-ci"])
+    print(destination.name if destination is not None else "(undeclared)")
+    find_runner_host([])  # -> None (an empty request is not a destination)
 
-A ``None`` is not a capacity problem — it means NO machine advertises
-that label set, so the job is undeliverable and queues forever. That is
-a real, measured failure mode: three scheduled runs (scitex-io,
+For nonempty labels, ``None`` means no declared machine advertises the
+label set. Empty labels also return ``None``. This is not a liveness or
+capacity probe. Undeliverable label sets caused a measured failure: three scheduled runs (scitex-io,
 scitex-hub, scitex-writer) sat with ``updated_at == created_at`` from
 2026-05-15 while runners sat online and idle, because they named a
 destination nothing served. The PS-224 audit rule turns that into a

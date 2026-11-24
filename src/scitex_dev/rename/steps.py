@@ -13,6 +13,7 @@ from typing import Any
 
 from .config import RenameConfig
 from .filters import (
+    _read_content_text,
     find_matching_files,
     is_django_protected_line,
     is_src_excluded,
@@ -77,9 +78,8 @@ def rename_file_contents(config: RenameConfig, directory: str) -> list[dict[str,
     for i, file_path in enumerate(files):
         file_id = f"c-{i:03d}"
 
-        try:
-            content = file_path.read_text(errors="replace")
-        except (OSError, UnicodeDecodeError):
+        content = _read_content_text(file_path)
+        if content is None:
             continue
 
         skip_entire_file = _should_skip(file_id, config.skip_ids)
@@ -115,7 +115,7 @@ def _regex_replace_content(
 
     new_content = _replace(content, config)
 
-    if not config.dry_run and not skip_entire_file:
+    if not config.dry_run and not skip_entire_file and new_content != content:
         _write_text(file_path, new_content, config.use_sudo)
 
     entry: dict[str, Any] = {
@@ -131,9 +131,7 @@ def _regex_replace_content(
             if len(snippets) >= 20:
                 break
             matched_text = m.group()
-            replaced_text = re.sub(
-                config.pattern, config.replacement, matched_text, flags=re.DOTALL
-            )
+            replaced_text = m.expand(config.replacement)
             snippets.append(
                 {
                     "id": f"{file_id}-M{len(snippets)}",
@@ -218,7 +216,9 @@ def _literal_replace_content(
         return None
 
     if matches and not config.dry_run and not skip_entire_file:
-        _write_text(file_path, "\n".join(new_lines), config.use_sudo)
+        new_content = "\n".join(new_lines)
+        if new_content != content:
+            _write_text(file_path, new_content, config.use_sudo)
 
     entry: dict[str, Any] = {
         "id": file_id,
@@ -256,7 +256,11 @@ def update_symlink_targets(
             item_id = f"st-{idx:03d}"
             new_target = _replace(target, config)
 
-            if not config.dry_run and not _should_skip(item_id, config.skip_ids):
+            if (
+                not config.dry_run
+                and not _should_skip(item_id, config.skip_ids)
+                and new_target != target
+            ):
                 _unlink_path(path, config.use_sudo)
                 _symlink_to(path, new_target, config.use_sudo)
 
@@ -290,7 +294,7 @@ def rename_symlink_names(config: RenameConfig, directory: str) -> list[dict[str,
             item_id = f"sn-{idx:03d}"
             new_name = _replace(name, config)
             new_path = path.parent / new_name
-            target_exists = new_path.exists() and new_path != path
+            target_exists = (new_path.exists() or new_path.is_symlink()) and new_path != path
 
             if not config.dry_run and not _should_skip(item_id, config.skip_ids):
                 _rename_path(path, new_path, config.use_sudo)
@@ -320,7 +324,7 @@ def rename_file_names(config: RenameConfig, directory: str) -> list[dict[str, An
             item_id = f"f-{idx:03d}"
             new_name = _replace(name, config)
             new_path = file_path.parent / new_name
-            target_exists = new_path.exists() and new_path != file_path
+            target_exists = (new_path.exists() or new_path.is_symlink()) and new_path != file_path
 
             if not config.dry_run and not _should_skip(item_id, config.skip_ids):
                 _rename_path(file_path, new_path, config.use_sudo)
@@ -398,7 +402,7 @@ def rename_directory_names(
             rel = str(dir_path.relative_to(root))
             new_rel = _replace(rel, config)
             new_path = root / new_rel
-        target_exists = new_path.exists() and new_path != dir_path
+        target_exists = (new_path.exists() or new_path.is_symlink()) and new_path != dir_path
 
         if not config.dry_run and not _should_skip(item_id, config.skip_ids):
             _mkdir(new_path.parent, parents=True, use_sudo=config.use_sudo)
@@ -413,7 +417,7 @@ def rename_directory_names(
                 "old_path": str(dir_path),
                 "new_path": str(new_path),
                 "target_exists": target_exists,
-                "merged": target_exists,
+                "merged": target_exists and new_path.is_dir() and not new_path.is_symlink(),
             }
         )
 

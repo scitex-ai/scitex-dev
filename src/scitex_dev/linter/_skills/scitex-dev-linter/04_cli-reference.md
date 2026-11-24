@@ -48,16 +48,33 @@ group under another CLI prefix retains that prefix.
 | `show-completion-zsh`      | Print the zsh completion script                  |
 | `show-completion-status`   | Show shell completion installation status        |
 
-## Configuration precedence
+## Configuration sources and limits
 
-```
-1. Explicit CLI flags
-2. ./pyproject.toml [tool.scitex-dev.linter]  (legacy [tool.scitex-linter] still read with a DeprecationWarning)
-3. ./config.yaml (project-local)
-4. $SCITEX_DEV_LINTER_CONFIG (path to a YAML file; legacy $SCITEX_LINTER_CONFIG still read)
-5. ~/.scitex/dev/linter/config.yaml (user-wide)
-6. Built-in defaults
-```
+`linter.config.load_config(start_path)` resolves settings in this order:
+
+1. `SCITEX_DEV_LINTER_*` environment values (legacy `SCITEX_LINTER_*` aliases).
+2. The first applicable `pyproject.toml` table found walking upward from the
+   target: `[tool.scitex-dev.linter]`, with `[tool.scitex-linter]` as a deprecated
+   fallback when the canonical table is empty or absent.
+3. `LinterConfig` defaults.
+
+The canonical TOML key uses `scitex-dev`, not `scitex_dev`. The current settings
+loader does not read `./config.yaml`, `SCITEX_DEV_LINTER_CONFIG`, its legacy
+counterpart, or `~/.scitex/dev/linter/config.yaml`. YAML settings support remains
+an implementation gap; those paths must not be presented as working fallbacks.
+The separate `.scitex/dev/config.yaml` `project-type` reader still applies its
+existing research-type rule and capability requirements.
+
+Command flags have their command-specific meanings. In particular,
+`validate-files --severity` controls its reporting filter and defaults to
+`info`; it does not derive that filter from `LinterConfig.severity` or the
+severity environment setting. That consumption gap remains unresolved.
+No rule, mandatory provider, exemption or exit policy changes here.
+
+Sources: `linter/config.py`, `linter/_project_type.py` and
+`linter/_cmd_check.py::_do_check`. Existing configuration/path controls:
+`tests/scitex_dev/linter/test__source_helpers.py` and
+`test_config_import_severity_promotion.py`.
 
 ## Examples
 

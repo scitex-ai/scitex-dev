@@ -113,3 +113,384 @@ def test_plain_quoted_string_is_replaceable(tmp_path, key, expected):
     result = preview_rename("business", "affairs", directory=str(tmp_path))
     # Assert
     assert result.summary[key] == expected
+
+
+def _collision_tree_state(root):
+    import os
+
+    files = [root / name for name in ["alpha.py", "beta.py", "notes.txt", "payload.txt"]]
+    return {file.name: ("link", os.readlink(file)) if file.is_symlink() else ("file", file.read_text()) for file in files if file.exists() or file.is_symlink()}
+
+
+@pytest.fixture(params=[(kind, state) for kind in ["file", "symlink"] for state in ["dangling", "existing", "absent"]])
+def _dangling_collision_case(request, tmp_path):
+    import subprocess
+
+    kind, state = request.param
+    root = tmp_path / "owned-repo"
+    root.mkdir()
+    source, target = root / "alpha.py", root / "beta.py"
+    (root / "payload.txt").write_text("VALUE = 1\n")
+    (root / "notes.txt").write_text("alpha\n")
+    if kind == "file":
+        source.write_text("VALUE = 1\n")
+    else:
+        source.symlink_to("payload.txt")
+    if state == "dangling":
+        target.symlink_to("missing.txt")
+    elif state == "existing":
+        target.write_text("DESTINATION = 2\n")
+    for args in [["init"], ["config", "user.name", "Owned rename fixture"], ["config", "user.email", "owned@example.invalid"], ["add", "."], ["commit", "-m", "owned rename fixture"]]:
+        subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True, timeout=10)
+    before = _collision_tree_state(root)
+    expected = dict(before)
+    if state == "absent":
+        expected["beta.py"] = expected.pop("alpha.py")
+        expected["notes.txt"] = ("file", "beta\n")
+    return root, state, before, expected
+
+
+def test_dangling_collision_preview_reports_occupied_target(_dangling_collision_case):
+    # Arrange
+    root, state, _, _ = _dangling_collision_case
+    # Act
+    result = preview_rename("alpha", "beta", directory=str(root))
+    # Assert
+    assert result.summary["collisions"] == int(state != "absent")
+
+
+def test_dangling_collision_preview_preserves_paths_and_bytes(_dangling_collision_case):
+    # Arrange
+    root, _, before, _ = _dangling_collision_case
+    # Act
+    preview_rename("alpha", "beta", directory=str(root))
+    # Assert
+    assert _collision_tree_state(root) == before
+
+
+@pytest.fixture
+def _dangling_collision_application(_dangling_collision_case):
+    from scitex_dev import execute_rename
+
+    root, state, before, expected = _dangling_collision_case
+    file = root / "notes.txt"
+    info = file.stat()
+    result = execute_rename("alpha", "beta", directory=str(root))
+    after = file.stat()
+    return root, state, expected, result, (info.st_ino, info.st_mtime_ns) == (after.st_ino, after.st_mtime_ns)
+
+
+def test_dangling_collision_apply_refuses_occupied_target(_dangling_collision_application):
+    # Arrange
+    _, state, _, result, _ = _dangling_collision_application
+    # Act
+    refused = bool(result.error and "Collisions detected" in result.error)
+    # Assert
+    assert refused == (state != "absent")
+
+
+def test_dangling_collision_apply_preserves_or_renames_exact_state(_dangling_collision_application):
+    # Arrange
+    root, _, expected, _, _ = _dangling_collision_application
+    # Act
+    actual = _collision_tree_state(root)
+    # Assert
+    assert actual == expected
+
+
+def test_dangling_collision_refusal_precedes_content_writes(_dangling_collision_application):
+    # Arrange
+    _, state, _, _, unchanged = _dangling_collision_application
+    # Act
+    expected = state != "absent"
+    # Assert
+    assert unchanged == expected
+
+
+def _directory_collision_state(base):
+    import os
+
+    state = {}
+    for file in base.rglob("*"):
+        if ".git" in file.parts:
+            continue
+        name = str(file.relative_to(base))
+        state[name] = ("link", os.readlink(file)) if file.is_symlink() else ("directory", "") if file.is_dir() else ("file", file.read_text())
+    return state
+
+
+@pytest.fixture(params=["dangling", "link-file", "link-directory", "file", "directory", "absent"])
+def _directory_target_case(request, tmp_path):
+    import subprocess
+
+    state = request.param
+    root, outside = tmp_path / "repo", tmp_path / "outside"
+    root.mkdir()
+    outside.mkdir()
+    (outside / "keep.txt").write_text("KEEP = 1\n")
+    (root / "notes.txt").write_text("alpha_pkg\n")
+    source, target = root / "alpha_pkg", root / "beta_pkg"
+    source.mkdir()
+    (source / "module.txt").write_text("VALUE = 1\n")
+    if state == "dangling":
+        target.symlink_to("../missing")
+    elif state == "link-file":
+        target.symlink_to("../outside/keep.txt")
+    elif state == "link-directory":
+        target.symlink_to("../outside")
+    elif state == "file":
+        target.write_text("DESTINATION = 2\n")
+    elif state == "directory":
+        target.mkdir()
+        (target / "keep.txt").write_text("DESTINATION = 2\n")
+    for args in [["init"], ["config", "user.name", "Owned directory fixture"], ["config", "user.email", "owned@example.invalid"], ["add", "."], ["commit", "-m", "owned directory fixture"]]:
+        subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True, timeout=10)
+    before = _directory_collision_state(tmp_path)
+    expected = dict(before)
+    if state in ["directory", "absent"]:
+        expected["repo/beta_pkg"] = expected.pop("repo/alpha_pkg")
+        expected["repo/beta_pkg/module.txt"] = expected.pop("repo/alpha_pkg/module.txt")
+        expected["repo/notes.txt"] = ("file", "beta_pkg\n")
+    return root, state, before, expected
+
+
+def test_directory_target_preview_counts_occupied_destination(_directory_target_case):
+    # Arrange
+    root, state, _, _ = _directory_target_case
+    # Act
+    result = preview_rename("alpha_pkg", "beta_pkg", directory=str(root))
+    # Assert
+    assert result.summary["collisions"] == int(state != "absent")
+
+
+def test_directory_target_preview_marks_only_real_directory_merge(_directory_target_case):
+    # Arrange
+    root, state, _, _ = _directory_target_case
+    # Act
+    result = preview_rename("alpha_pkg", "beta_pkg", directory=str(root))
+    # Assert
+    assert result.dir_names[0]["merged"] == (state == "directory")
+
+
+@pytest.fixture
+def _directory_target_application(_directory_target_case):
+    from scitex_dev import execute_rename
+
+    root, state, before, expected = _directory_target_case
+    info = (root / "notes.txt").stat()
+    try:
+        result = execute_rename("alpha_pkg", "beta_pkg", directory=str(root))
+    except OSError:
+        result = None
+    after = (root / "notes.txt").stat()
+    return root, state, expected, result, (info.st_ino, info.st_mtime_ns) == (after.st_ino, after.st_mtime_ns)
+
+
+def test_directory_target_apply_refuses_non_directory_destination(_directory_target_application):
+    # Arrange
+    _, state, _, result, _ = _directory_target_application
+    # Act
+    refused = bool(result and result.error and "Collisions detected" in result.error)
+    # Assert
+    assert refused == (state not in ["directory", "absent"])
+
+
+def test_directory_target_apply_preserves_or_moves_exact_owned_state(_directory_target_application):
+    # Arrange
+    root, _, expected, _, _ = _directory_target_application
+    # Act
+    actual = _directory_collision_state(root.parent)
+    # Assert
+    assert actual == expected
+
+
+def test_directory_target_refusal_precedes_all_content_writes(_directory_target_application):
+    # Arrange
+    _, state, _, _, unchanged = _directory_target_application
+    # Act
+    expected = state not in ["directory", "absent"]
+    # Assert
+    assert unchanged == expected
+
+
+@pytest.fixture(params=[(regex, state) for regex in [False, True] for state in ["dangling", "link-file", "link-directory", "file", "directory", "absent"]])
+def _relative_target_case(request, tmp_path):
+    import subprocess
+
+    regex, state = request.param
+    root, outside = tmp_path / "repo", tmp_path / "outside"
+    root.mkdir()
+    outside.mkdir()
+    (outside / "keep.txt").write_text("KEEP = 1\n")
+    (root / "notes.txt").write_text("alpha/pkg\n")
+    (root / "alpha").mkdir()
+    (root / "beta").mkdir()
+    source, target = root / "alpha/pkg", root / "beta/pkg"
+    source.mkdir()
+    (source / "module.txt").write_text("VALUE = 1\n")
+    if state == "dangling":
+        target.symlink_to("../../missing")
+    elif state == "link-file":
+        target.symlink_to("../../outside/keep.txt")
+    elif state == "link-directory":
+        target.symlink_to("../../outside")
+    elif state == "file":
+        target.write_text("DESTINATION = 2\n")
+    elif state == "directory":
+        target.mkdir()
+        (target / "keep.txt").write_text("DESTINATION = 2\n")
+    for args in [["init"], ["config", "user.name", "Owned relative fixture"], ["config", "user.email", "owned@example.invalid"], ["add", "."], ["commit", "-m", "owned relative fixture"]]:
+        subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True, timeout=10)
+    before = _directory_collision_state(tmp_path)
+    expected = dict(before)
+    blocked = state not in ["directory", "absent"]
+    if not blocked:
+        expected["repo/beta/pkg"] = expected.pop("repo/alpha/pkg")
+        expected["repo/beta/pkg/module.txt"] = expected.pop("repo/alpha/pkg/module.txt")
+        expected["repo/notes.txt"] = ("file", "beta/pkg\n")
+    pattern, replacement = (r"alpha/(pkg)", r"beta/\1") if regex else ("alpha/pkg", "beta/pkg")
+    return root, regex, pattern, replacement, blocked, expected
+
+
+def test_relative_directory_target_checks_preflight_before_writes(_relative_target_case):
+    # Arrange
+    from scitex_dev import execute_rename
+
+    root, regex, pattern, replacement, blocked, expected = _relative_target_case
+    info = (root / "notes.txt").stat()
+    # Act
+    try:
+        result = execute_rename(pattern, replacement, directory=str(root), regex=regex)
+    except OSError:
+        result = None
+    after = (root / "notes.txt").stat()
+    refused = bool(result and result.error and "Collisions detected" in result.error)
+    preserved = (info.st_ino, info.st_mtime_ns) == (after.st_ino, after.st_mtime_ns)
+    # Assert
+    assert (refused, _directory_collision_state(root.parent) == expected, preserved) == (blocked, True, blocked)
+
+
+@pytest.fixture(params=[
+    (r"(?<=prefix:)alpha", "beta", "prefix:alpha suffix\n", "alpha", "beta", "prefix:beta suffix\n"),
+    (r"alpha(?= suffix)", "beta", "prefix:alpha suffix\n", "alpha", "beta", "prefix:beta suffix\n"),
+    (r"(?P<word>alpha)(?= suffix)", r"\g<word>-beta", "prefix:alpha suffix\n", "alpha", "alpha-beta", "prefix:alpha-beta suffix\n"),
+    (r"(?<=prefix:)(a)(lpha)", r"\2-\1", "prefix:alpha suffix\n", "alpha", "lpha-a", "prefix:lpha-a suffix\n"),
+    (r"(?=alpha)", "MARK", "prefix:alpha suffix\n", "", "MARK", "prefix:MARKalpha suffix\n"),
+    (r"(alpha)", r"\1-beta", "prefix:alpha suffix\n", "alpha", "alpha-beta", "prefix:alpha-beta suffix\n"),
+    (r"^(alpha)", "beta", "alpha suffix\n", "alpha", "beta", "beta suffix\n"),
+    (r"(?<=prefix:)alpha", r"\n", "prefix:alpha suffix\n", "alpha", "\n", "prefix:\n suffix\n"),
+])
+def _regex_preview_context_case(request, tmp_path):
+    import subprocess
+
+    pattern, replacement, body, before, after, expected = request.param
+    root = tmp_path / "owned-repo"
+    root.mkdir()
+    file = root / "owned.txt"
+    file.write_text(body)
+    for args in [["init"], ["config", "user.name", "Owned regex fixture"], ["config", "user.email", "owned@example.invalid"], ["add", "."], ["commit", "-m", "owned regex fixture"]]:
+        subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True, timeout=10)
+    info = file.stat()
+    return root, file, pattern, replacement, body, before, after, expected, (file.read_bytes(), info.st_ino, info.st_mtime_ns)
+
+
+def test_regex_context_preview_uses_original_match(_regex_preview_context_case):
+    # Arrange
+    root, _, pattern, replacement, _, before, after, _, _ = _regex_preview_context_case
+    # Act
+    result = preview_rename(pattern, replacement, directory=str(root), regex=True)
+    entry = result.contents[0]
+    # Assert
+    assert (entry["matches"], entry["lines"][0]["before"], entry["lines"][0]["after"]) == (1, before, after)
+
+
+def test_regex_context_preview_never_rewrites_file(_regex_preview_context_case):
+    # Arrange
+    root, file, pattern, replacement, _, _, _, _, before = _regex_preview_context_case
+    # Act
+    preview_rename(pattern, replacement, directory=str(root), regex=True)
+    info = file.stat()
+    # Assert
+    assert (file.read_bytes(), info.st_ino, info.st_mtime_ns) == before
+
+
+def test_regex_context_apply_keeps_whole_file_semantics(_regex_preview_context_case):
+    # Arrange
+    from scitex_dev import execute_rename
+
+    root, file, pattern, replacement, _, _, _, expected, _ = _regex_preview_context_case
+    # Act
+    result = execute_rename(pattern, replacement, directory=str(root), regex=True)
+    # Assert
+    assert (result.error, file.read_text()) == (None, expected)
+
+
+import os
+import subprocess
+from scitex_dev import execute_rename
+
+
+@pytest.fixture(params=[
+    (False, "needle", "needle", b"needle\n", b"needle\n", False, 1),
+    (True, "(needle)", r"\1", b"needle\n", b"needle\n", False, 1),
+    (False, "needle", "needle", b"needle\r\n", b"needle\r\n", False, 1),
+    (True, "needle", r"\g<0>", b"needle\r\n", b"needle\r\n", False, 1),
+    (False, "needle", "changed", b"needle\n", b"changed\n", False, 1),
+    (True, "(needle)", r"\1-changed", b"needle\n", b"needle-changed\n", False, 1),
+    (False, "needle", "changed", b"unrelated\n", b"unrelated\n", False, 0),
+    (True, "(needle)", "changed", b"needle\n", b"needle\n", True, 1),
+])
+def content_noop_case(request, tmp_path):
+    regex, pattern, replacement, body, expected, skipped, matches = request.param
+    root = tmp_path / "owned-repo"
+    root.mkdir()
+    file = root / "owned.txt"
+    file.write_bytes(body)
+    sibling = root / "other.txt"
+    sibling.write_bytes(b"unrelated\n")
+    for args in [["init"], ["config", "user.name", "Owned unchanged-text fixture"], ["config", "user.email", "owned@example.invalid"], ["add", "."], ["commit", "-m", "owned unchanged-text fixture"]]:
+        subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True, timeout=10)
+    # A known old mtime makes a needless write observable without sleeping.
+    os.utime(file, ns=(1700000000000000000, 1700000000000000000))
+    assert not subprocess.check_output(["git", "-C", str(root), "status", "--porcelain"], timeout=10)
+    before = [(f.read_bytes(), f.stat().st_ino, f.stat().st_mtime_ns) for f in (file, sibling)]
+    options = {"directory": str(root), "regex": regex, "skip_ids": ["c-000"] if skipped else []}
+    return file, sibling, pattern, replacement, options, expected, matches, before
+
+
+def test_content_noop_preview_retains_match_counts(content_noop_case):
+    # Arrange
+    _, _, pattern, replacement, options, _, matches, _ = content_noop_case
+    # Act
+    result = preview_rename(pattern, replacement, **options)
+    # Assert
+    assert (result.summary["content_files"], result.summary["content_matches"]) == (int(matches > 0), matches)
+
+
+def test_content_noop_preview_preserves_bytes_and_metadata(content_noop_case):
+    # Arrange
+    file, sibling, pattern, replacement, options, _, _, before = content_noop_case
+    # Act
+    preview_rename(pattern, replacement, **options)
+    after = [(f.read_bytes(), f.stat().st_ino, f.stat().st_mtime_ns) for f in (file, sibling)]
+    # Assert
+    assert after == before
+
+
+def test_content_noop_application_preserves_unchanged_file(content_noop_case):
+    # Arrange
+    file, sibling, pattern, replacement, options, expected, _, before = content_noop_case
+    # Act
+    result = execute_rename(pattern, replacement, **options)
+    sibling_after = (sibling.read_bytes(), sibling.stat().st_ino, sibling.stat().st_mtime_ns)
+    # Assert
+    assert (result.error, file.read_bytes(), file.stat().st_ino, file.stat().st_mtime_ns == before[0][2], sibling_after) == (None, expected, before[0][1], expected == before[0][0], before[1])
+
+
+def test_content_noop_application_retains_match_counts(content_noop_case):
+    # Arrange
+    _, _, pattern, replacement, options, _, matches, _ = content_noop_case
+    # Act
+    result = execute_rename(pattern, replacement, **options)
+    # Assert
+    assert (result.summary["content_files"], result.summary["content_matches"]) == (int(matches > 0), matches)

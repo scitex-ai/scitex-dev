@@ -1,8 +1,9 @@
-"""Flake8 plugin for the SciTeX linter (now part of scitex-dev).
+#!/usr/bin/env python3
+"""Flake8 adapter class for the SciTeX linter.
 
-Usage:
-    pip install scitex-dev          # legacy 'scitex-linter' alias also works
-    flake8 --select STX script.py
+The current Dev distribution declares no ``flake8.extension`` entry point.
+This class's presence does not automatically register an installed plugin;
+registration, the flake8 tool and an actual plugin run need qualification.
 """
 
 import ast

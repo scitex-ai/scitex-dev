@@ -8,7 +8,8 @@ dynamic = ["version"]
 description = "Shared developer utilities for the SciTeX ecosystem"
 readme = "README.md"
 license = "AGPL-3.0-only"
-requires-python = ">=3.9"
+# FastMCP is mandatory in the base install and requires Python 3.10+.
+requires-python = ">=3.10"
 authors = [{name = "Yusuke Watanabe", email = "ywatanabe@scitex.ai"}]
 keywords = ["scitex", "developer-tools", "documentation", "llm-friendly", "mcp"]
 
@@ -64,6 +65,8 @@ dependencies = [
     # always have it transitively; a clean `uv` venv does not, which is why it
     # only ever failed in CI.
     "packaging>=23.2",
+    # Static documentation fence context uses CommonMark block tokens.
+    "markdown-it-py>=3.0.0",
     # SECOND INSTANCE OF THE DEFECT DIRECTLY ABOVE, found 2026-08-10 by
     # scitex-hub reporting that `scitex-dev[cli-audit]` provisions nothing.
     # It does not, but that extra was empty on purpose (its contents became
@@ -233,6 +236,7 @@ scitex-dev = "scitex_dev"
 
 [project.entry-points."scitex_dev.skills"]
 scitex-dev = "scitex_dev"
+scitex-dev-linter = "scitex_dev.linter"
 general = "scitex_dev"
 scientific = "scitex_dev"
 
@@ -401,6 +405,7 @@ scitex_dev = [
     "_branding/*.yaml",
     "_cli/audit/_summary/data/*",
     "linter/_rules/_verb_lexicon.txt",
+    "linter/_skills/**/*",
     "_sphinx_html/**/*",
     "_sphinx_html/**/.[!.]*",
     "_ecosystem/ci_template/templates/*.tmpl",
