@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Correct the declared Python minimum to 3.10 after FastMCP became a required
+  core dependency; Python 3.9 is rejected by package metadata before resolution.
+
 - Fix static documentation verification to select root-level CommonMark fences;
   list/quote and HTML contexts no longer create false Python findings or passes.
   Declare the parser dependency and retain unclosed-fence errors.
