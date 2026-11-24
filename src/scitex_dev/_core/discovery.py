@@ -18,6 +18,7 @@ import importlib
 import scitex_logging as slogging
 from pathlib import Path
 from typing import Optional
+from urllib.parse import unquote
 
 logger = slogging.getLogger(__name__)
 
@@ -174,7 +175,7 @@ def _get_package_root_fast(module_name: str) -> Optional[Path]:
             du = _json.loads(du_text)
             url = du.get("url", "")
             if url.startswith("file:///"):
-                project_root = Path(url[7:])
+                project_root = Path(unquote(url[7:]))
                 # Standard layout: src/<module_name>/
                 src_dir = project_root / "src" / module_name
                 if src_dir.is_dir():
