@@ -10,6 +10,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Correct Sphinx unified-search scope: console-script metadata, manifest metadata and source-text heuristics do not enumerate CLI subcommands, search page bodies or verify MCP registration.
+
 - Decode percent-escaped editable source paths before metadata-first documentation root lookup, avoiding unnecessary target imports; cover encoded src/flat paths with real child-process controls.
 
 - Correct configuration onboarding: `.env` alone is not loaded by `load_config`/`show-config`; document reader-specific precedence and remove unused variable suggestions from `.env.example`.
