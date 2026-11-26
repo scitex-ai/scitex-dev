@@ -10,6 +10,23 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Store default is now the per-user local store, never a fleet host**
+  (#1111). With `SCITEX_STORE_DSN` unset, `host_store()` resolves to a
+  PostgreSQL cluster under `$SCITEX_DIR/store/local` reached over a 0700
+  UNIX socket (no TCP), created with `initdb` and started on the first
+  connect. It previously resolved to `postgresql://scitex-primary:55432/scitex`,
+  a private fleet hostname, so PyPI users outside the fleet could not record
+  provenance or run `clew verify`, and fleet projects wrote to the shared
+  store without naming it. `DEFAULT_CENTRAL_HOST` is removed. Deployments set
+  `SCITEX_STORE_DSN` in their own environment; an explicit DSN still wins and
+  never falls through to the local store. A host that manages a deployment
+  node (`~/.scitex/pg` exists) is refused the local default with an
+  actionable error. Missing server binaries fail loudly, naming apt, brew,
+  conda and the new optional `scitex-dev[local-store]` extra (bundled
+  binaries via `pgserver`, CPython <= 3.12, included in `[all]`).
+
 ### Fixed
 
 - Validate host kinds as strings before set membership, so list/mapping values

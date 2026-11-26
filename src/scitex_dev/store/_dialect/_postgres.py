@@ -70,6 +70,15 @@ class PostgresDialect(Dialect):
                 "while no other host ever saw one."
             ) from None
 
+        # The per-user local store (the default when SCITEX_STORE_DSN is
+        # unset) is created and started HERE, on first connect, so resolving
+        # a target stays inert. Any other DSN is connected to as given.
+        from .._local import _local_database, ensure_local_store
+
+        local_database = _local_database(target.dsn)
+        if local_database is not None:
+            ensure_local_store(local_database)
+
         try:
             # `.dsn` by name — `str(locator)` renders a credential-free
             # summary precisely so a password cannot reach a log line.

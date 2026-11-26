@@ -189,6 +189,16 @@ order in `scitex_dev.store.host_store`. A default that lands on a local replica
 does not fail at connect time; it fails on the first write, or serves stale
 reads indefinitely, which is the silent wrong answer this ADR keeps cataloguing.
 
+> **Amended 2026-11-26 (scitex-dev#1111).** The central node is no longer a
+> CODE default. Compiling one deployment's hostname into a public wheel made
+> every PyPI user outside the fleet fail on a host they had never heard of.
+> The fleet now names its primary in its own environment
+> (`SCITEX_STORE_DSN`: dotfiles `.bashrc` for host shells, sac
+> `FLEET_DEFAULT_ENV` for containers), and an unset DSN resolves to a
+> per-user local store (`scitex_dev.store._local`). The replica hazard above
+> is still guarded: a host carrying `~/.scitex/pg` is REFUSED the local
+> default rather than handed a private store.
+
 ### 5. SSoT means one implementation, not one convention
 Leaves consume `scitex_dev.store`. They do not re-implement it to a
 documented spec. A convention that each package implements separately is

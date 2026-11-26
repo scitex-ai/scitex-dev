@@ -152,10 +152,39 @@ If that test fails, make the import lighter. Do not shorten the list — a
 gate loosened until it passes is a deleted gate that everyone still
 believes in.
 
+## Where the store lives
+
+`host_store()` resolves in two steps, and neither is a remote host:
+
+1. **`SCITEX_STORE_DSN`** when set. A deployment — a lab server, SciTeX
+   Cloud, a fleet with a central primary — names its store here, in its own
+   environment (shell profile, service unit, container spec).
+2. Otherwise the **per-user local store**: a PostgreSQL cluster under
+   `$SCITEX_DIR/store/local` (`~/.scitex/store/local`), reached only over a
+   0700 UNIX socket, never TCP. It is created with `initdb` and started on
+   the first connect, so `pip install scitex` followed by `@stx.session` and
+   `clew verify` needs no configuration.
+
+The local store needs PostgreSQL server binaries (`initdb`, `pg_ctl`). They
+are found on `PATH`, in the Debian/Ubuntu, Homebrew and conda layouts, or in
+the optional bundled wheel (`pip install 'scitex-dev[local-store]'`,
+Python <= 3.12). Without them the first connect fails with a message naming
+each option. Nothing ever falls back to a remote host, and a set but
+unreachable `SCITEX_STORE_DSN` fails rather than falling through to the
+local store.
+
+A host that manages a node of a shared deployment (`~/.scitex/pg` exists) is
+refused the local default: there, an unset `SCITEX_STORE_DSN` means a
+process lost its configuration, and a private store would silently diverge.
+
+The local server keeps running after the process exits. Stop it with
+`pg_ctl -D ~/.scitex/store/local/pgdata stop`; delete that directory to
+discard every record in it.
+
 ## Quick start
 
 `host_store(pkg="cards")` resolves `SCITEX_STORE_DSN` when configured, then
-the default central PostgreSQL target. Use an explicitly configured, writable
+the per-user local PostgreSQL store (see "Where the store lives" below). Use an explicitly configured, writable
 example database or isolated schema for this example; it writes record `c1`.
 The two quick starts are executed against a disposable PostgreSQL schema by
 `tests/scitex_dev/store/test___init__.py`, including a reopen/read check.

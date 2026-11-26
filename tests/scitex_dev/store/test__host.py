@@ -1,16 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""The host store resolves to the central Postgres, and never falls back.
+"""The host store resolves to an explicit DSN, else the per-user local store.
 
 These lock the decisions that are cheapest to erode later: the default
-engine, the default TARGET (the fleet's one writable node, not this host's
-read-only replica), the refusal of Postgres's own 5432, and — the one that
-matters most — that a host with no Postgres gets an ERROR rather than a
-private local file nobody else can see.
-
-The default flipped on 2026-08-30. It was this host's own Postgres over a
-UNIX socket, measured to be a read-only replica of one central primary, and
-so a store that could not be written and said nothing about it.
+engine, the default TARGET (a store the user owns — never a deployment's
+host compiled into the wheel, scitex-dev#1111), the refusal of Postgres's own
+5432, and that a host managing a deployment node gets an ERROR rather than a
+private store nobody else can see.
 
 The environment is manipulated through real ``os.environ`` fixtures that
 restore on teardown, not through ``monkeypatch``: the variable IS the
@@ -28,25 +24,39 @@ import pytest
 
 from scitex_dev.store import Backend, StoreTarget, host_store, socket_dsn
 from scitex_dev.store._errors import StoreTargetError
+from scitex_dev.store._local import LOCAL_ROLE, local_store_dir, local_store_dsn
 from scitex_dev.store._host import (
-    DEFAULT_CENTRAL_HOST,
+    DEFAULT_PGDATA_DIR,
     DEFAULT_SOCKET_DIR,
-    DEFAULT_TCP_PORT,
     STORE_DSN_ENV,
     is_socket_dsn,
     require_durable_pgdata,
 )
 
 
+_ISOLATED_VARS = (STORE_DSN_ENV, "HOME", "SCITEX_DIR")
+
+
 @pytest.fixture
-def unconfigured_host() -> Iterator[None]:
-    """A host with no override set — the state a fresh machine is in."""
-    saved = os.environ.pop(STORE_DSN_ENV, None)
+def unconfigured_host(tmp_path) -> Iterator[Path]:
+    """A fresh machine: no override, an empty HOME, no deployment node.
+
+    HOME is redirected because the managed-node refusal reads
+    ``~/.scitex/pg``; on a host that runs one, the real HOME would make every
+    default-resolution test exercise the refusal instead. Yields the HOME.
+    """
+    saved = {key: os.environ.get(key) for key in _ISOLATED_VARS}
+    os.environ.pop(STORE_DSN_ENV, None)
+    os.environ.pop("SCITEX_DIR", None)
+    os.environ["HOME"] = str(tmp_path)
     try:
-        yield
+        yield tmp_path
     finally:
-        if saved is not None:
-            os.environ[STORE_DSN_ENV] = saved
+        for key, value in saved.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
 
 
 @pytest.fixture
@@ -66,14 +76,13 @@ def set_store_override() -> Iterator[Callable[[str], None]]:
             os.environ[STORE_DSN_ENV] = saved
 
 
-class TestDefaultIsTheCentralPostgres:
-    """An unconfigured host resolves to the fleet's ONE WRITABLE node.
+class TestDefaultIsThePerUserLocalStore:
+    """An unconfigured machine resolves to a store its user owns.
 
-    Not to its own. Measured 2026-08-30, `scitex-primary:55432` reports
-    `pg_is_in_recovery() = FALSE` and every other host's local 55432 reports
-    `TRUE`, all of them carrying the same `system_identifier` — one cluster,
-    streaming replication, one primary. Resolving to the local node handed
-    back a store that could not be written, with nothing failing to say so.
+    Until 0.66.x it resolved to one fleet's central node by its private
+    hostname (scitex-dev#1111): outside that fleet every store-backed step
+    failed on a host the user had never heard of, and inside it a fresh
+    project wrote into the shared store without naming it.
     """
 
     def test_default_backend_is_postgres(self, unconfigured_host):
@@ -84,58 +93,138 @@ class TestDefaultIsTheCentralPostgres:
         # Assert
         assert target.backend is Backend.POSTGRES
 
-    def test_default_dsn_names_the_central_host(self, unconfigured_host):
-        """The one node that can accept a write."""
+    def test_default_dsn_is_the_local_store(self, unconfigured_host):
         # Arrange
         package = "cards"
         # Act
         dsn = host_store(pkg=package).dsn or ""
         # Assert
-        assert f"//{DEFAULT_CENTRAL_HOST}:" in dsn
+        assert dsn == local_store_dsn()
 
-    def test_default_dsn_carries_the_fleet_port(self, unconfigured_host):
-        """55432, explicitly — this replaces the assertion that the default
-        carried no port at all, which was true only while it was a socket."""
-        # Arrange
-        package = "cards"
-        # Act
-        dsn = host_store(pkg=package).dsn or ""
-        # Assert
-        assert f":{DEFAULT_TCP_PORT}/" in dsn
-
-    def test_default_dsn_is_not_a_socket_directory(self, unconfigured_host):
-        """It was one until 2026-08-30, and that is exactly the defect: a
-        socket can only ever reach the local instance, which is a replica."""
+    def test_default_dsn_reaches_a_socket_not_a_network_host(
+        self, unconfigured_host
+    ):
+        """No TCP authority: nothing off this machine can be named."""
         # Arrange
         package = "cards"
         # Act
         target = host_store(pkg=package)
         # Assert
-        assert not is_socket_dsn(target)
+        assert is_socket_dsn(target)
+
+    def test_a_short_store_root_keeps_its_socket_inside(self):
+        # Arrange
+        from scitex_dev.store._local import _socket_dir
+
+        root = Path("/home/u/.scitex/store/local")
+        # Act
+        socket_dir = _socket_dir(root)
+        # Assert
+        assert socket_dir == root / "run"
+
+    def test_a_deep_store_root_moves_its_socket_to_a_short_path(self):
+        """Past the kernel's socket-path limit the server would not start."""
+        # Arrange
+        from scitex_dev.store._local import _MAX_SOCKET_PATH, _socket_dir
+
+        root = Path("/" + "d" * _MAX_SOCKET_PATH) / ".scitex" / "store" / "local"
+        # Act
+        socket_path = _socket_dir(root) / ".s.PGSQL.55432"
+        # Assert
+        assert len(str(socket_path)) <= _MAX_SOCKET_PATH
+
+    def test_scitex_dir_relocates_the_local_store(self, unconfigured_host):
+        # Arrange
+        os.environ["SCITEX_DIR"] = str(unconfigured_host / "elsewhere")
+        # Act
+        root = local_store_dir()
+        # Assert
+        assert root == unconfigured_host / "elsewhere" / "store" / "local"
 
     def test_default_dsn_does_not_carry_the_postgres_default_port(
         self, unconfigured_host
     ):
-        """5432 stays refused on TCP too. It collides with any system
-        Postgres, and an address that could name either is how an SSH tunnel
-        to a laptop passed for a local server on 2026-08-09."""
+        """5432 stays refused: it collides with any system Postgres."""
         # Arrange
         package = "cards"
         # Act
         dsn = host_store(pkg=package).dsn or ""
         # Assert
-        assert ":5432" not in dsn
+        assert "port=5432" not in dsn
 
     def test_default_dsn_carries_no_unexpanded_home(self, unconfigured_host):
-        """A literal '~' reaching libpq is a lookup for a directory named
-        '~'. The default no longer holds a path, so this now pins that it
-        did not acquire one."""
+        """A literal '~' reaching libpq is a lookup for a directory named '~'."""
         # Arrange
         package = "cards"
         # Act
         dsn = host_store(pkg=package).dsn or ""
         # Assert
         assert "~" not in dsn
+
+    def test_default_dsn_names_its_role(self, unconfigured_host):
+        """A deployment's PGUSER must not be presented to the local cluster."""
+        # Arrange
+        package = "cards"
+        # Act
+        dsn = host_store(pkg=package).dsn or ""
+        # Assert
+        assert dsn.startswith(f"postgresql://{LOCAL_ROLE}@/")
+
+    def test_no_deployment_host_is_the_default(self, unconfigured_host):
+        """The fleet's private hostname must never be a library default."""
+        # Arrange
+        package = "cards"
+        # Act
+        dsn = host_store(pkg=package).dsn or ""
+        # Assert
+        assert "scitex-primary" not in dsn
+
+    def test_resolution_is_inert(self, unconfigured_host):
+        """Resolving creates nothing; the cluster is made on first connect."""
+        # Arrange
+        package = "cards"
+        # Act
+        host_store(pkg=package)
+        # Assert
+        assert not local_store_dir().exists()
+
+
+class TestAManagedNodeIsRefusedTheLocalDefault:
+    """A host running a deployment node must name its store explicitly.
+
+    There, an unset DSN means a process lost its configuration; a private
+    store would accept every write and diverge with nothing in any log.
+    """
+
+    def test_an_unset_dsn_on_a_managed_node_raises(self, unconfigured_host):
+        # Arrange
+        (unconfigured_host / ".scitex" / "pg").mkdir(parents=True)
+        # Act
+        # Assert
+        with pytest.raises(StoreTargetError, match="SCITEX_STORE_DSN"):
+            host_store(pkg="cards")
+
+    def test_an_explicit_dsn_on_a_managed_node_still_wins(
+        self, unconfigured_host, set_store_override
+    ):
+        # Arrange
+        (unconfigured_host / ".scitex" / "pg").mkdir(parents=True)
+        dsn = "postgresql://someone@db.example:55432/scitex"
+        set_store_override(dsn)
+        # Act
+        target = host_store(pkg="cards")
+        # Assert
+        assert target.dsn == dsn
+
+    def test_the_managed_node_marker_is_the_managed_pgdata(self):
+        """The refusal keys on the very directory the managed node uses."""
+        # Arrange
+        from scitex_dev.store._local import _MANAGED_NODE_PGDATA
+
+        # Act
+        same = _MANAGED_NODE_PGDATA == DEFAULT_PGDATA_DIR
+        # Assert
+        assert same
 
 
 @pytest.fixture
@@ -348,7 +437,7 @@ class TestTheTestHarnessNeverReachesTheFleetStore:
             offered = str(exc)
 
         # Assert
-        assert DEFAULT_CENTRAL_HOST not in offered
+        assert "scitex-primary" not in offered
 
     def test_the_testing_helper_does_not_resolve_the_host_store_at_all(self):
         # Arrange

@@ -32,9 +32,9 @@ def resolve_target(plugin: StorePlugin) -> StoreTarget:
     """WHERE ``plugin``'s store lives on this host.
 
     Goes through :func:`~.._host.host_store`, which has exactly two steps
-    (``SCITEX_STORE_DSN`` or the per-host Postgres) and deliberately no
-    third: a host whose Postgres is down must fail loudly rather than start
-    writing to a private local file that shares nothing. A fallback here
+    (``SCITEX_STORE_DSN``, else the per-user local PostgreSQL) and
+    deliberately no third: a configured store that is down must fail loudly
+    rather than start writing to a private local file that shares nothing. A fallback here
     would reproduce the 2026-08-09 shape by design — a write that succeeds
     locally while reaching nobody.
     """
