@@ -171,6 +171,8 @@ dev = [
     # degrades to absent, which is the documented plugin contract. Install
     # `scitex-cards` explicitly to turn it on.
     "scitex-events>=0.1",
+    # PS-210 dev-extras completeness: the local-store binaries source.
+    'pgserver>=0.1.4; python_version < "3.13"',
 ]
 docs = [
     "sphinx>=7.0",
