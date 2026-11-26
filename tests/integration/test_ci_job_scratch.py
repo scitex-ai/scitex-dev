@@ -299,7 +299,7 @@ def _fixture_digest(call, digest):
     if build.get("with") != {
         "suite": "dev-release",
         "release_tag": "${{ inputs.version || '' }}",
-        "runs_on": '["self-hosted","Linux","X64","scitex-org-cpu"]',
+        "runs_on": '["self-hosted","Linux","X64","scitex-org-cpu","scitex-compute-02"]',
     }:
         return ""
     plan = json.loads(json.dumps({"image": {"sha256": digest}}))
