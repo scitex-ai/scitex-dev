@@ -31,7 +31,7 @@ is not merely discouraged here — it is unavailable.
 
 Quick start
 -----------
-The resolver honors ``SCITEX_STORE_DSN``, then the central PostgreSQL default.
+The resolver honors ``SCITEX_STORE_DSN``, then the per-user local store.
 Use a writable example database or isolated schema: this writes record ``c1``.
 The README and docstring examples are exercised by
 ``tests/scitex_dev/store/test___init__.py``.

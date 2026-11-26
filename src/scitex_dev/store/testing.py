@@ -100,23 +100,16 @@ def _is_writable(dsn: str) -> bool:
     return _writability(dsn)[0]
 
 
-def _pg_bin(name: str) -> "str | None":
-    """Locate a PostgreSQL binary, including the Debian versioned layout.
+def _pg_bin(name: str) -> str | None:
+    """Locate a PostgreSQL server binary — the same search the local store uses.
 
     Debian and Ubuntu keep ``initdb`` and ``pg_ctl`` out of PATH under
-    ``/usr/lib/postgresql/<major>/bin``, so a plain ``which`` reports them
-    absent on hosts that are in fact running PostgreSQL — which is every host
-    in this fleet.
+    ``/usr/lib/postgresql/<major>/bin``; Homebrew, conda and the ``pgserver``
+    wheel each have their own layout. See :func:`._local.pg_bin`.
     """
-    found = shutil.which(name)
-    if found:
-        return found
-    candidates = sorted(
-        Path("/usr/lib/postgresql").glob(f"*/bin/{name}"),
-        key=lambda p: p.parts[-3],
-        reverse=True,
-    )
-    return str(candidates[0]) if candidates else None
+    from ._local import pg_bin
+
+    return pg_bin(name)
 
 
 @contextlib.contextmanager
@@ -188,9 +181,9 @@ def writable_dsn() -> Iterator[str]:
     was MEASURED to fail — the caller turns that into a skip or a failure.
 
     A third route used to sit between them, resolving this host's own store and
-    using it when writable. It is deliberately gone: the store default now names
-    the central primary, so that route could only ever have handed a test suite
-    the live fleet board. The long comment in the body records the whole shape,
+    using it when writable. It is deliberately gone: the store default is the
+    store a user or a deployment keeps its real records in, so that route could
+    only ever have handed a test suite live data. The long comment in the body records the whole shape,
     because "we deleted a fallback" is the kind of change a later reader
     reasonably tries to undo.
     """
@@ -231,10 +224,10 @@ def writable_dsn() -> Iterator[str]:
     # exactly one thing. A route with a single possible value, and that value
     # forbidden, is not a fallback — so it is gone rather than guarded.
     tried.append(
-        "  this host's store — NOT TRIED, deliberately. The store default now "
-        "names the central primary, and a test must never write to the fleet "
-        f"board. Point {STORE_DSN_ENV} at a throwaway cluster to choose a "
-        "specific server."
+        "  this host's store — NOT TRIED, deliberately. The store default "
+        "holds a user's or a deployment's real records, and a test must never "
+        f"write to them. Point {STORE_DSN_ENV} at a throwaway cluster to "
+        "choose a specific server."
     )
 
     try:

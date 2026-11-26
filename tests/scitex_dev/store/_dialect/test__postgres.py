@@ -31,7 +31,8 @@ import os
 
 import pytest
 
-from scitex_dev.store import host_store
+
+from ..conftest import BASE_DSN
 from scitex_dev.store._dialect._postgres import PostgresDialect
 from scitex_dev.store._target import Backend, StoreTarget
 
@@ -44,7 +45,13 @@ from scitex_dev.store._target import Backend, StoreTarget
 #: string, not the resolver the product uses. So it goes through
 #: ``host_store()`` — the single switch, which reads ``SCITEX_STORE_DSN`` and
 #: otherwise falls back to this host's socket.
-_dsn = host_store(pkg="scitex_dev_tests", name="dialect").dsn
+#:
+#: 2026-11-26 (scitex-dev#1111): that resolution, with the DSN unset, named
+#: the fleet's central primary — so collecting this file connected a test to
+#: the live store. It now uses the suite's verified-writable cluster
+#: (``conftest.BASE_DSN``: the configured DSN, else a throwaway cluster),
+#: which is what every other database-backed test here already does.
+_dsn = BASE_DSN
 
 
 def test_the_identity_statement_asks_which_cluster():
@@ -252,7 +259,7 @@ def two_schemas():
     psycopg = pytest.importorskip("psycopg")
     # The PRIMARY: the loopback is a standby and refuses CREATE SCHEMA, which
     # turned this probe into a permanent skip.
-    base = host_store(pkg="scitex_dev_tests", name="searchpath").dsn
+    base = BASE_DSN
     tag = uuid.uuid4().hex[:10]
     decoy, target = f"probe_decoy_{tag}", f"probe_target_{tag}"
     unusable = (
