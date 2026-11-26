@@ -10,6 +10,20 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.67.0] - 2026-11-27
+
+> **Deployment note.** From this release an unset `SCITEX_STORE_DSN` no longer
+> reaches the fleet primary. A host carrying `~/.scitex/pg` refuses the local
+> default outright, so export `SCITEX_STORE_DSN` on every fleet node (dotfiles
+> #608) before installing 0.67.0 there.
+
+### CI
+
+- Release `publish`/`release` jobs and the `dev-release` test/build legs run on
+  `scitex-compute-02`, the host the Dev profile's Apptainer 1.5.5 pin is
+  qualified on (scitex-ai/.github#141); compute-04 is retired from Dev CI
+  (#1115).
+
 ### Changed
 
 - **Store default is now the per-user local store, never a fleet host**
