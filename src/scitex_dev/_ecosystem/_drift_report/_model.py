@@ -229,6 +229,7 @@ class DriftMatrix:
                 "total": len(self.packages),
                 "consistent": len(self.consistent_packages),
                 "drifting": len(self.drifting),
+                "unjudgeable": len(self.unjudgeable),
             },
             "packages": [p.to_dict() for p in self.packages],
             "package_drift_warnings": [w.to_dict() for w in self.package_drift_warnings],

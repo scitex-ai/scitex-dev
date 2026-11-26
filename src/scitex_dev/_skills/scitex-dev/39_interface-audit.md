@@ -48,6 +48,12 @@ Record the checkout commit, imported/installed versions and rule-provider
 metadata separately. Python source auditing must inspect the resolved checkout,
 not substitute a different installed copy. Missing source is not auditable.
 
+An unresolved declaration target yields no declared skips; it does not establish
+that the package is clean. Unexpected resolver failures propagate before child
+audits start. Explicit paths still load their declarations, and malformed skip
+configs still refuse. Owning source: `_cli/ecosystem/_cmds/_audit_masking.py::resolve_skip_rules`;
+controls: `tests/scitex_dev/_cli/ecosystem/_cmds/test__audit_masking_resolution_followup.py`.
+
 The ecosystem commands `audit-all`, `audit-cli`, `audit-mcp-tools`,
 `audit-project`, `audit-django`, `audit-local-state` and `audit-registry-layout`
 accept both `--severity warn` and `--severity warning` for the same warning
@@ -56,6 +62,22 @@ defaults, findings, filters and exit policies are unchanged. Other severity
 vocabularies, such as hook actions, are separate contracts. Source-backed
 parser and real project-audit parity controls live in
 `tests/scitex_dev/_cli/test__severity.py`.
+
+That spelling parity does not establish a shared reporting floor. The
+`audit-all --severity` option currently reaches only `audit-cli`; the MCP,
+skills, Python-API, project and Django auditors retain their own defaults.
+For example, `audit-all --severity info` does not request info-level project
+findings. To select the project auditor's own floor, invoke it explicitly:
+
+```bash
+scitex-dev ecosystem audit-project scitex-dev --path . --severity info --json
+```
+
+`_cli/ecosystem/_cmds/_audit_all.py::_run_audit` owns this dispatch behavior;
+the aggregate uses its existing child exits, finding classification and declared
+skip-rule policy. The reporting option does not turn an auditor's failure into
+success. A uniform wrapper-wide floor remains an implementation gap; do not
+treat alias acceptance or a zero unmasked-error tally as evidence that it works.
 
 An absent MCP server, empty tool list or placeholder handler is missing coverage
 or implementation, even if a discovery command exits zero. A symbol count does

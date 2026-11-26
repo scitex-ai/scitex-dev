@@ -272,7 +272,7 @@ def test_actual_immutable_admission_and_first_guard_resolve_known_native_labels(
     destinations = [resolve_admission_destination(workflow, workflow["jobs"][name])
                     for name in ("publish", "release")]
     # Assert
-    assert destinations == [["self-hosted", "Linux", "X64", "scitex-org-cpu"]] * 2
+    assert destinations == [["self-hosted", "Linux", "X64", "scitex-org-cpu", "scitex-compute-02"]] * 2
 
 
 @pytest.mark.parametrize("runner,authorized,reason,labels,accepted", [
@@ -292,7 +292,8 @@ def test_actual_precheckout_release_guards_refuse_hosted_unknown_and_wrong_admis
     environment = {"PATH": "/usr/bin:/bin", "RUNNER_ENVIRONMENT": runner,
                    "NATIVE_AUTHORIZED": authorized, "ADMISSION_REASON": reason,
                    "ADMISSION_RUNS_ON": json.dumps({"group": labels, "labels": [
-                       "self-hosted", "Linux", "X64", "scitex-org-cpu"]}, separators=(",", ":"))}
+                       "self-hosted", "Linux", "X64", "scitex-org-cpu", "scitex-compute-02"]},
+                       separators=(",", ":"))}
     # Act
     result = subprocess.run(["bash", "-c", guard], env=environment, capture_output=True,
                             text=True, timeout=60, check=False)

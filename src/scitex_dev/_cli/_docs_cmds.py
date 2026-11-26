@@ -87,10 +87,10 @@ def register_docs_commands(main):
         "search",
         cls=SpecCommand,
         help_spec=CliHelp(
-            summary="Search across APIs, CLI, MCP tools, and documentation.",
+            summary="Search local API introspection and CLI/MCP/docs indexes.",
             examples=(
                 Example(
-                    '{prog} docs search "save figure"', "Full-text search everywhere."
+                    '{prog} docs search "save figure"', "Search local indexes."
                 ),
                 Example(
                     "{prog} docs search version --scope api", "Limit to the API scope."

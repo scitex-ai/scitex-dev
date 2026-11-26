@@ -10,6 +10,102 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.67.0] - 2026-11-27
+
+> **Deployment note.** From this release an unset `SCITEX_STORE_DSN` no longer
+> reaches the fleet primary. A host carrying `~/.scitex/pg` refuses the local
+> default outright, so export `SCITEX_STORE_DSN` on every fleet node (dotfiles
+> #608) before installing 0.67.0 there.
+
+### CI
+
+- Release `publish`/`release` jobs and the `dev-release` test/build legs run on
+  `scitex-compute-02`, the host the Dev profile's Apptainer 1.5.5 pin is
+  qualified on (scitex-ai/.github#141); compute-04 is retired from Dev CI
+  (#1115).
+
+### Changed
+
+- **Store default is now the per-user local store, never a fleet host**
+  (#1111). With `SCITEX_STORE_DSN` unset, `host_store()` resolves to a
+  PostgreSQL cluster under `$SCITEX_DIR/store/local` reached over a 0700
+  UNIX socket (no TCP), created with `initdb` and started on the first
+  connect. It previously resolved to `postgresql://scitex-primary:55432/scitex`,
+  a private fleet hostname, so PyPI users outside the fleet could not record
+  provenance or run `clew verify`, and fleet projects wrote to the shared
+  store without naming it. `DEFAULT_CENTRAL_HOST` is removed. Deployments set
+  `SCITEX_STORE_DSN` in their own environment; an explicit DSN still wins and
+  never falls through to the local store. A host that manages a deployment
+  node (`~/.scitex/pg` exists) is refused the local default with an
+  actionable error. Missing server binaries fail loudly, naming apt, brew,
+  conda and the new optional `scitex-dev[local-store]` extra (bundled
+  binaries via `pgserver`, CPython <= 3.12, included in `[all]`).
+
+### Fixed
+
+- Validate host kinds as strings before set membership, so list/mapping values
+  report registry validation errors instead of leaking unhashable-type failures.
+
+### Fixed
+
+- Format `host list` registry errors on stderr with their declared exit code,
+  matching `show` and `resolve`; preserve success output and unexpected errors.
+
+### Fixed
+
+- Refuse nonmapping host-registry YAML documents and `hosts` blocks with a
+  structured validation error instead of collapsing false-valued shapes to
+  empty state or leaking attribute errors. Preserve accepted empty/null forms.
+
+### Documentation
+
+- Clarify that skill projection audits use the supplied discovery snapshot and
+  recorded materialized hash; require rediscovery after source edits and separate
+  review of adapter transformations, hash exclusions and live harness adoption.
+
+- Add an always-present `unjudgeable` integer count to drift-report JSON
+  summaries, retaining the existing three counts and classification rules.
+
+- Include missing-reference and install-integrity finding counts in quiet
+  drift reports without changing model verdicts or JSON output.
+
+- Show install-integrity findings before staleness warnings in full drift
+  reports, retaining interpreter identity and existing diagnostic hints.
+
+- Correct drift-report guidance and help for committed Git references, missing
+  baselines, independent install findings and incomplete observation coverage.
+
+- Surface unexpected audit declaration-target resolver failures instead of
+  reporting empty declarations; retain normal unresolved and explicit targets.
+
+- Correct root CLI configuration help to match the actual shared path resolver
+  and package-state overlay, keeping command-specific readers explicit.
+
+- Correct environment-variable guidance for consumer-specific precedence,
+  package state, completion commands and diagnostic scope.
+
+- Reject non-object documentation manifests so normal safe overview discovery
+  can run; preserve valid object fields and existing file-containment rules.
+
+- Correct audit-all severity help and guidance: the wrapper currently forwards
+  the option only to audit-cli; a uniform reporting floor remains unresolved.
+
+- Preserve source expressions in generated API defaults so documentation does
+  not substitute a builder-specific home path for `CREDENTIALS_PATH`.
+
+- Document per-format docs build results and warning/content limits; correct
+  leaf-owned page CLI examples and remove the unavailable `docs build` route.
+
+- Clarify unified-search index boundaries, import side effects and fuzzy
+  required-term scoring; broader subcommand/tool coverage remains unresolved.
+
+- Clarify inert docs-provider catalogs versus cached legacy discovery and
+  import-capable docs resolution; document duplicate-name and runtime limits.
+
+- **Linter:** ignore package-relative `scipy` names in the engine compatibility
+  path for `STX-I002`; preserve absolute-import selection, availability and
+  ownership gates. This matches the leaf-provider correction in Stats PR 219.
+
 ## [0.66.1] - 2026-11-21
 
 - Register SciTeX Rich PDF as a leaf library for ecosystem maintenance.

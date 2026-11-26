@@ -153,7 +153,7 @@ def test_drift_matrix_to_dict_summary_counts():
     # Act
     d = matrix.to_dict()
     # Assert
-    assert d["summary"] == {"total": 2, "consistent": 1, "drifting": 1}
+    assert d["summary"] == {"total": 2, "consistent": 1, "drifting": 1, "unjudgeable": 0}
 
 
 def test_drift_matrix_to_dict_carries_sac_availability():

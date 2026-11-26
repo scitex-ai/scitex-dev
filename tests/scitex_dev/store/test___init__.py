@@ -54,6 +54,8 @@ import pytest
 
 import scitex_dev.store as store
 
+from .conftest import BASE_DSN
+
 #: Modules whose presence would mean the ecosystem toolchain came along.
 FORBIDDEN = (
     "scitex_dev.linter",
@@ -270,7 +272,9 @@ def _quickstart(document):
 @pytest.fixture
 def documented_store_dsn(pg_schemas):
     schema = pg_schemas("documented_quickstart")
-    url = urlsplit(store.host_store(pkg="documentation-test").dsn)
+    # The suite's verified-writable cluster, not the default resolution: with
+    # SCITEX_STORE_DSN unset that would be the user's own local store.
+    url = urlsplit(BASE_DSN)
     query = dict(parse_qsl(url.query))
     query["options"] = f"-c search_path={schema}"
     dsn = urlunsplit(url._replace(query=urlencode(query, quote_via=quote)))

@@ -2,8 +2,10 @@
 # -*- coding: utf-8 -*-
 """Unified search across the SciTeX ecosystem.
 
-Searches Python APIs, CLI commands, MCP tools, and documentation pages
-across all installed scitex packages.
+Searches shallow API introspection, console-script metadata, selected MCP
+source text and docs manifest metadata in the legacy local package mapping.
+It does not enumerate CLI subcommands, verify MCP registration or search page
+bodies. API introspection and package-root fallback can execute imports.
 
 Query syntax (Google-like):
     search("save figure")           # match any term
@@ -16,7 +18,7 @@ Usage:
 
     search("save figure")                      # search everything
     search("ttest", scope="api")               # Python API only
-    search("docs", scope="cli")                # CLI subcommands only
+    search("docs", scope="cli")                # Console-script metadata
     search("stats -internal", scope="mcp")     # MCP tools, excluding "internal"
 """
 
@@ -172,12 +174,12 @@ def search(
     max_results: int = 10,
     fuzzy: bool = True,
 ) -> list[dict[str, Any]]:
-    """Search across the SciTeX ecosystem.
+    """Search the local API, CLI metadata, MCP source and docs metadata indexes.
 
     Query syntax:
         "save figure"     → match any term
         '"exact phrase"'  → match exact phrase
-        "+required term"  → term must appear
+        "+required term"  → term must match (fuzzy by default)
         "-excluded"       → results with this term are removed
 
     Args:
@@ -278,7 +280,7 @@ def _search_docs(
     targets: dict[str, Optional[str]],
     fuzzy: bool = True,
 ) -> list[dict[str, Any]]:
-    """Search documentation pages."""
+    """Search manifest page names/titles and package descriptions."""
     from .docs import get_docs
 
     results = []
@@ -379,7 +381,7 @@ def _search_cli(
     targets: dict[str, Optional[str]],
     fuzzy: bool = True,
 ) -> list[dict[str, Any]]:
-    """Search CLI subcommands via console_scripts entry points."""
+    """Search console-script names/targets without loading or walking commands."""
     results = []
     try:
         from importlib.metadata import entry_points
@@ -420,7 +422,7 @@ def _search_mcp(
     targets: dict[str, Optional[str]],
     fuzzy: bool = True,
 ) -> list[dict[str, Any]]:
-    """Search MCP tool names and descriptions."""
+    """Search def/docstring text in selected files; registration is unchecked."""
     results = []
 
     for pkg_name, module_name in targets.items():

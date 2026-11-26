@@ -47,12 +47,23 @@ for host in list_hosts():
 ```
 
 `HostRecord.kind` is one of `HOST_KINDS`: `workstation`, `hpc-login`,
-`compute`, `storage`. A missing SSH alias does not establish that a host is
+`compute`, `storage`. It must be a string: non-string lists, mappings and
+sets are rejected as `HostRegistryError` during direct construction. YAML
+loading retains the selected file path when reporting these validation errors.
+The owning controls are in
+`tests/scitex_dev/hosts/test__registry_kind_shapes.py`. A missing SSH alias does not establish that a host is
 local; use the registry's locality API rather than assuming local execution.
 `resolve()` raises `UnknownHostError` (fail loud, no silent
 fallback) with the full list of registered hosts and a remediation
 pointing at the file to edit. `HostRegistryError` covers a malformed
-`hosts.yaml` (bad shape, invalid `kind`, YAML parse error).
+`hosts.yaml` (bad shape, invalid `kind`, YAML parse error). The document and its
+`hosts` block must be mappings: lists, booleans, numbers and strings are refused
+even when empty or false-valued. Errors retain the selected file path and a
+validation code. Empty documents, YAML `null`, `{}`, and missing/null `hosts`
+still describe an empty registry; `hosts: {}` remains valid. These checks do not
+change host-record validation, alias resolution, runner floors or seeding.
+Controls: `tests/scitex_dev/hosts/test__parse_shapes.py` exercises the public
+`list_hosts(hosts_path=...)` API against actual YAML fixture files.
 
 ## Storage: `~/.scitex/dev/hosts.yaml`
 
@@ -78,6 +89,14 @@ SPARTAN_ROOT=$(scitex-dev host resolve spartan --field scitex_root)
 
 `host resolve --field` exits non-zero with an actionable stderr
 message when the host isn't found — never a silent empty string.
+
+`host list`, `show` and `resolve` format declared registry errors on stderr and
+exit with that error's declared code; validation errors use code 2. This also
+applies to `list --json`: failure emits no success JSON on stdout. Unexpected
+exceptions are not converted into registry errors. Controls in
+`tests/scitex_dev/_cli/test__hosts_list_errors.py` cover malformed registries,
+text/JSON channels, valid/empty results and an unexpected decoding failure.
+
 
 ## Scope note
 

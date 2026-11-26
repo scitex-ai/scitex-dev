@@ -145,6 +145,12 @@ policy. Read the actual exit status and per-auditor findings: a tally of zero
 unmasked errors alone does not establish success. Invocation or configuration
 errors can return exit code 2.
 
+The wrapper's `--severity` option currently reaches only `audit-cli`; other
+auditors retain their own defaults. Both `warn` and `warning` are accepted, but
+that spelling parity does not implement a uniform reporting floor. See the
+[owning audit skill](src/scitex_dev/_skills/scitex-dev/39_interface-audit.md)
+for direct auditor commands and remaining coverage limits.
+
 Illustrative output structure, rather than a current package assessment:
 
 ```
@@ -227,6 +233,19 @@ Markdown Python fences against local source without exporting skills or
 executing examples. Inspect its `checked_scope`, `unverified` and `limitations`;
 it does not prove complete documentation drift coverage. See
 [scoped documentation verification](docs/documentation-verification.md).
+
+`list_doc_providers()` and `scitex-dev docs list-providers --json` inspect inert
+installed declarations. `get_docs` uses a separate legacy mapping and can import
+package code during root lookup or introspection. See the
+[discovery boundaries](src/scitex_dev/_skills/scitex-dev/16_docs-search.md#discovery-and-execution-boundaries).
+
+Unified `search` indexes docs manifest metadata, shallow API introspection,
+console-script declarations and selected MCP source text. It does not enumerate
+CLI subcommands or verify MCP registration. See the
+[search index scope](src/scitex_dev/_skills/scitex-dev/16_docs-search.md#search).
+
+`build_docs` returns per-format output paths or errors; a returned path alone
+does not accept the content. See [build and CLI boundaries](docs/documentation-builds.md).
 
 > Discover and install skills through `scitex-dev dev skills list/get/install`.
 > Python discovery/export helpers are public in `scitex_dev.ecosystem`:

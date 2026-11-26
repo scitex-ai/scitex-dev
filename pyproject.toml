@@ -171,6 +171,8 @@ dev = [
     # degrades to absent, which is the documented plugin contract. Install
     # `scitex-cards` explicitly to turn it on.
     "scitex-events>=0.1",
+    # PS-210 dev-extras completeness: the local-store binaries source.
+    'pgserver>=0.1.4; python_version < "3.13"',
 ]
 docs = [
     "sphinx>=7.0",
@@ -179,9 +181,17 @@ docs = [
     "sphinx-copybutton>=0.5",
     "sphinx-autodoc-typehints>=1.25",
 ]
+# PostgreSQL server binaries for the per-user LOCAL store (the default when
+# SCITEX_STORE_DSN is unset; scitex-dev#1111). Optional because many machines
+# already have them (apt/brew/conda), and the bundled wheel ships only for
+# CPython <= 3.12; the store finds system binaries first either way.
+local-store = [
+    'pgserver>=0.1.4; python_version < "3.13"',
+]
 all = [
     "scitex-dev[dev]",
     "scitex-dev[docs]",
+    "scitex-dev[local-store]",
     # --- Optional runtime capabilities, declared here and guarded at every
     # import site (PS-233 runtime-import-dependency-undeclared) --------------
     # Each of these is imported from a `src/` module that is NOT reachable

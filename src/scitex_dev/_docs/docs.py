@@ -5,7 +5,7 @@
 Usage:
     from scitex_dev import get_docs, build_docs
 
-    # All installed packages (manifest overview)
+    # All discovered packages (local legacy mapping)
     get_docs()
 
     # Single package — returns unwrapped result
@@ -49,7 +49,11 @@ def get_docs(
     _root_fn=None,
     _sphinx_fn=None,
 ) -> Any:
-    """Get documentation for one, several, or all installed SciTeX packages.
+    """Retrieve docs for named packages or the local legacy discovery mapping.
+
+    This path can import package code for root lookup or introspection. Use
+    list_doc_providers for an inert, duplicate-preserving declaration catalog;
+    retrieval does not establish provider activation or live availability.
 
     Resolution chain per package:
         1. Pre-built _sphinx_html/ in installed package → fastest (production)
@@ -129,11 +133,16 @@ def build_docs(
         formats: List of builders ("html", "json"). Default: ["html"].
 
     Returns:
-        Dict mapping package name → build result (path or error).
+        Per-package dict of builder names to output-path strings or error dicts.
+        RuntimeError/FileNotFoundError from each build become {"error": str(e)};
+        other formats continue. Missing source gives a package-level error.
+        An override uses output_dir/<builder>; defaults use source_dir/_build/<builder>.
+        A returned path records Sphinx success, not warning-free/content acceptance.
+
+    Source-lookup errors and other exception types can still propagate.
 
     Raises:
-        LookupError: If package not found.
-        RuntimeError: If Sphinx is not installed.
+        LookupError: If the package is absent from discovery.
     """
     from .._core.builder import build_sphinx
 

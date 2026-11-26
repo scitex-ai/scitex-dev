@@ -48,14 +48,22 @@ def read_manifest(docs_dir: Path) -> Optional[dict[str, Any]]:
         docs_dir: Path to the _sphinx_html/ directory.
 
     Returns:
-        Parsed manifest dict, or None if not found/invalid.
+        Parsed manifest dict, or None if not found/invalid. Non-object JSON
+        is invalid. Object fields are preserved; dictionary schema and page
+        contents are not validated here.
     """
     manifest_path = _page_file(docs_dir, "manifest.json")
     if manifest_path is None:
         return None
     try:
         with open(manifest_path, encoding="utf-8") as f:
-            return json.load(f)
+            manifest = json.load(f)
+        if not isinstance(manifest, dict):
+            logger.warning(
+                "Invalid manifest at %s: expected a JSON object", manifest_path
+            )
+            return None
+        return manifest
     except (json.JSONDecodeError, OSError) as e:
         logger.warning("Failed to read manifest at %s: %s", manifest_path, e)
         return None

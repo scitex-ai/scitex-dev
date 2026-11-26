@@ -14,6 +14,9 @@ extensions = [
     "sphinx_copybutton",
 ]
 
+# Display source defaults instead of values resolved in the builder's HOME.
+autodoc_preserve_defaults = True
+
 templates_path = ["_templates"]
 exclude_patterns = ["_build"]
 

@@ -58,7 +58,12 @@ ROOT_HELP_SPEC = CliHelp(
         Example("{prog} mcp start", "Start the MCP server."),
     ),
     config_resolution=(
-        "config.yaml → $SCITEX_DEV_CONFIG → ~/.scitex/dev/config.yaml → defaults",
+        "show-config: $SCITEX_DEV_CONFIG, else shared Dev config path "
+        "(existing Git-project .scitex/dev/config.yaml before user path).",
+        "User root: $SCITEX_DIR (default ~/.scitex); legacy user dev_config.yaml "
+        "only when preferred path is absent. Python config_path overrides selection.",
+        "Package switches: ecosystem defaults < YAML < knob-state.json. "
+        "Other readers differ; see dev skills get scitex-dev 12_config.",
     ),
     see_also=("{prog} docs — browse doctrine and package documentation",),
 )

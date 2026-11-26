@@ -11,6 +11,7 @@ Shared developer utilities for the SciTeX ecosystem.
    api
    unified-search
    documentation-verification
+   documentation-builds
    cli
 
 Indices and tables

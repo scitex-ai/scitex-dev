@@ -6,7 +6,10 @@ Each package registers itself in pyproject.toml:
     [project.entry-points."scitex_dev.docs"]
     scitex-writer = "scitex_writer"
 
-This module lazily discovers all registered packages and caches the result.
+This legacy resolver reads local entry points, adds installed ECOSYSTEM
+fallbacks and caches the default mapping. It is separate from the inert,
+duplicate-preserving doc_providers catalog. Package-root fallback can import
+provider code.
 """
 
 from __future__ import annotations
@@ -30,10 +33,13 @@ def discover_packages(
     ecosystem: Optional[dict] = None,
     use_cache: bool = True,
 ) -> dict[str, str]:
-    """Discover all ecosystem packages, merging entry points with ECOSYSTEM.
+    """Build the legacy local docs mapping from metadata and ECOSYSTEM.
 
-    Uses entry points as primary source, then fills in missing packages
-    from ECOSYSTEM dict with a warning for each missing entry point.
+    Entry points are primary; installed ECOSYSTEM packages fill missing names.
+    This scan does not import targets. Missing-entry-point hints use DEBUG.
+    Repeated entry-point names collapse into one dict value in iteration order;
+    this is not the duplicate-preserving doc_providers catalog. Ambiguous
+    routing remains unresolved rather than a stable provider-selection policy.
 
     ``entry_points_fn`` / ``ecosystem`` are test-injection seams (default
     behavior is unchanged when both are ``None``). When either is supplied,
@@ -111,13 +117,12 @@ def invalidate_cache() -> None:
 
 
 def get_package_root(module_name: str) -> Optional[Path]:
-    """Get the installed root directory of a Python package.
+    """Resolve a package root with metadata first, then an import fallback.
 
-    Uses importlib.metadata to resolve the path WITHOUT importing the module.
-    This avoids triggering heavy module initialization (numpy, torch, etc.)
-    which can take seconds per package.
-
-    Falls back to importlib.import_module only if metadata resolution fails.
+    Successful metadata resolution avoids module initialization. If it cannot
+    locate a root, importlib.import_module executes the target's import code.
+    Only ImportError is caught there; other initialization exceptions propagate.
+    This resolver is therefore not an inert installed-provider catalog.
 
     Args:
         module_name: Python import name (e.g. "scitex_writer")
