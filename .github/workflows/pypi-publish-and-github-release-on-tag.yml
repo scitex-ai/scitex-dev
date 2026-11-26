@@ -19,10 +19,15 @@ permissions:
   contents: read
 
 jobs:
+  # Publish/release verify the registered Apptainer by sha256 (ci-sif-matrix
+  # dev profile), so they must land on the host that registration was qualified
+  # on: scitex-compute-02 with apptainer 1.5.5 (scitex-ai/.github
+  # docs/qualifications/dev-apptainer-1.5.5-20261126.json). The generic pool
+  # also holds compute-03 (apptainer 1.5.3), which the pin would refuse.
   runner-admission:
     uses: scitex-ai/.github/.github/workflows/runner-admission.yml@d7d96c34d68cdfbb5503a933591f7748b5aa30ee
     with:
-      runs_on: '["self-hosted","Linux","X64","scitex-org-cpu"]'
+      runs_on: '["self-hosted","Linux","X64","scitex-org-cpu","scitex-compute-02"]'
 
   test-and-build:
     permissions:
@@ -33,7 +38,7 @@ jobs:
     with:
       suite: dev-release
       release_tag: ${{ inputs.version || '' }}
-      runs_on: '["self-hosted","Linux","X64","scitex-org-cpu"]'
+      runs_on: '["self-hosted","Linux","X64","scitex-org-cpu","scitex-compute-02"]'
 
   publish:
     needs:
@@ -64,7 +69,7 @@ jobs:
         self-hosted)
           test "$NATIVE_AUTHORIZED" = true
           test "$ADMISSION_REASON" = confirmed-organization-members
-          test "$ADMISSION_RUNS_ON" = '{"group":"Organization","labels":["self-hosted","Linux","X64","scitex-org-cpu"]}'
+          test "$ADMISSION_RUNS_ON" = '{"group":"Organization","labels":["self-hosted","Linux","X64","scitex-org-cpu","scitex-compute-02"]}'
           ;;
         github-hosted)
           ;;
@@ -275,7 +280,7 @@ jobs:
         self-hosted)
           test "$NATIVE_AUTHORIZED" = true
           test "$ADMISSION_REASON" = confirmed-organization-members
-          test "$ADMISSION_RUNS_ON" = '{"group":"Organization","labels":["self-hosted","Linux","X64","scitex-org-cpu"]}'
+          test "$ADMISSION_RUNS_ON" = '{"group":"Organization","labels":["self-hosted","Linux","X64","scitex-org-cpu","scitex-compute-02"]}'
           ;;
         github-hosted)
           ;;
