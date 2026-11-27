@@ -33,6 +33,8 @@ def _check(tmp_path: Path, destination: str, registry_text: str = "hosts: {}\n")
     "[self-hosted, scitex-docker]",
     "scitex-docker",
     "[self-hosted, Linux, X64, scitex-ci, scitex-org-cpu, scitex-local-cpu]",
+    # Served by ONE runner set since 2026-11-27: compute-02's five org runners.
+    "[self-hosted, scitex-ci, scitex-docker]",
 ])
 def test_current_primary_destination_passes_the_actual_packaged_floor(tmp_path, destination):
     # Arrange — real workflow and empty owned registry use the shipped floor.
@@ -43,7 +45,7 @@ def test_current_primary_destination_passes_the_actual_packaged_floor(tmp_path, 
 
 
 @pytest.mark.parametrize("destination", [
-    "[self-hosted, scitex-ci, scitex-docker]",
+    "[self-hosted, scitex-ci, scitex-docker, scitex-compute-03]",
     "[self-hosted, scitex-dockers]",
     "[self-hosted, scitex-docker, unregistered-gpu]",
     "${{ vars.ARBITRARY }}",
@@ -62,15 +64,17 @@ def test_current_sets_are_recorded_on_their_measured_hosts():
     # Arrange — authenticated primary inventory measured 2026-10-02.
     cpu = frozenset({"self-hosted", "Linux", "X64", "scitex-ci", "scitex-org-cpu", "scitex-local-cpu"})
     docker = frozenset({"self-hosted", "Linux", "X64", "scitex-docker"})
+    # 2026-11-27: compute-02's org runners all serve cpu + docker as one set.
+    compute02 = cpu | {"scitex-docker", "scitex-compute-02"}
     expected = [
-        ("scitex-compute-02", cpu),
+        ("scitex-compute-02", compute02),
         ("scitex-compute-03", cpu),
         ("scitex-compute-03", docker),
         ("scitex-compute-04", cpu),
     ]
     # Act
     found = [pair for pair in packaged_default_runner_destinations()
-             if pair[1] in {cpu, docker}]
+             if pair[1] in {cpu, docker, compute02}]
     # Assert
     assert found == expected
 
