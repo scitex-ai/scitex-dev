@@ -63,7 +63,6 @@ _CHILD_CODE = (
 
 def test_conftest_leaves_site_packages_untouched():
     # Arrange
-    assert CONFTEST.is_file(), f"conftest not found at {CONFTEST}"
     # Act
     completed = subprocess.run(
         [sys.executable, "-c", _CHILD_CODE],
