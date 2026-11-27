@@ -20,7 +20,6 @@ One assert per test (STX-TQ007), Arrange/Act/Assert markers (STX-TQ002).
 from __future__ import annotations
 
 import yaml
-
 from scitex_dev.hosts import packaged_default_runner_destinations
 from scitex_dev.hosts._seed import _DEFAULT_HOSTS_YAML
 
@@ -29,9 +28,7 @@ from scitex_dev.hosts._seed import _DEFAULT_HOSTS_YAML
 #: `sac-control-plane` is a CO-LOCATION label — see the seed's entry.
 _CONTROL_PLANE_DESTINATION = (
     "scitex-compute-04",
-    frozenset(
-        {"self-hosted", "Linux", "X64", "scitex-org-cpu", "sac-control-plane"}
-    ),
+    frozenset({"self-hosted", "Linux", "X64", "scitex-org-cpu", "sac-control-plane"}),
 )
 
 #: spartan's two live runner label sets, measured 2026-07-24 from the
@@ -61,15 +58,31 @@ _COMPUTE_POOL_DESTINATIONS = [
     ),
     (
         "scitex-compute-02",
-        frozenset({"self-hosted", "Linux", "X64", "scitex-ci", "scitex-org-cpu", "scitex-local-cpu"}),
-    ),
-    (
-        "scitex-compute-02",
-        frozenset({"self-hosted", "Linux", "X64", "scitex-compute-02", "scitex-org-cpu"}),
+        frozenset(
+            {
+                "self-hosted",
+                "Linux",
+                "X64",
+                "scitex-ci",
+                "scitex-org-cpu",
+                "scitex-local-cpu",
+                "scitex-docker",
+                "scitex-compute-02",
+            }
+        ),
     ),
     (
         "scitex-compute-03",
-        frozenset({"self-hosted", "Linux", "X64", "scitex-ci", "scitex-org-cpu", "scitex-local-cpu"}),
+        frozenset(
+            {
+                "self-hosted",
+                "Linux",
+                "X64",
+                "scitex-ci",
+                "scitex-org-cpu",
+                "scitex-local-cpu",
+            }
+        ),
     ),
     (
         "scitex-compute-03",
@@ -93,7 +106,16 @@ _SEED_DESTINATIONS = [
     _CONTROL_PLANE_DESTINATION,
     (
         "scitex-compute-04",
-        frozenset({"self-hosted", "Linux", "X64", "scitex-ci", "scitex-org-cpu", "scitex-local-cpu"}),
+        frozenset(
+            {
+                "self-hosted",
+                "Linux",
+                "X64",
+                "scitex-ci",
+                "scitex-org-cpu",
+                "scitex-local-cpu",
+            }
+        ),
     ),
     _DOTFILES_DESTINATION,
     *_SPARTAN_DESTINATIONS,
@@ -233,7 +255,6 @@ def test_packaged_floor_is_exactly_the_measured_label_sets():
 def test_packaged_floor_is_never_empty():
     # Arrange — the explicit anti-silent-degradation guard: an empty floor
     # is indistinguishable from "checked and clean" at a glance.
-    pass
     # Act
     found = packaged_default_runner_destinations()
     # Assert
@@ -242,14 +263,14 @@ def test_packaged_floor_is_never_empty():
 
 def test_seed_label_sets_are_per_runner_not_a_flattened_union():
     # Arrange — a flattened union would green-light a combination no single
-    # runner offers, and such a job queues forever. Eleven independently recorded
-    # label sets across five machines (2026-11-16: + the compute-02 executors'
-    # set); a flatten would collapse them to five.
-    pass
+    # runner offers, and such a job queues forever. Ten independently recorded
+    # label sets across five machines (2026-11-27: compute-02's executors now
+    # share scitex-ci-02's set, so its two destinations became one); a flatten
+    # would collapse them to five.
     # Act
     found = packaged_default_runner_destinations()
     # Assert
-    assert len(found) == 11
+    assert len(found) == 10
 
 
 def test_control_plane_label_travels_with_the_rest_of_its_runners_set():
