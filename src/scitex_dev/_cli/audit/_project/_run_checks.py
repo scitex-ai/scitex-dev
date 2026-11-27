@@ -116,6 +116,11 @@ def run_checks(
     from ._check_no_url_deps import check_ps216_no_url_deps
 
     check_ps216_no_url_deps(repo_root, Violation, violations)
+    # PS-237: exact `==` pins in publishable metadata downgrade newer installs
+    # and force a release here for every dependency release.
+    from ._check_exact_pins import check_ps237_exact_pins
+
+    check_ps237_exact_pins(repo_root, Violation, violations)
     # PS-220 runs through the mandatory logging-owned provider below.
     # PS-221: [all]-closure on public optional-dependency extras. A public
     # extra must be `[all]` or bare only — every public extra must be a
@@ -240,8 +245,8 @@ def run_checks(
     from ._check_naming_vocabulary import check_ps230_naming_vocabulary
 
     check_ps230_naming_vocabulary(repo_root, Violation, violations)
-    from ._check_workflow_presence import check_ps165_workflow_presence
     from ._check_readme_badge_labels import check_ps166_readme_badge_labels
+    from ._check_workflow_presence import check_ps165_workflow_presence
 
     check_ps165_workflow_presence(repo_root, Violation, violations)
     check_ps166_readme_badge_labels(repo_root, Violation, violations)
@@ -266,13 +271,13 @@ def run_checks(
     # Artifact-gated (only fire when PATH.yaml / clew.add_claim /
     # scripts/agent/ are present); safe to run on every project type.
     # See PR #97.
-    from ._check_path_yaml import (
-        check_ps_path_001_outer_wrapper,
-        check_ps_path_002_bare_string_leaf,
-    )
     from ._check_clew_claims import (
         check_ps_agent_001_agent_script_no_claims_json,
         check_ps_clew_001_add_claim_without_self_verify,
+    )
+    from ._check_path_yaml import (
+        check_ps_path_001_outer_wrapper,
+        check_ps_path_002_bare_string_leaf,
     )
 
     check_ps_path_001_outer_wrapper(repo_root, Violation, violations)

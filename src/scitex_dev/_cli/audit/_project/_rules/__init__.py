@@ -268,7 +268,7 @@ def _patch(rule: Rule) -> Rule:
 
 # hook-bypass: line-limit
 # Sidecar rule registration — see ._extra_rules / GITIGNORED/REFACTORING.md.
-from .._extra_rules import EXTRA_RULES as _EXTRA_RULES  # noqa: E402
+from .._extra_rules import EXTRA_RULES as _EXTRA_RULES
 
 for _c, _sec, _msg, _sev, _slug in _EXTRA_RULES:
     RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
@@ -278,7 +278,7 @@ for _c, _sec, _msg, _sev, _slug in _EXTRA_RULES:
 # generation of sidecar, new rules ship in the shape `_extra_rules.py`'s own
 # docstring names as the target architecture — "each rule co-located with its
 # check module" — and are merged here on the same terms.
-from .._check_precommit_hooks import HOOK_RULES as _HOOK_RULES  # noqa: E402
+from .._check_precommit_hooks import HOOK_RULES as _HOOK_RULES
 
 for _c, _sec, _msg, _sev, _slug in _HOOK_RULES:
     RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
@@ -286,22 +286,28 @@ for _c, _sec, _msg, _sev, _slug in _HOOK_RULES:
 # hook-bypass: line-limit
 # PS-216 — direct-URL/VCS deps in publishable metadata (co-located rule,
 # merged on the same terms as HOOK_RULES / EXTRA_RULES).
-from .._check_no_url_deps import URL_DEP_RULES as _URL_DEP_RULES  # noqa: E402
+from .._check_no_url_deps import URL_DEP_RULES as _URL_DEP_RULES
 
 for _c, _sec, _msg, _sev, _slug in _URL_DEP_RULES:
+    RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
+
+# PS-237 — exact `==` pins in publishable metadata (co-located rule).
+from .._check_exact_pins import EXACT_PIN_RULES as _EXACT_PIN_RULES
+
+for _c, _sec, _msg, _sev, _slug in _EXACT_PIN_RULES:
     RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
 
 # hook-bypass: line-limit
 # PS-217 — skills CLI federation; PS-218/PS-219 — CLI-normalization
 # doctor/health + version-flag conformance (co-located rules, merged on the
 # same terms as HOOK_RULES / URL_DEP_RULES).
-from .._check_skills_federation import (  # noqa: E402
-    SKILLS_FEDERATION_RULES as _SKILLS_FEDERATION_RULES,
-)
-from .._check_doctor_health_naming import (  # noqa: E402
+from .._check_doctor_health_naming import (
     DOCTOR_HEALTH_RULES as _DOCTOR_HEALTH_RULES,
 )
-from .._check_version_flag import VERSION_FLAG_RULES as _VERSION_FLAG_RULES  # noqa: E402
+from .._check_skills_federation import (
+    SKILLS_FEDERATION_RULES as _SKILLS_FEDERATION_RULES,
+)
+from .._check_version_flag import VERSION_FLAG_RULES as _VERSION_FLAG_RULES
 
 for _c, _sec, _msg, _sev, _slug in (
     *_SKILLS_FEDERATION_RULES,
@@ -314,7 +320,7 @@ for _c, _sec, _msg, _sev, _slug in (
 
 # PS-221 — [all]-closure on public optional-dependency extras (co-located
 # rule, merged on the same terms as URL_DEP_RULES / HOOK_RULES).
-from .._check_extras_all_closure import (  # noqa: E402
+from .._check_extras_all_closure import (
     ALL_CLOSURE_RULES as _ALL_CLOSURE_RULES,
 )
 
@@ -324,7 +330,7 @@ for _c, _sec, _msg, _sev, _slug in _ALL_CLOSURE_RULES:
 # PS-225 — extra NAMES restricted to {all, dev, docs} (co-located rule,
 # merged on the same terms as ALL_CLOSURE_RULES). Severity W lives in the
 # tuple for the rollout; see the module docstring and ADR-0005.
-from .._check_extras_allowlist import (  # noqa: E402
+from .._check_extras_allowlist import (
     EXTRAS_ALLOWLIST_RULES as _EXTRAS_ALLOWLIST_RULES,
 )
 
@@ -334,7 +340,7 @@ for _c, _sec, _msg, _sev, _slug in _EXTRAS_ALLOWLIST_RULES:
 # PS-222 — `.scitex/<pkg-short>/` config-layout convention (co-located rule,
 # merged on the same terms as ALL_CLOSURE_RULES / PRINT_FORBIDDEN_RULES).
 # Default severity W lives in the tuple; the final `_patch` pass applies overrides.
-from .._check_config_layout import (  # noqa: E402
+from .._check_config_layout import (
     CONFIG_LAYOUT_RULES as _CONFIG_LAYOUT_RULES,
 )
 
@@ -344,7 +350,7 @@ for _c, _sec, _msg, _sev, _slug in _CONFIG_LAYOUT_RULES:
 # PS-223 — non-`runtime/` logs-path string literal in package source
 # (co-located rule, merged on the same terms as CONFIG_LAYOUT_RULES).
 # Default severity W lives in the tuple; the final `_patch` pass applies overrides.
-from .._check_logs_path import LOGS_PATH_RULES as _LOGS_PATH_RULES  # noqa: E402
+from .._check_logs_path import LOGS_PATH_RULES as _LOGS_PATH_RULES
 
 for _c, _sec, _msg, _sev, _slug in _LOGS_PATH_RULES:
     RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
@@ -354,7 +360,7 @@ for _c, _sec, _msg, _sev, _slug in _LOGS_PATH_RULES:
 # registry (co-located rule, merged on the same terms as LOGS_PATH_RULES).
 # Default severity E lives in the tuple and can fail a build. The final
 # `_patch` pass applies overrides after this co-located set is registered.
-from .._check_runner_destinations import (  # noqa: E402
+from .._check_runner_destinations import (
     RUNNER_DESTINATION_RULES as _RUNNER_DESTINATION_RULES,
 )
 
@@ -365,7 +371,7 @@ for _c, _sec, _msg, _sev, _slug in _RUNNER_DESTINATION_RULES:
 # PS-226..PS-229 — the fleet-wide JobSpec declaration convention (co-located
 # rule set, merged on the same terms as RUNNER_DESTINATION_RULES). Default
 # severities live in the tuples; the final `_patch` pass applies overrides.
-from .._check_job_naming import JOB_NAMING_RULES as _JOB_NAMING_RULES  # noqa: E402
+from .._check_job_naming import JOB_NAMING_RULES as _JOB_NAMING_RULES
 
 for _c, _sec, _msg, _sev, _slug in _JOB_NAMING_RULES:
     RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
@@ -377,7 +383,7 @@ for _c, _sec, _msg, _sev, _slug in _JOB_NAMING_RULES:
 # The operator settled the shape on PS-224 —
 # 「昔だろうが今だろうが問題点は問題点」 (no grandfathering) and
 # 「全て赤でいいと思います」 (a fleet-wide red is the intended start).
-from .._check_workflow_duplication import (  # noqa: E402
+from .._check_workflow_duplication import (
     WORKFLOW_DUPLICATION_RULES as _WORKFLOW_DUPLICATION_RULES,
 )
 
@@ -391,7 +397,7 @@ for _c, _sec, _msg, _sev, _slug in _WORKFLOW_DUPLICATION_RULES:
 # operator decision — the WORDS — which the naming skill itself flagged as
 # "convention until an auditor rule exists". Default severity W lives in the
 # tuple; the final `_patch` pass applies overrides after registration.
-from .._check_naming_vocabulary import (  # noqa: E402
+from .._check_naming_vocabulary import (
     NAMING_VOCABULARY_RULES as _NAMING_VOCABULARY_RULES,
 )
 
@@ -402,7 +408,7 @@ for _c, _sec, _msg, _sev, _slug in _NAMING_VOCABULARY_RULES:
 # bucket dictated by their guard shape. Severity E: the reference incident
 # passed tests and failed only after a fresh installation reached the default
 # psutil-backed runtime path.
-from .._check_runtime_dependencies import (  # noqa: E402
+from .._check_runtime_dependencies import (
     RUNTIME_DEPENDENCY_RULES as _RUNTIME_DEPENDENCY_RULES,
 )
 
@@ -414,12 +420,12 @@ for _c, _sec, _msg, _sev, _slug in _RUNTIME_DEPENDENCY_RULES:
 # `scitex_dev.hooks` federation, not left implicit in shell (co-located rule
 # set, merged on the same terms as the sets above). Default severities live
 # in the tuples; the final `_patch` pass applies overrides after registration.
-from .._check_hook_rules import HOOK_RULES_RULES as _HOOK_RULES_RULES  # noqa: E402
+from .._check_hook_rules import HOOK_RULES_RULES as _HOOK_RULES_RULES
 
 for _c, _sec, _msg, _sev, _slug in _HOOK_RULES_RULES:
     RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
 
-from .._check_workflow_integrity import (  # noqa: E402
+from .._check_workflow_integrity import (
     WORKFLOW_INTEGRITY_RULES as _WORKFLOW_INTEGRITY_RULES,
 )
 
@@ -428,7 +434,7 @@ for _c, _sec, _msg, _sev, _slug in _WORKFLOW_INTEGRITY_RULES:
 
 # Owner-provided project checks share the existing Rule and override rails.
 # Keep this registration before the single final severity/slug pass below.
-from .._plugins import register_plugin_rules as _register_plugin_rules  # noqa: E402
+from .._plugins import register_plugin_rules as _register_plugin_rules
 
 _register_plugin_rules(RULES, Rule)
 
@@ -441,6 +447,6 @@ _register_plugin_rules(RULES, Rule)
 # ---------------------------------------------------------------------------
 RULES = {code: _patch(rule) for code, rule in RULES.items()}
 
-__all__ = ["Rule", "RULES"]
+__all__ = ["RULES", "Rule"]
 
 # EOF

@@ -10,6 +10,27 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **PS-237 — exact pin in publishable metadata** (`scitex-dev audit
+  project`, every package). An `==`/`===` requirement in
+  `[project].dependencies` or any `[project.optional-dependencies]` group is
+  flagged: it downgrades a newer installed dependency, conflicts with any
+  package needing another version, and forces a release for every dependency
+  release. Wildcard equality (`==1.2.*`), `[build-system]` requirements and
+  marker text are not pins. New-vs-baseline severity: a pin introduced by the
+  change under audit blocks (E), one already on the baseline warns (W).
+
+### Changed
+
+- **PS-170 (`ecosystem audit-umbrella-pins`) flags exact member pins instead
+  of drift-checking them against PyPI latest.** The drift check made every
+  member release demand an umbrella re-pin and release. The audit now needs
+  no network; `--allow-network-error` is accepted as a hidden no-op so
+  existing callers keep working. The release-and-pin doctrine skill states
+  that a floor is the oldest working release, kept honest by a
+  lowest-direct CI job, never "PyPI latest".
+
 ## [0.67.0] - 2026-11-27
 
 > **Deployment note.** From this release an unset `SCITEX_STORE_DSN` no longer
