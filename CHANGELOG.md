@@ -10,6 +10,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Test infrastructure: configure subprocess coverage via coverage.py's subprocess patch (`patch = ["subprocess"]` in pyproject.toml); `tests/conftest.py` no longer writes `.pth` files into site-packages or overwrites caller-owned `COVERAGE_PROCESS_START` / `COVERAGE_FILE`.
+
 ## [0.67.0] - 2026-11-27
 
 > **Deployment note.** From this release an unset `SCITEX_STORE_DSN` no longer

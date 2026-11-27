@@ -4,21 +4,12 @@ An empty conftest.py at tests/ is the canonical SciTeX
 convention (audit-project PS-208) — it pins the pytest
 rootdir and gives downstream fixtures a home.
 
-Also wires subprocess coverage at module import time so child Python
-interpreters (subprocess.run([sys.executable, ...]), demo smoke tests,
-etc.) write their coverage data into the same shard pool as the parent.
-See ``src/scitex_dev/_skills/general/05_development/06_subprocess-coverage.md``.
-
-Critical: we force-set (not setdefault) ``COVERAGE_PROCESS_START`` and
-``COVERAGE_FILE`` because pytest-cov has already set ``COVERAGE_FILE`` to
-a per-test tmp dir by the time conftest loads — ``setdefault`` would be a
-silent no-op and the fix would appear to "do nothing".
+Subprocess coverage is configured in pyproject.toml via coverage.py's subprocess patch; test collection must not install .pth files or overwrite caller-owned coverage environment variables.
 """
 
 from __future__ import annotations
 
 import os
-import sysconfig
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Mapping, MutableMapping
@@ -26,11 +17,6 @@ from typing import Mapping, MutableMapping
 import pytest
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
-
-# Pin coverage's data file at the repo root and point process_startup at
-# our pyproject so child interpreters configure themselves correctly.
-os.environ["COVERAGE_PROCESS_START"] = str(_PROJECT_ROOT / "pyproject.toml")
-os.environ["COVERAGE_FILE"] = str(_PROJECT_ROOT / ".coverage")
 
 
 # ---------------------------------------------------------------------- #
@@ -97,52 +83,6 @@ except ImportError as exc:  # too old, or a different tree entirely
     ) from exc
 
 pytest_configure = make_pytest_configure("scitex_dev", _PROJECT_ROOT)
-
-
-def _ensure_subprocess_coverage_shim() -> None:
-    """Drop an idempotent ``.pth`` file in site-packages that auto-starts
-    coverage in every child Python interpreter via
-    ``coverage.process_startup()``.
-    """
-    purelib = Path(sysconfig.get_paths()["purelib"])
-    pth = purelib / "_scitex_dev_subprocess_coverage.pth"
-    # ORDER MATTERS, AND SO DOES THE GUARD. The previous shim read
-    # `import os, coverage` on its FIRST line, so every Python process in the
-    # environment imported coverage at interpreter startup — and where
-    # coverage was absent, `site` printed a ModuleNotFoundError traceback to
-    # stderr and carried on. Measured across the fleet 2026-08-12: four
-    # tracebacks before any real output, on every interpreter start, because
-    # scitex-container ships an identical file.
-    #
-    # The cost is not the noise. It is that a channel RESERVED FOR PROBLEMS
-    # was filled with a permanent non-problem, so everyone learned to skim
-    # stderr — which is where the next real error appears. Fail-loud inverted
-    # by accident.
-    #
-    # Checking the env var FIRST also means a non-test process imports
-    # nothing at all, rather than paying for a coverage import it will never
-    # use. A `.pth` runs before anything can catch it, so it must be the
-    # cheapest and quietest thing in the process.
-    shim = (
-        "import os\n"
-        "if os.environ.get('COVERAGE_PROCESS_START'):\n"
-        "    try:\n"
-        "        import coverage\n"
-        "    except ImportError:\n"
-        "        pass\n"
-        "    else:\n"
-        "        coverage.process_startup()\n"
-    )
-    try:
-        if not pth.exists() or pth.read_text() != shim:
-            pth.write_text(shim)
-    except OSError:
-        # site-packages may be read-only (e.g. system Python); silently
-        # skip — local dev venvs are writable and that's where it matters.
-        pass
-
-
-_ensure_subprocess_coverage_shim()
 
 
 # --------------------------------------------------------------------------- #
