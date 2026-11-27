@@ -225,14 +225,21 @@ hosts:
     #   agentName scitex-02-org-cpu-01  (org scitex-ai)
     #     -> [self-hosted, Linux, X64, scitex-org-cpu]
     runner_labels:
-    # Measured 2026-10-02 from the org Actions API: scitex-ci-02.
-      - [self-hosted, Linux, X64, scitex-ci, scitex-org-cpu, scitex-local-cpu]
-    # 2026-11-16: seven more org executors on this host, scitex-ci-02-02..08
-    # (actions-runner-org-02..08). Registered 2026-10-08 with the full org label
-    # set (runner _diag), stripped by hand to [scitex-compute-02], then restored
-    # to the scitex-org-cpu pool by the operator. All seven share ONE label
-    # set, so it is ONE destination here (this list is destinations, not a count).
-      - [self-hosted, Linux, X64, scitex-compute-02, scitex-org-cpu]
+    # Measured 2026-11-27 from the org Actions API: scitex-ci-02 and
+    # scitex-ci-02-02..05 carry ONE identical label set, so they are ONE
+    # destination here (this list is destinations, not a count).
+    #
+    # History: 02-02..08 were registered 2026-10-08 with the full org label
+    # set, stripped by hand to [scitex-compute-02], and restored to
+    # scitex-org-cpu only by the operator on 2026-11-16. That left the
+    # `scitex-docker` pool at three runners fleet-wide while 02-02..05 sat
+    # idle. On 2026-11-27 02-06..08 moved to scitex-compute-01 (as
+    # scitex-ci-01-02..04), and 02-02..05 got scitex-docker, scitex-ci and
+    # scitex-local-cpu back. They run as the same user as scitex-ci-02, under
+    # the same `sg docker` unit with the same rootful daemon, in the same
+    # Organization runner group (6), so they offer no weaker isolation than
+    # the runner that already served the label.
+      - [self-hosted, Linux, X64, scitex-ci, scitex-org-cpu, scitex-local-cpu, scitex-docker, scitex-compute-02]
   scitex-compute-03:
     kind: compute
     ssh_alias: scitex-compute-03
