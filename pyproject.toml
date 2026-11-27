@@ -111,7 +111,8 @@ dev = [
     "setuptools>=68.0",
     "setuptools-scm>=8.0",
     "pytest>=7.0.0",
-    "pytest-cov>=4.0.0",
+    "pytest-cov>=7.0.0",
+    "coverage[toml]>=7.13.0",
     # pytest-timeout: per-test wall-clock cap (see [tool.pytest.ini_options]
     # `timeout`). A single hung test fails loud + names itself in ~5 min
     # instead of wedging the whole job until GitHub's 6h ceiling.
@@ -453,6 +454,7 @@ markers = [
 # excludes site-packages noise.
 [tool.coverage.run]
 parallel = true
+patch = ["subprocess"]
 source = ["scitex_dev"]
 concurrency = ["multiprocessing", "thread"]
 
