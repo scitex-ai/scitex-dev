@@ -138,12 +138,23 @@ regression by qualifying a new version, never by moving a published tag.
 
 ## 4. Enforcement — scitex-dev is the version overseer
 
-`scitex-dev ecosystem audit-umbrella-pins` (PS-170) accepts `>=` floors
-on umbrella members. It still checks any remaining explicit `==` pin
-against PyPI latest and reports drift (warn by default, `--strict` in a
-pre-publish gate), because a stale `==` is a real bug class. Do not add
-checks that *require* `==` on umbrella members, and do not reintroduce
-`==` member pins in the umbrella's `pyproject.toml`.
+- **PS-237** (`scitex-dev audit project`, every package) flags an exact
+  `==`/`===` pin in `[project].dependencies` or any extra. A pin introduced
+  by the change under audit blocks (E); one already on the baseline warns.
+- **PS-170** (`scitex-dev ecosystem audit-umbrella-pins`, umbrella only)
+  flags every exact member pin, with no PyPI lookup (warn by default,
+  `--strict` in a pre-publish gate). It used to drift-check `==` pins
+  against PyPI latest; that pushed a re-pin and an umbrella release for
+  every member release, the coupling this doctrine removes.
+- **A floor is the oldest release that works, not today's release.** Do
+  not gate a release on "every floor equals PyPI latest": that is an
+  exact pin by another name. Keep floors honest instead with a CI job that
+  installs the minimums (`uv pip compile --resolution lowest-direct` over
+  the member requirements, then the package's tests against that set), and
+  raise a floor only when that job or a new API use requires it.
+
+Do not add checks that *require* `==` on umbrella members, and do not
+reintroduce `==` member pins in the umbrella's `pyproject.toml`.
 
 ## 5. Relationship to existing pinning guidance
 
