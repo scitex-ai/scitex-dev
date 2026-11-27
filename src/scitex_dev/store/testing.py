@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """An ephemeral store, so a consumer can test the code that uses one.
 
 WHY THIS MODULE EXISTS. Three packages hit the same wall on the same day —
@@ -50,8 +49,8 @@ import subprocess
 import tempfile
 import time
 import uuid
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator
 
 from ._host import STORE_DSN_ENV
 from ._testing_process import _run_bootstrap
@@ -66,7 +65,7 @@ __all__ = [
 _START_TIMEOUT_SECONDS = 30.0
 
 
-def _writability(dsn: str) -> "tuple[bool, str]":
+def _writability(dsn: str) -> tuple[bool, str]:
     """Whether ``dsn`` accepts writes, AND THE REASON IT DOES NOT.
 
     Returns the reason rather than a bare bool because the three ways this
@@ -112,6 +111,23 @@ def _pg_bin(name: str) -> str | None:
     return pg_bin(name)
 
 
+# A throwaway cluster is deleted when the context exits, so crash safety buys
+# nothing — but every fsync it issues still reaches the shared disk. initdb
+# alone fsyncs the whole new data directory, and a running server flushes WAL
+# on every commit plus a checkpoint at shutdown. On a CI host whose consumer
+# NVMe was measured at ~2 s write latency under eight concurrent jobs
+# (2026-11-27), those flushes stalled every other job on the machine, including
+# GitHub service containers that then failed their start-up health check.
+# PostgreSQL documents exactly these settings for disposable clusters
+# ("Non-Durable Settings", runtime-config docs).
+INITDB_NO_SYNC = "--no-sync"
+NON_DURABLE_SERVER_SETTINGS = (
+    "-c fsync=off",
+    "-c synchronous_commit=off",
+    "-c full_page_writes=off",
+)
+
+
 @contextlib.contextmanager
 def ephemeral_cluster_dsn() -> Iterator[str]:
     """Start a private PostgreSQL, yield its DSN, and destroy it after.
@@ -119,8 +135,11 @@ def ephemeral_cluster_dsn() -> Iterator[str]:
     The cluster lives in a temporary directory, listens on a UNIX socket in
     that same directory, so it cannot collide with a real instance on a port.
     It uses trust authentication inside its owned temporary directory and is
-    removed on exit whether or not the test passed. Bootstrap failures retain
-    their original exception type and log bounded, escaped output tails.
+    removed on exit whether or not the test passed. It runs non-durable
+    (``initdb --no-sync``, ``fsync=off``): the data is discarded anyway, and
+    the flushes would otherwise load the disk other jobs share. Bootstrap
+    failures retain their original exception type and log bounded, escaped
+    output tails.
 
     Raises ``RuntimeError`` when the binaries are absent — the caller decides
     whether that is a skip or a failure, because the answer differs by
@@ -140,8 +159,19 @@ def ephemeral_cluster_dsn() -> Iterator[str]:
     sock.mkdir()
     try:
         _run_bootstrap(
-            [initdb, "-D", str(data), "-A", "trust", "--encoding=UTF8", "-U", "postgres"],
-            stage="initdb", timeout=120,
+            [
+                initdb,
+                "-D",
+                str(data),
+                "-A",
+                "trust",
+                "--encoding=UTF8",
+                "-U",
+                "postgres",
+                INITDB_NO_SYNC,
+            ],
+            stage="initdb",
+            timeout=120,
         )
         # ``-l`` is REQUIRED, not tidiness. Without it the postmaster pg_ctl
         # forks inherits this process's captured stdout/stderr pipes and holds
@@ -150,9 +180,21 @@ def ephemeral_cluster_dsn() -> Iterator[str]:
         # Observed on the org runners as a 120s TimeoutExpired whose traceback
         # reads ``Popen: returncode: 0``.
         _run_bootstrap(
-            [pg_ctl, "-D", str(data), "-l", str(log), "-o", f"-k {sock} -h ''", "-w",
-             "-t", str(int(_START_TIMEOUT_SECONDS)), "start"],
-            stage="pg_ctl start", timeout=120,
+            [
+                pg_ctl,
+                "-D",
+                str(data),
+                "-l",
+                str(log),
+                "-o",
+                " ".join([f"-k {sock} -h ''", *NON_DURABLE_SERVER_SETTINGS]),
+                "-w",
+                "-t",
+                str(int(_START_TIMEOUT_SECONDS)),
+                "start",
+            ],
+            stage="pg_ctl start",
+            timeout=120,
         )
         dsn = f"postgresql://postgres@/postgres?host={sock}"
         deadline = time.monotonic() + _START_TIMEOUT_SECONDS
@@ -166,8 +208,11 @@ def ephemeral_cluster_dsn() -> Iterator[str]:
         yield dsn
     finally:
         with contextlib.suppress(Exception):
-            subprocess.run([pg_ctl, "-D", str(data), "-m", "immediate", "stop"],
-                           capture_output=True, timeout=60)
+            subprocess.run(
+                [pg_ctl, "-D", str(data), "-m", "immediate", "stop"],
+                capture_output=True,
+                timeout=60,
+            )
         shutil.rmtree(root, ignore_errors=True)
 
 
@@ -263,5 +308,6 @@ def ephemeral_schema(dsn: str, *, prefix: str = "test") -> Iterator[str]:
         with contextlib.suppress(Exception):
             with psycopg.connect(dsn, connect_timeout=5, autocommit=True) as conn:
                 conn.execute(f'DROP SCHEMA IF EXISTS "{name}" CASCADE')
+
 
 # EOF
