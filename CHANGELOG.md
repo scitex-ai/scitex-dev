@@ -10,6 +10,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.68.0] - 2026-11-27
+
 ### Added
 
 - **PS-237 — exact pin in publishable metadata** (`scitex-dev audit
