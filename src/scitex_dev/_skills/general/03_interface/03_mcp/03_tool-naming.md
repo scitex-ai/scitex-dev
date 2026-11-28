@@ -22,6 +22,27 @@ Every MCP tool name has the shape:
   arbitrary single-token names or verbs requiring an explicit noun, such as
   `list` and `describe`. The cross-package standard `health` is also accepted.
 
+## SDK-derived tools: `<package>_<resource>_<verb>` (API contract v1)
+
+A tool that scitex-sdk generates from an `ApiOperation` (a leaf's public REST
+operation) is named by the SDK, not by hand:
+
+```
+<package>_<resource>_<verb>        dataset_datasets_list, clew_claims_verify,
+                                   dataset_project_datasets_fetch
+```
+
+This is the same noun-group form the CLI uses (`<noun> <verb>`, e.g.
+`dev_ecosystem_list`), with the REST resource (plural) as the noun. It is
+mandatory for every public tool (rule API-T001; operator decision 1,
+2026-11-28) and is the only form remote MCP serves. The auditor recognises a
+derived tool from the package's installed `scitex.apis` plugin and checks its
+**operation verb** against the synonym catalogue instead of reading the name
+positionally; a derived name is never a double prefix
+(`notes_notes_list` is resource `notes` of package `notes`). Hand-written
+local tools keep the `<pkg>_<verb>_<noun>` rules below until they are
+declared as operations.
+
 ## Examples (canonical)
 
 | CLI subcommand                         | MCP tool name              |
