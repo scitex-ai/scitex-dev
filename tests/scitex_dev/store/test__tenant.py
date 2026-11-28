@@ -351,6 +351,94 @@ def test_provisioning_will_not_adopt_existing_tables(tenants, card_schema):
         )
 
 
+def _login_dsn(user: str, password: str, database: str) -> str:
+    selected = conninfo_to_dict(BASE_DSN)
+    selected.pop("dbname", None)
+    selected.update(user=user, password=password)
+    return f"postgresql:///{quote(database, safe='')}?{urlencode(selected)}"
+
+
+@pytest.fixture
+def noinherit_provisioner():
+    """A non-superuser provisioner holding the owner role WITHOUT inheritance.
+
+    Least privilege for a deployment's administration login: CREATEROLE to
+    mint tenant logins, and membership in the NOLOGIN owner only as something
+    it may SET ROLE to, never as privileges it carries implicitly.
+    """
+    suffix = uuid4().hex[:12]
+    owner, provisioner = f"tenant_test_owner_{suffix}", f"tenant_test_prov_{suffix}"
+    tenant = TenantScope(uuid4())
+    password = secrets.token_urlsafe(32)
+    with psycopg.connect(BASE_DSN, autocommit=True) as admin, ExitStack() as cleanup:
+        if admin.info.port in {55432, 55433}:
+            pytest.fail("These synthetic experiments refuse the managed store ports.")
+        database = admin.info.dbname
+        for role in (tenant.principal, provisioner, owner):
+            cleanup.callback(
+                admin.execute,
+                sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(role)),
+            )
+        cleanup.callback(
+            admin.execute,
+            sql.SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(
+                sql.Identifier(tenant.namespace)
+            ),
+        )
+        admin.execute(
+            sql.SQL("CREATE ROLE {} NOLOGIN NOBYPASSRLS").format(sql.Identifier(owner))
+        )
+        admin.execute(
+            sql.SQL(
+                "CREATE ROLE {} LOGIN NOINHERIT CREATEROLE NOSUPERUSER PASSWORD {}"
+            ).format(sql.Identifier(provisioner), sql.Literal(password))
+        )
+        admin.execute(
+            sql.SQL("GRANT {} TO {}").format(
+                sql.Identifier(owner), sql.Identifier(provisioner)
+            )
+        )
+        admin.execute(
+            sql.SQL("GRANT CREATE ON DATABASE {} TO {}").format(
+                sql.Identifier(database), sql.Identifier(provisioner)
+            )
+        )
+        cleanup.callback(
+            admin.execute,
+            sql.SQL("REVOKE CREATE ON DATABASE {} FROM {}").format(
+                sql.Identifier(database), sql.Identifier(provisioner)
+            ),
+        )
+        provisioner_dsn = _login_dsn(provisioner, password, database)
+        with psycopg.connect(provisioner_dsn, autocommit=True) as connection:
+            connection.execute(
+                sql.SQL(
+                    "CREATE ROLE {} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE "
+                    "NOREPLICATION NOBYPASSRLS PASSWORD {}"
+                ).format(sql.Identifier(tenant.principal), sql.Literal(password))
+            )
+        yield admin, provisioner_dsn, owner, tenant
+
+
+def test_a_noinherit_provisioner_can_provision_a_tenant_store(
+    noinherit_provisioner, card_schema
+):
+    # Arrange
+    admin, provisioner_dsn, owner, tenant = noinherit_provisioner
+    # Act
+    provision_tenant_store(
+        StoreTarget.postgres(provisioner_dsn, pkg="tenant_test"),
+        card_schema,
+        tenant,
+        owner_role=owner,
+    )
+    # Assert
+    assert admin.execute(
+        "SELECT has_schema_privilege(%s, %s, 'USAGE')",
+        (tenant.principal, tenant.namespace),
+    ).fetchone()[0]
+
+
 @pytest.mark.parametrize("operation", ["DELETE FROM cards_rows", "TRUNCATE cards_rows"])
 def test_destructive_sql_is_not_granted(tenants, operation):
     # Arrange
