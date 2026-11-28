@@ -27,6 +27,11 @@ A package declares the exemption in its OWN repo, mirroring the
 When set, `_check_api_parity` emits an informational "exempt by config"
 line instead of a §6 violation. The rule still fires for every package
 that did NOT declare the exemption.
+
+3. **Ratchet** (`record_parity_baseline` + `_mcp_parity_baseline`) — a
+   package that DOES owe the parity but cannot close the gap at once
+   commits `.scitex/dev/mcp-parity-baseline.yaml`; new gaps then fail and
+   the recorded backlog may only shrink.
 """
 
 from __future__ import annotations
@@ -38,6 +43,20 @@ from typing import get_origin
 
 from ._audit import Violation
 from ._mcp_names import _import_name, _short_name
+from ._mcp_parity_baseline import (
+    MalformedParityBaseline,
+    format_backlog_notice,
+    load_parity_baseline,
+    write_parity_baseline,
+)
+
+# Pure name comparison lives in `_mcp_parity_match` (line budget);
+# re-exported so existing importers keep their paths.
+from ._mcp_parity_match import (
+    _parity_violations,
+    _tool_matches_api,
+    missing_python_apis,
+)
 
 # --------------------------------------------------------------------- #
 # §6 exemption — per-package opt-out                                    #
@@ -60,7 +79,7 @@ _YAML_MCP_PARITY_EXEMPT_RE = re.compile(
 # Repo-root resolution (which tree do we read exemptions from?) lives in
 # `_mcp_repo_root` — audited tree first, registry local_path fallback.
 # Re-imported here so existing importers/tests keep their paths.
-from ._mcp_repo_root import (  # noqa: E402  (after regex constants)
+from ._mcp_repo_root import (
     _audited_repo_root,
     _repo_root_from_import,  # noqa: F401  -- re-export for existing importers
 )
@@ -238,6 +257,18 @@ def _python_api_names(package: str) -> set[str]:
     if names is None:
         names = [n for n in dir(mod) if not n.startswith("_")]
     out: set[str] = set()
+    # One operation re-exported both flat (`pkg.describe`) and nested
+    # (`pkg.descriptive.describe`) is ONE operation: counting it twice made
+    # every such function demand two MCP tools. Nested names whose (unwrapped)
+    # function is already exported flat are skipped below.
+    flat_ops = {
+        id(_inspect.unwrap(v))
+        for v in (getattr(mod, n, None) for n in names if isinstance(n, str))
+        if callable(v)
+        and not _inspect.isclass(v)
+        and not _inspect.ismodule(v)
+        and get_origin(v) is None
+    }
     for n in names:
         if not isinstance(n, str):
             continue
@@ -263,6 +294,7 @@ def _python_api_names(package: str) -> set[str]:
                     or get_origin(sub_val) is not None
                     or _inspect.ismodule(sub_val)
                     or not callable(sub_val)
+                    or id(_inspect.unwrap(sub_val)) in flat_ops
                 ):
                     continue
                 # Trailing underscore is the Python idiom for keyword
@@ -346,7 +378,62 @@ def _check_api_parity(
     if not py_apis:
         return  # cannot establish parity; not the auditor's place to invent it.
 
-    out.extend(_parity_violations(package, py_apis, mcp_normalized))
+    # A committed parity baseline turns the missing-tool half into a ratchet
+    # (see `_mcp_parity_baseline`); the orphan half is unchanged.
+    root = repo if repo is not None else _audited_repo_root(package)
+    try:
+        baseline = load_parity_baseline(root)
+    except MalformedParityBaseline as exc:
+        out.append(Violation(package, "§6", f"malformed parity baseline: {exc}"))
+        return
+    out.extend(_parity_violations(package, py_apis, mcp_normalized, baseline))
+    if baseline is not None:
+        import click
+
+        # Visible, like the no-mcp notice: the backlog is the point of the
+        # ratchet and must never be swallowed by the WARNING-level logger.
+        missing = missing_python_apis(py_apis, mcp_normalized)
+        click.echo(
+            format_backlog_notice(package, missing, baseline, len(py_apis)),
+            err=True,
+        )
+
+
+def record_parity_baseline(package: str, repo: Path | None) -> tuple[Path, int]:
+    """Write `package`'s current §6 missing-tool set as its parity baseline.
+
+    Uses the same discovery as the audit (`_resolve_mcp_server` + the
+    `_python_api_names` walk), so the recorded set is exactly what the next
+    audit run compares against. Refuses packages whose §6 is exempt or
+    allowlist-scoped (a baseline would never be read) and packages without
+    an audited tree or MCP server. Returns ``(path, n_recorded)``.
+    """
+    from ._mcp_audit import _isolated_streams, _list_tools
+    from ._mcp_bridge import _resolve_mcp_server
+
+    root = repo if repo is not None else _audited_repo_root(package)
+    if root is None:
+        raise ValueError(f"{package}: no audited tree to write a baseline into")
+    if (
+        declares_no_mcp(package, repo=root)
+        or is_mcp_parity_exempt(package, repo=root)
+        or mcp_tools_allowlist(package, repo=root) is not None
+    ):
+        raise ValueError(
+            f"{package}: §6 is skipped or allowlist-scoped by config — a parity "
+            "baseline would never be read"
+        )
+    with _isolated_streams():
+        server = _resolve_mcp_server(package)
+        if server is None:
+            raise ValueError(f"{package}: no FastMCP instance found")
+        tools = _list_tools(server)
+    short = _short_name(package)
+    mcp_normalized = {
+        t.name.removeprefix(f"{short}_") for t in tools if getattr(t, "name", "")
+    }
+    missing = missing_python_apis(_python_api_names(package), mcp_normalized)
+    return write_parity_baseline(root, missing), len(missing)
 
 
 def _allowlist_violations(
@@ -390,99 +477,13 @@ def _allowlist_violations(
     return out
 
 
-def _tool_matches_api(tool: str, api: str) -> bool:
-    """Return True if `tool` covers `api` for §6 parity.
-
-    A bare-name match (``tool == api``) always counts. We ALSO accept any
-    ``<verb>_<api>`` form — i.e. the tool ends with ``_<api>`` — so an
-    MCP tool named ``submit_sbatch`` satisfies §6 for the Python API
-    ``sbatch``. This resolves the §2 / §6 conflict surfaced by #82:
-    single-token Python APIs (the SLURM verb family ``sbatch`` /
-    ``srun`` / ``squeue`` / ``sacct`` / ``scancel`` / ``salloc``, plus
-    ``sync``, ``rsync``, etc.) previously could not satisfy both rules
-    at once — §2 forbids single-token tool names, §6 demanded an
-    exactly-matching MCP tool. Letting §6 accept the verb-prefixed form
-    lets the package keep §2-compliant tool names while still passing
-    §6.
-
-    The match is intentionally one-way (the API name must appear as the
-    tool's suffix after an underscore) so this does NOT silence the
-    legitimate case where a totally-unrelated tool happens to share a
-    short suffix with an API — the FULL api string must be present.
-    """
-    if tool == api:
-        return True
-    return tool.endswith(f"_{api}")
-
-
-def _parity_violations(
-    package: str, py_apis: set[str], mcp_normalized: set[str]
-) -> list[Violation]:
-    """Pure §6 comparison: given Python-API names and normalized MCP tool
-    names, return the §6 violations (missing-in-MCP and orphan-tool).
-
-    Split out from `_check_api_parity` so the comparison logic is testable
-    with real sets — no module-import or registry I/O required.
-
-    Matching uses :func:`_tool_matches_api`, which accepts both the bare
-    ``tool == api`` form AND the ``<verb>_<api>`` form so single-token
-    Python APIs can satisfy both §2 (verb_noun naming) and §6
-    (Python-API coverage) at the same time. See :func:`_tool_matches_api`
-    docstring and #82 for the motivating conflict.
-    """
-    out: list[Violation] = []
-
-    missing_in_mcp = {
-        api
-        for api in py_apis
-        if not any(_tool_matches_api(t, api) for t in mcp_normalized)
-    }
-    if missing_in_mcp and len(missing_in_mcp) > len(py_apis) * 0.5:
-        out.append(
-            Violation(
-                package,
-                "§6",
-                f"{len(missing_in_mcp)}/{len(py_apis)} Python APIs have no "
-                f"matching MCP tool (sample: {sorted(missing_in_mcp)[:3]})",
-            )
-        )
-
-    # Orphan check (warn-tier; small set is normal for envelope tools).
-    # A tool that covers any Python API via the verb_<api> form is not
-    # an orphan — same matching rule as the missing-in-MCP direction so
-    # the two halves stay symmetric.
-    skill_tools = {"skills_list", "skills_get"}
-    orphans = {
-        t
-        for t in mcp_normalized
-        if t not in skill_tools
-        and not any(_tool_matches_api(t, api) for api in py_apis)
-    }
-    if orphans and len(orphans) > 3:
-        out.append(
-            Violation(
-                package,
-                "§6",
-                f"{len(orphans)} MCP tools have no matching Python API "
-                f"(sample: {sorted(orphans)[:3]}). This count is NOT one "
-                "uniform task: some tools already have a real sync "
-                "implementation and need only an export, while others have "
-                "no Python API behind them at all and need a public "
-                "signature designed. Do NOT satisfy this by re-exporting "
-                "async MCP wrappers that return JSON strings — that "
-                "publishes a transport shape as a Python API and is worse "
-                "than the gap. See 03_interface/03_mcp/07_python-api-parity.",
-            )
-        )
-    return out
-
-
 __all__ = [
+    "_allowlist_violations",
+    "_check_api_parity",
+    "_parity_violations",
+    "_python_api_names",
+    "_tool_matches_api",
     "is_mcp_parity_exempt",
     "mcp_tools_allowlist",
-    "_parity_violations",
-    "_allowlist_violations",
-    "_python_api_names",
-    "_check_api_parity",
-    "_tool_matches_api",
+    "record_parity_baseline",
 ]

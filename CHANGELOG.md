@@ -20,6 +20,26 @@ versions follow [Semantic Versioning](https://semver.org/).
   release. Wildcard equality (`==1.2.*`), `[build-system]` requirements and
   marker text are not pins. New-vs-baseline severity: a pin introduced by the
   change under audit blocks (E), one already on the baseline warns (W).
+- **§6 parity ratchet** (`ecosystem audit-mcp-tools`, `audit-all`). A package
+  that owes Python-API ↔ MCP parity but cannot close the gap at once records
+  it with `audit-mcp-tools <pkg> --write-parity-baseline` in a committed
+  `.scitex/dev/mcp-parity-baseline.yaml`. While the file exists the
+  missing-tool half of §6 is exact instead of "more than half": a new API
+  without a tool fails, an entry whose API gained a tool (or was removed)
+  fails until it is deleted, and the remaining backlog is printed as a
+  `[ratchet] … §6 parity backlog N/M` line. A malformed file fails §6 instead
+  of suppressing anything. The orphan-tool half is unchanged.
+
+### Fixed
+
+- **§6 counted a function once per export path.** An operation exported both
+  flat (`pkg.describe`) and from a nested noun module
+  (`pkg.descriptive.describe`) demanded two MCP tools; nested names whose
+  function is already exported flat are no longer counted again.
+- **§2 and §6 could not both be met for single-token APIs §2 rejects as bare
+  tool names** (`describe`, `verify`). §2 requires such a tool to be
+  `<api>_<noun>` (`describe_data`, `verify_result`); §6 now accepts that form
+  as covering the API, mirroring the `<verb>_<api>` form accepted for #82.
 
 ### Changed
 

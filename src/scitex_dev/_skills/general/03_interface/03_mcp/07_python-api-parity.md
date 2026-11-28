@@ -66,15 +66,39 @@ explicitly exported noun submodules. Classes and typing aliases for which
 `typing.get_origin(value)` is non-`None` are not operations: for example,
 `Callable[[str], str]`, `Literal["draft", "published"]`, and `list[str]` do not
 need fake MCP tools. Real functions and callable instances remain in the check.
-Nested operations flatten to `<noun>_<verb>`.
+Nested operations flatten to `<noun>_<verb>`; a nested name whose function is
+already exported flat is the same operation and is counted once.
 
 The current unscoped comparison reports missing-tool drift when more than half
 of discovered operations lack matching tools, and orphan-tool drift when more
 than three non-skill tools lack Python operations. Matching accepts a bare API
-name or a `verb_<api>` suffix. This name check does not by itself prove argument
+name, a `verb_<api>` suffix, and — for a single-token API that §2 rejects as a
+bare tool name (`describe`, `verify`) — an `<api>_<noun>` tool
+(`describe_data`, `verify_result`). This name check does not by itself prove argument
 or output equivalence; those contracts still need executable tests. Excluding
 a typing alias must never suppress a missing real operation or create a
 package-specific exemption.
+
+## Paying down a large gap: the parity ratchet
+
+A package that owes parity but is far from it (most of its operations have no
+tool) records the gap instead of exempting itself:
+
+```bash
+scitex-dev ecosystem audit-mcp-tools scitex-stats --write-parity-baseline
+git add .scitex/dev/mcp-parity-baseline.yaml
+```
+
+While `.scitex/dev/mcp-parity-baseline.yaml` exists, the missing-tool half of
+§6 is exact: a NEW operation without a tool fails, and an entry whose operation
+gained a tool (or was removed) fails until it is deleted from the file, so the
+list only shrinks. The audit prints the remaining backlog
+(`[ratchet] <pkg>: §6 parity backlog N/M …`). Re-recording is a deliberate,
+reviewable diff — never a way to make a new gap pass.
+
+Use `mcp_parity_exempt` only when the tools mirror external methods with no
+Python counterpart by design, and `mcp_tools_allowlist` only when the MCP
+surface is deliberately curated. A gap you intend to close is a ratchet.
 
 ## The orphan count is two different jobs, not one
 
