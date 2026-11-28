@@ -80,17 +80,6 @@ def provision_tenant_store(
                 raise StoreProvisionError(
                     "Existing tenant namespace has a different owner."
                 )
-            connection.execute(
-                sql.SQL("REVOKE ALL ON SCHEMA {} FROM PUBLIC").format(namespace)
-            )
-            connection.execute(
-                sql.SQL("GRANT USAGE ON SCHEMA {} TO {}").format(namespace, principal)
-            )
-            connection.execute(
-                sql.SQL("REVOKE CREATE ON SCHEMA {} FROM {}").format(
-                    namespace, principal
-                )
-            )
             # One schema per tenant across packages, so pooled connections of
             # the SAME login retain the same namespace. Forced shared logins
             # are refused by open_tenant_store, not trusted via an app GUC.
@@ -111,7 +100,21 @@ def provision_tenant_store(
                     raise StoreProvisionError(
                         "Existing store objects require a separate reviewed migration."
                     )
+            # Everything the namespace owner decides runs AS the owner, so the
+            # provisioner needs only SET on that role: a NOINHERIT membership
+            # (least privilege) can create a schema it then cannot grant on.
             connection.execute(sql.SQL("SET LOCAL ROLE {}").format(owner))
+            connection.execute(
+                sql.SQL("REVOKE ALL ON SCHEMA {} FROM PUBLIC").format(namespace)
+            )
+            connection.execute(
+                sql.SQL("GRANT USAGE ON SCHEMA {} TO {}").format(namespace, principal)
+            )
+            connection.execute(
+                sql.SQL("REVOKE CREATE ON SCHEMA {} FROM {}").format(
+                    namespace, principal
+                )
+            )
             connection.execute(sql.SQL("SET LOCAL search_path TO {}").format(namespace))
             for statement in dialect.create_sql(schema):
                 connection.execute(statement)
