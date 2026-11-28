@@ -18,6 +18,7 @@ pip install 'scitex-dev[cli-audit]'
 scitex-dev ecosystem audit-mcp-tools <package-name>
 scitex-dev ecosystem audit-mcp-tools --all --json > mcp-drift.json
 scitex-dev ecosystem audit-mcp-tools <pkg> --behavioral   # also probe `<cli> mcp ...`
+scitex-dev ecosystem audit-mcp-tools <pkg> --write-parity-baseline   # record the §6 backlog (ratchet)
 ```
 
 ## Coverage matrix
@@ -33,7 +34,7 @@ scitex-dev ecosystem audit-mcp-tools <pkg> --behavioral   # also probe `<cli> mc
 | Required subcommands (`mcp start | doctor | list-tools | install`) on the CLI | §3 | ✅ static + behavioral | **Static:** click-tree walk verifies all four leaves under the `mcp` group; missing any one is a §3 violation (the scitex-scholar pre-2026-05-06 case shipped only `list-tools` and went unflagged because the check was behavioral-only). **Behavioral:** under `--behavioral`, also probes `<cli> mcp <sub> --help` to confirm the leaf actually wires up. |
 | `mcp list-tools` accepts `-v|-vv|-vvv` and `--json`                   | §4      | ✅ behavioral | Monotonic ladder check + JSON parseability.                          |
 | `<pkg>_skills_list` and `<pkg>_skills_get` present                    | §5      | ✅ static   | Accepts both prefixed and bare (Convention A vs B).                  |
-| Every public Python API has matching MCP tool                         | §6      | ✅ static   | Functions only (classes filtered); >50% missing → flag.              |
+| Every public Python API has matching MCP tool                         | §6      | ✅ static   | Functions only (classes filtered); >50% missing → flag. With a committed `.scitex/dev/mcp-parity-baseline.yaml` (`--write-parity-baseline`): exact shrink-only ratchet — new gap or stale entry → flag, backlog count printed. |
 | Every MCP tool traces back to a public Python API (no orphans)        | §6      | ✅ static   | Skill-tool envelope (`skills_*`) excluded; >3 orphans → flag.        |
 | No banned synonyms in tool names (`io_ls`, `io_rm`, …)                | §2      | ✅ static   | Maps `ls`→`list`, `rm`→`delete`, `display`→`show`, etc.              |
 | JSON-schema arg parity at `-vvv`                                      | §6      | ❌ TODO     | Currently only verifies `--json` parses, not arg-name/type match.    |

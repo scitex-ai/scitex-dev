@@ -39,6 +39,10 @@ def register(ecosystem):
                     "{prog} ecosystem audit-mcp-tools --all --json > mcp-drift.json",
                     "Every registry package, as JSON.",
                 ),
+                Example(
+                    "{prog} ecosystem audit-mcp-tools scitex-stats --write-parity-baseline",
+                    "Record the §6 missing-tool backlog as a shrink-only ratchet.",
+                ),
             ),
         ),
     )
@@ -109,6 +113,17 @@ def register(ecosystem):
         help="Only report violations at or above this severity.",
     )
     @click.option(
+        "--write-parity-baseline",
+        is_flag=True,
+        help=(
+            "Record this package's current §6 Python APIs without an MCP "
+            "tool in <repo>/.scitex/dev/mcp-parity-baseline.yaml and exit. "
+            "While that file exists, §6 fails on any NEW API without a tool "
+            "and on any entry that gained a tool (delete it): the backlog "
+            "may only shrink. Commit the file; re-run only to re-record."
+        ),
+    )
+    @click.option(
         "--timeout",
         type=float,
         default=30.0,
@@ -125,6 +140,7 @@ def register(ecosystem):
         rules,
         exclude_rules,
         min_severity,
+        write_parity_baseline,
         timeout,
     ):
         from ....audit._summary._mcp_audit import run_audit_mcp, run_audit_mcp_all
@@ -153,6 +169,17 @@ def register(ecosystem):
         # toplevel, incl. linked worktrees) > registry local_path. Shared
         # with the other per-target auditors so --path wins uniformly.
         repo, resolved_via = resolve_target_tree(package, repo_path)
+
+        if write_parity_baseline:
+            from ....audit._summary._mcp_parity import record_parity_baseline
+
+            try:
+                path, n = record_parity_baseline(package, repo)
+            except ValueError as exc:
+                click.echo(f"error: {exc}", err=True)
+                raise SystemExit(2) from exc
+            click.echo(f"{package}: recorded {n} §6 parity-backlog entries in {path}")
+            raise SystemExit(0)
 
         raise SystemExit(
             run_audit_mcp(
