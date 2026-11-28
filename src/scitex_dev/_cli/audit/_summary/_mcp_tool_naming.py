@@ -15,7 +15,6 @@ import re
 from ._audit import Violation
 from ._mcp_names import _short_name
 
-
 # Banned synonyms — same "Avoid" column as the CLI catalog.
 _TOOL_NAME_SYNONYMS: dict[str, str] = {
     "ls": "list",
@@ -122,14 +121,45 @@ _VALID_NAME = re.compile(r"^[a-z][a-z0-9_]*$")
 #: belongs to the corpus that audits all N.
 STANDARD_TOOL_NAMES: frozenset[str] = frozenset({"health"})
 
+
+def _check_derived_tool(package: str, raw: str, verb: str, out: list) -> None:
+    """§2 for an SDK-derived tool: the verb comes from its operation."""
+    if verb in _TOOL_NAME_SYNONYMS:
+        out.append(
+            Violation(
+                f"{package}::{raw}",
+                "§2",
+                f"banned synonym verb '{verb}' in the SDK operation behind '{raw}' "
+                f"— declare the operation with verb '{_TOOL_NAME_SYNONYMS[verb]}'",
+            )
+        )
+
+
 def _check_tool_naming(
-    package: str, tool_names: list[str], out: list[Violation]
+    package: str,
+    tool_names: list[str],
+    out: list[Violation],
+    derived: dict[str, str] | None = None,
 ) -> None:
-    """§2 — `<pkg>_<verb>_<noun>` snake_case + no banned synonyms / shapes."""
+    """§2 — `<pkg>_<verb>_<noun>` snake_case + no banned synonyms / shapes.
+
+    Tools that scitex-sdk generated from an ``ApiOperation`` are named
+    ``<package>_<resource>_<verb>`` (API-T001, operator decision 2026-11-28)
+    and are judged by their operation metadata instead of by position:
+    ``derived`` maps such a tool name to its operation verb (discovered from
+    the package's installed ``scitex.apis`` plugin when omitted).
+    """
+    from ._mcp_sdk_operations import derived_tool_verbs
+
     short = _short_name(package)
     expected_prefix = f"{short}_"
+    if derived is None:
+        derived = derived_tool_verbs(package)
 
     for raw in tool_names:
+        if raw in derived:
+            _check_derived_tool(package, raw, derived[raw], out)
+            continue
         # snake_case sanity
         if not _VALID_NAME.match(raw):
             out.append(
@@ -173,7 +203,7 @@ def _check_tool_naming(
             continue
 
         # If the name is prefixed, strip and inspect the verb_noun tail.
-        body = raw[len(expected_prefix) :] if raw.startswith(expected_prefix) else raw
+        body = raw.removeprefix(expected_prefix)
         parts = body.split("_")
         # Bare-verb name `<pkg>_<verb>` is allowed when the verb naturally takes
         # its object as a parameter (`io_save`, `audio_speak`). Only flag when
