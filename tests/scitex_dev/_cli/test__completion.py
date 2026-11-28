@@ -328,6 +328,24 @@ def test_bash_completion_lazy_loads_the_dropin_without_any_rc_line(tmp_path):
     assert (loaded.returncode, "_scitex_dev_completion" in loaded.stdout) == (0, True)
 
 
+def test_public_cli_module_exports_the_completion_building_blocks():
+    # Arrange
+    import scitex_dev.cli as public
+    from scitex_dev._cli import _completion
+
+    names = (
+        "attach_shell_completion",
+        "completion_dropin_path",
+        "generate_completion_script",
+        "install_completion",
+        "legacy_rc_lines",
+    )
+    # Act
+    resolved = [getattr(public, n) is getattr(_completion, n) for n in names]
+    # Assert
+    assert resolved == [True] * len(names)
+
+
 def test_ecosystem_install_does_not_wire_completions_by_default():
     # Arrange
     ctx = main.make_context("scitex-dev", ["ecosystem"], resilient_parsing=True)

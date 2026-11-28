@@ -153,8 +153,9 @@ then runs in a subshell.
 
 ### Use the shared helper
 
-`scitex_dev._cli._completion.attach_shell_completion(group, prog_name=...)`
-implements all of the above; every CLI that calls it inherits the contract.
+`attach_shell_completion(group, prog_name=...)` (public import path:
+`from scitex_dev.cli import attach_shell_completion`) implements all of the
+above; every CLI that calls it inherits the contract.
 A package shipping a second console script for the same group (Click keys
 completion on `argv[0]`) passes it as an alias:
 

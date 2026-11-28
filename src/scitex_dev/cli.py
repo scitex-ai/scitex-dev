@@ -26,8 +26,16 @@ from ._core.dispatch import (
     skills_click_group,
 )
 
-__all__ = [
+_COMPLETION_EXPORTS = (
     "attach_shell_completion",
+    "completion_dropin_path",
+    "generate_completion_script",
+    "install_completion",
+    "legacy_rc_lines",
+)
+
+__all__ = [
+    *_COMPLETION_EXPORTS,
     "docs_click_group",
     "register_docs_subcommand",
     "register_skills_subcommand",
@@ -36,8 +44,8 @@ __all__ = [
 
 
 def __getattr__(name: str):
-    if name == "attach_shell_completion":
-        from ._cli._completion import attach_shell_completion
+    if name in _COMPLETION_EXPORTS:
+        from ._cli import _completion
 
-        return attach_shell_completion
+        return getattr(_completion, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
