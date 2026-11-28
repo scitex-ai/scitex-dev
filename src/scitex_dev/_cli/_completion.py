@@ -249,7 +249,17 @@ def legacy_rc_lines(shell: str, prog_name: str) -> list[tuple[Path, str]]:
     except OSError:
         return []
     marker = _legacy_marker(prog_name)
-    return [(rc, line) for line in text.splitlines() if line.rstrip().endswith(marker)]
+    lines = text.splitlines()
+    found = []
+    for index, line in enumerate(lines):
+        if not line.rstrip().endswith(marker):
+            continue
+        found.append((rc, line))
+        # Some installers wrote the marker as its own comment line above the
+        # `eval` line; report that line too so the user deletes both.
+        if line.strip() == marker and index + 1 < len(lines):
+            found.append((rc, lines[index + 1]))
+    return found
 
 
 def _activation_hint(shell: str, outcomes: list[CompletionInstall]) -> str:

@@ -246,6 +246,21 @@ def test_legacy_rc_line_is_reported_but_not_edited(tmp_path):
     ) == (0, True, rc_text)
 
 
+def test_legacy_marker_on_its_own_line_reports_the_following_eval_line(tmp_path):
+    # Arrange — the umbrella CLI's old two-line block
+    home = _home(tmp_path)
+    eval_line = 'eval "$(_SCITEX_DEV_COMPLETE=bash_source /usr/bin/scitex-dev)"'
+    rc_text = _RC_TEXT + "# scitex-dev tab completion\n" + eval_line + "\n"
+    (home / ".bashrc").write_text(rc_text)
+    # Act
+    result = _install(home)
+    # Assert
+    assert (eval_line in result.output, (home / ".bashrc").read_text()) == (
+        True,
+        rc_text,
+    )
+
+
 def test_aliases_get_one_dropin_each(tmp_path):
     # Arrange
     import click
