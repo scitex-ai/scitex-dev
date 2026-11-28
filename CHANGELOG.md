@@ -10,6 +10,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.68.1] - 2026-11-28
+
 ### Fixed
 
 - **Shell completion no longer edits rc files** (#1127). The shared
