@@ -74,13 +74,13 @@ RULES_S2_SRC_TESTS: list[Rule] = [
         "PS-147",
         "§1",
         (
-            "source writes an eval-form shell-completion line "
-            '(`eval "$(_<NAME>_COMPLETE=bash_source <bin>)"`) into '
-            "the user's rc file. The eval form re-invokes the binary "
-            "on every shell start (~0.4s/binary). Use the cache-file "
-            "pattern instead: generate the completion once into "
-            "`~/.scitex/<pkg-short>/runtime/completion/<binary>` and "
-            "have rc `source` it. See _skills/general/03_interface/02_"
+            "source writes shell completion (an "
+            '`eval "$(_<NAME>_COMPLETE=bash_source <bin>)"` line, a '
+            "`source` line, or a script) into the user's rc file. rc "
+            "files are often symlinks into a tracked dotfiles repo. "
+            "Install a drop-in under the shell's completion directory "
+            "via `scitex_dev._cli._completion.attach_shell_completion`. "
+            "See _skills/general/03_interface/02_"
             "cli/03_required-introspection-commands.md."
         ),
         slug="local-state-eval-completion",
