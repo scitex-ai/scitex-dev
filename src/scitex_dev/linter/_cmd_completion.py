@@ -1,13 +1,10 @@
-"""CLI subcommand: completion — shell tab completion for scitex-linter."""
+"""Static completion script text for the linter's `show-completion-*` leaves.
 
-import os
-
-import scitex_logging as slogging
-
-log = slogging.getLogger(__name__)
-
-from .._core.streams import render_content
-console = slogging.getConsole(f"{__name__}.console")
+Installing completion is the shared helper's job
+(`scitex_dev._cli._completion`); nothing here writes to the filesystem.
+The argparse-era `completion install` that appended to ~/.bashrc was removed
+(scitex-dev#1127).
+"""
 
 
 def _generate_completion_script(shell: str) -> str:
@@ -97,99 +94,3 @@ _scitex-linter() {
 
 _scitex-linter "$@" """
     return ""
-
-
-def register(subparsers) -> None:
-    """Register the completion subcommand."""
-    p = subparsers.add_parser(
-        "completion",
-        help="Shell tab completion",
-        description="Install or display shell tab completion for scitex-linter.",
-    )
-    comp_sub = p.add_subparsers(dest="comp_command")
-
-    inst_p = comp_sub.add_parser("install", help="Install completion to shell RC file")
-    inst_p.add_argument(
-        "--shell",
-        choices=["bash", "zsh"],
-        help="Shell type (auto-detected if not provided)",
-    )
-    inst_p.set_defaults(func=_cmd_install)
-
-    stat_p = comp_sub.add_parser("status", help="Check completion installation status")
-    stat_p.set_defaults(func=_cmd_status)
-
-    bash_p = comp_sub.add_parser("bash", help="Show bash completion script")
-    bash_p.set_defaults(func=lambda args: _cmd_show("bash"))
-
-    zsh_p = comp_sub.add_parser("zsh", help="Show zsh completion script")
-    zsh_p.set_defaults(func=lambda args: _cmd_show("zsh"))
-
-    p.set_defaults(func=lambda args: _cmd_default(p, args))
-
-
-def _cmd_default(parser, args) -> int:
-    if not hasattr(args, "comp_command") or args.comp_command is None:
-        parser.print_help()
-    return 0
-
-
-def _cmd_show(shell: str) -> int:
-    script = _generate_completion_script(shell)
-    if script:
-        render_content(script)
-        return 0
-    log.error(f"Unsupported shell: {shell}")
-    return 1
-
-
-def _cmd_install(args) -> int:
-    shell = args.shell
-    if not shell:
-        shell_env = os.environ.get("SHELL", "")
-        if "zsh" in shell_env:
-            shell = "zsh"
-        else:
-            shell = "bash"
-
-    script = _generate_completion_script(shell)
-    if not script:
-        log.error(f"Unsupported shell: {shell}")
-        return 1
-
-    rc_file = os.path.expanduser("~/.bashrc" if shell == "bash" else "~/.zshrc")
-
-    if os.path.exists(rc_file):
-        with open(rc_file) as f:
-            if "scitex-linter tab completion" in f.read():
-                console.info(f"Completion already installed in {rc_file}")
-                return 0
-
-    with open(rc_file, "a") as f:
-        f.write(f"\n{script}\n")
-
-    console.info(f"Completion installed in {rc_file}")
-    console.info(f"Reload with: source {rc_file}")
-    return 0
-
-
-def _cmd_status(args) -> int:
-    shell_env = os.environ.get("SHELL", "")
-    shell = "zsh" if "zsh" in shell_env else "bash"
-    rc_file = os.path.expanduser("~/.bashrc" if shell == "bash" else "~/.zshrc")
-
-    installed = False
-    if os.path.exists(rc_file):
-        with open(rc_file) as f:
-            if "scitex-linter tab completion" in f.read():
-                installed = True
-
-    status = "installed" if installed else "not installed"
-    console.info(f"Shell:  {shell}")
-    console.info(f"RC:     {rc_file}")
-    console.info(f"Status: {status}")
-
-    if not installed:
-        console.info("\nInstall with: scitex-linter completion install")
-
-    return 0

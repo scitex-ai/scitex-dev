@@ -8,7 +8,6 @@ group via :func:`register`. The lower-level script generator lives in
 from __future__ import annotations
 
 import json
-import sys
 
 import click
 
@@ -32,7 +31,7 @@ def register(main_group):
             examples=(
                 Example(
                     "{prog} linter completion install --shell bash",
-                    "Install completion into ~/.bashrc.",
+                    "Install the scitex-dev completion drop-in.",
                 ),
                 Example(
                     "{prog} linter show-completion-status",
@@ -48,14 +47,14 @@ def register(main_group):
         "install",
         cls=SpecCommand,
         help_spec=CliHelp(
-            summary="Install completion to shell RC file.",
+            summary="Install the completion drop-in (never edits shell rc files).",
             examples=(
                 Example(
                     "{prog} linter completion install", "Auto-detect the shell."
                 ),
                 Example(
                     "{prog} linter completion install --shell zsh",
-                    "Target ~/.zshrc explicitly.",
+                    "Install the zsh drop-in.",
                 ),
                 Example(
                     "{prog} linter completion install --dry-run",
@@ -87,40 +86,27 @@ def register(main_group):
         "--json", "as_json", is_flag=True, default=False, help="Output as JSON."
     )
     def completion_install(shell, dry_run, yes, as_json):
+        # The linter is a subgroup of `scitex-dev`, so its words complete
+        # through scitex-dev's own completion. Install that drop-in via the
+        # shared helper; no rc file is touched (scitex-dev#1127).
         import os
 
+        from .._cli import main as root_cli
+        from .._cli._completion import install_completion
+
+        del yes  # install never prompts
         if not shell:
-            shell_env = os.environ.get("SHELL", "")
-            shell = "zsh" if "zsh" in shell_env else "bash"
-
-        script = _completion_script(shell)
-        if not script:
-            click.echo(f"Unsupported shell: {shell}", err=True)
-            sys.exit(1)
-
-        rc_file = os.path.expanduser("~/.bashrc" if shell == "bash" else "~/.zshrc")
-
-        if os.path.exists(rc_file):
-            with open(rc_file) as f:
-                if "scitex-dev linter tab completion" in f.read():
-                    click.echo(f"Completion already installed in {rc_file}")
-                    return
-
-        if dry_run:
-            click.echo(f"Would append completion script to {rc_file}")
+            shell = "zsh" if "zsh" in os.environ.get("SHELL", "") else "bash"
+        outcomes = install_completion(root_cli, shell, ("scitex-dev",), dry_run=dry_run)
+        if as_json:
+            rows = [
+                {"prog": o.prog_name, "path": str(o.path), "status": o.status}
+                for o in outcomes
+            ]
+            click.echo(json.dumps(rows, indent=2))
             return
-
-        if not yes:
-            click.echo(
-                f"Refusing to modify {rc_file} without --yes/-y.",
-                err=True,
-            )
-            raise SystemExit(2)
-
-        with open(rc_file, "a") as f:
-            f.write(f"\n{script}\n")
-        click.echo(f"Completion installed in {rc_file}")
-        click.echo(f"Reload with: source {rc_file}")
+        for o in outcomes:
+            click.echo(f"{o.status}: {o.path}")
 
     @main_group.command(
         "show-completion-status",
@@ -144,29 +130,26 @@ def register(main_group):
     def show_completion_status(as_json):
         import os
 
-        shell_env = os.environ.get("SHELL", "")
-        shell = "zsh" if "zsh" in shell_env else "bash"
-        rc_file = os.path.expanduser("~/.bashrc" if shell == "bash" else "~/.zshrc")
-        installed = False
-        if os.path.exists(rc_file):
-            with open(rc_file) as f:
-                if "scitex-dev linter tab completion" in f.read():
-                    installed = True
+        from .._cli._completion import completion_dropin_path
+
+        shell = "zsh" if "zsh" in os.environ.get("SHELL", "") else "bash"
+        dropin = completion_dropin_path(shell, "scitex-dev")
+        installed = dropin.is_file()
 
         if as_json:
             click.echo(
                 json.dumps(
-                    {"shell": shell, "rc_file": rc_file, "installed": installed},
+                    {"shell": shell, "path": str(dropin), "installed": installed},
                     indent=2,
                 )
             )
             return
 
         click.echo(f"Shell:  {shell}")
-        click.echo(f"RC:     {rc_file}")
+        click.echo(f"File:   {dropin}")
         click.echo(f"Status: {'installed' if installed else 'not installed'}")
         if not installed:
-            click.echo("\nInstall with: scitex-dev linter completion install")
+            click.echo("\nInstall with: scitex-dev install-shell-completion")
 
     @main_group.command(
         "show-completion-bash",

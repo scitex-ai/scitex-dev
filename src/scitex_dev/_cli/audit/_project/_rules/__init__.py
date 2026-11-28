@@ -103,7 +103,7 @@ _SEVERITY_OVERRIDES: dict[str, str] = {
     "PS-142": "E",  # README missing `## Architecture` with diagram/tree
     "PS-145": "W",  # cross-package state read (bake-in: warn first)
     "PS-146": "E",  # pip-install side-effect (clear violation)
-    "PS-147": "W",  # eval-form shell completion (bake-in: warn first)
+    "PS-147": "W",  # shell completion written into a user rc file (bake-in)
     "PS-152": "W",  # README split Problem/Solution headings (warn)
     "PS-153": "W",  # README architecture file-tree, no mermaid (warn)
     "PS-154": "W",  # README installation not canonical (warn)

@@ -14,11 +14,12 @@ Implements the rules from
            install time. Wheels stay inert; PathManager mkdir's
            lazily on first write.
 
-  PS-147 — eval-form shell completion (§11 / required-introspection).
-           Source must not write `eval "$(_<NAME>_COMPLETE=...)"`
-           into the user's rc file. The cache-file pattern is:
-           generate completion to `~/.scitex/<pkg-short>/runtime/
-           completion/<binary>` once, source it from rc.
+  PS-147 — shell completion written into a user rc file
+           (required-introspection §1a, scitex-dev#1127). Source must not
+           append `eval "$(_<NAME>_COMPLETE=...)"`, a `source` line, or any
+           other text to `~/.bashrc` / `~/.zshrc`. Completion installs as a
+           drop-in under the shell's own completion directory (shared
+           helper `scitex_dev._cli._completion.attach_shell_completion`).
 """
 
 from __future__ import annotations
@@ -344,7 +345,7 @@ def check_ps146_pip_install_side_effect(
 
 
 # ---------------------------------------------------------------------------
-# PS-147 — eval-form shell completion
+# PS-147 — shell completion written into a user rc file
 # ---------------------------------------------------------------------------
 
 # Look for a string literal of the form  eval "$(_FOO_COMPLETE=bash_source ...)
@@ -355,6 +356,16 @@ _RE_EVAL_COMPLETE = re.compile(
 # Match _<NAME>_COMPLETE= as a string literal anywhere in source — strong
 # proxy for "this package wires shell completion".
 _RE_COMPLETE_VAR = re.compile(r"_[A-Z][A-Z0-9_]*_COMPLETE\s*=")
+_RE_RC_NAME = re.compile(r"\.(bashrc|zshrc|profile|bash_profile)\b")
+# Installers add to an rc by appending: flag an append-mode open.
+_RE_RC_WRITE = re.compile(r"""open\([^)\n]*["']a["']|\.open\(\s*["']a["']""")
+
+
+def _first_code_match(rx: re.Pattern, text: str):
+    for m in rx.finditer(text):
+        if not _is_in_docstring_or_comment(text, m.start()):
+            return m
+    return None
 
 
 def check_ps147_eval_form_completion(
@@ -363,23 +374,36 @@ def check_ps147_eval_form_completion(
     out: list,
 ) -> None:
     findings: list[tuple[Path, int, str]] = []
+
+    def _record(py: Path, text: str, pos: int) -> None:
+        line_no = text[:pos].count("\n") + 1
+        line = text.splitlines()[line_no - 1]
+        findings.append((py, line_no, line.lstrip()[:120]))
+
     for py in _src_files(repo):
         try:
             text = py.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
-        # Cheap pre-filter: must mention rc-files AND _COMPLETE=.
-        if not _RE_COMPLETE_VAR.search(text):
+        # Cheap pre-filter: must mention an rc file AND completion.
+        if not _RE_RC_NAME.search(text):
             continue
-        if not re.search(r"\.(bashrc|zshrc|profile|bash_profile)\b", text):
+        if not (_RE_COMPLETE_VAR.search(text) or "complet" in text.lower()):
             continue
-        for m in _RE_EVAL_COMPLETE.finditer(text):
-            if _is_in_docstring_or_comment(text, m.start()):
-                continue
-            line_no = text[: m.start()].count("\n") + 1
-            line = text.splitlines()[line_no - 1]
-            stripped = line.lstrip()
-            findings.append((py, line_no, stripped[:120]))
+        evals = [
+            m
+            for m in _RE_EVAL_COMPLETE.finditer(text)
+            if not _is_in_docstring_or_comment(text, m.start())
+        ]
+        for m in evals:
+            _record(py, text, m.start())
+        if evals:
+            continue
+        # Any other write in completion code that names an rc file (a
+        # `source` line, an inline script) — one finding per file.
+        write = _first_code_match(_RE_RC_WRITE, text)
+        if write is not None:
+            _record(py, text, write.start())
 
     for py, line_no, snippet in findings:
         out.append(
@@ -387,15 +411,15 @@ def check_ps147_eval_form_completion(
                 "PS-147",
                 f"{py}:{line_no}",
                 (
-                    f"writes eval-form shell-completion line into a user rc "
-                    f"file: `{snippet}`. The eval form re-invokes the binary "
-                    f"on every shell start (~0.4s per binary). Use the "
-                    f"cache-file pattern: generate completion once into "
-                    f"`~/.scitex/<pkg-short>/runtime/completion/<binary>`, "
-                    f"create an XDG symlink, and write a `[ -f cache ] && "
-                    f"source cache` line into rc. See _skills/general/"
-                    f"03_interface/02_cli/03_required-introspection-commands.md "
-                    f"and 01_ecosystem/06_dot_scitex_directory.md §11."
+                    f"writes shell completion into a user rc file: "
+                    f"`{snippet}`. rc files are often symlinks into a "
+                    f"tracked dotfiles repo, so every install dirties it. "
+                    f"Install a drop-in under the shell's completion "
+                    f"directory instead (bash: ~/.local/share/bash-completion/"
+                    f"completions/<binary>) via the shared helper "
+                    f"`scitex_dev._cli._completion.attach_shell_completion`. "
+                    f"See _skills/general/03_interface/02_cli/"
+                    f"03_required-introspection-commands.md."
                 ),
             )
         )

@@ -41,4 +41,4 @@ Every `scitex-*` package that writes anything to disk — config, logs, caches, 
 - [ ] Project scope is always a directory (`<project>/.scitex/<pkg-short>/`), never a single file at `<project>/.scitex/<pkg>.yaml`.
 - [ ] If the package consumes another package's domain fact (machine name, SLURM cluster, …), it imports that package's API rather than re-deriving the answer.
 - [ ] Migration shims from legacy paths are time-boxed (one minor version) — no permanent back-compat read paths.
-- [ ] **Shell-completion install** writes a cache file under `~/.scitex/<pkg-short>/runtime/completion/<binary>` and a source line in the user's rc — never an `eval "$(_<PKG>_COMPLETE=...)"` line that re-invokes the binary on every shell start. See `03_interface/02_cli/03_required-introspection-commands.md`.
+- [ ] **Shell-completion install** writes a drop-in file into the shell's own per-user completion directory (bash: `~/.local/share/bash-completion/completions/<binary>`) and NEVER edits a user rc file (rc files are often symlinks into a tracked dotfiles repo). See `03_interface/02_cli/03_required-introspection-commands.md`.

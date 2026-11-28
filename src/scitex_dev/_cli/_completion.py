@@ -14,6 +14,9 @@ Usage from a downstream package's CLI module:
         ...
 
     attach_shell_completion(cli, prog_name="scitex-io")
+    # a package shipping a second console script for the same group:
+    attach_shell_completion(cli, prog_name="scitex-agent-container",
+                            aliases=("sac",))
 
 That single call registers four leaves on `cli`:
 
@@ -21,12 +24,36 @@ That single call registers four leaves on `cli`:
   * `print-shell-completion   --shell {bash,zsh,fish}`  (canonical)
   * `install-tab-completion`   (hidden deprecated alias → install-shell-completion)
   * `completion`               (hidden deprecated alias → install-shell-completion)
+
+Install contract (scitex-dev#1127):
+
+  * It NEVER modifies a shell rc file (`~/.bashrc`, `~/.zshrc`, ...). On many
+    machines the rc file is a symlink into a version-controlled dotfiles
+    checkout, so appending to it dirties a tracked file on every host that
+    installs a package. Earlier versions appended a `source` line per CLI.
+  * It writes one package-owned drop-in file per console script, at the
+    location the shell's completion framework already scans:
+
+      bash  ${BASH_COMPLETION_USER_DIR:-${XDG_DATA_HOME:-~/.local/share}/bash-completion}/completions/<prog>
+      zsh   ${XDG_DATA_HOME:-~/.local/share}/zsh/site-functions/_<prog>
+      fish  ${XDG_CONFIG_HOME:-~/.config}/fish/completions/<prog>.fish
+
+    bash-completion >= 2 loads the bash file lazily on the first `<TAB>`; fish
+    loads its file automatically; zsh needs the directory on `fpath` before
+    `compinit` (printed as a hint, never written).
+  * It is idempotent: an unchanged script is not rewritten; writes are atomic.
+  * It refuses to write when the target (or a directory on its way, resolved
+    through symlinks) lies inside a git work tree.
+
+The script is generated with this interpreter's Click against the registered
+group; no console program is executed from `PATH`.
 """
 
 from __future__ import annotations
 
 import os
-import shlex
+import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 import click
@@ -34,7 +61,17 @@ from click.shell_completion import get_completion_class
 
 from .._ecosystem.help_spec import CliHelp, Example, SpecCommand
 
-_SOURCE_MAP = {"bash": "bash_source", "zsh": "zsh_source", "fish": "fish_source"}
+SHELLS = ("bash", "zsh", "fish")
+
+__all__ = [
+    "SHELLS",
+    "CompletionInstall",
+    "attach_shell_completion",
+    "completion_dropin_path",
+    "generate_completion_script",
+    "install_completion",
+    "legacy_rc_lines",
+]
 
 
 def _env_var(prog_name: str) -> str:
@@ -42,62 +79,48 @@ def _env_var(prog_name: str) -> str:
     return "_" + prog_name.upper().replace("-", "_") + "_COMPLETE"
 
 
-def _rc_path(shell: str, prog_name: str) -> str:
-    if shell == "fish":
-        return os.path.expanduser(f"~/.config/fish/completions/{prog_name}.fish")
-    return os.path.expanduser({"bash": "~/.bashrc", "zsh": "~/.zshrc"}[shell])
-
-
-def _marker(prog_name: str) -> str:
+def _legacy_marker(prog_name: str) -> str:
+    """Trailing comment earlier versions appended to rc lines."""
     return f"# {prog_name} tab completion"
 
 
-def _eval_line(shell: str, prog_name: str) -> str:
-    """Legacy eval-form line. Kept for migration detection / removal only."""
-    return (
-        f'eval "$({_env_var(prog_name)}={_SOURCE_MAP[shell]} {prog_name})"  '
-        f"{_marker(prog_name)}"
-    )
+def _home() -> Path:
+    return Path(os.path.expanduser("~"))
 
 
-def _scitex_dir() -> Path:
-    """Resolve `$SCITEX_DIR` (default `~/.scitex`). Honours §6 relocation."""
-    return Path(os.environ.get("SCITEX_DIR", os.path.expanduser("~/.scitex")))
+def _xdg_data_home() -> Path:
+    raw = os.environ.get("XDG_DATA_HOME")
+    return Path(raw) if raw else _home() / ".local" / "share"
 
 
-def _pkg_short(prog_name: str) -> str:
-    """`scitex-io` → `io`; `figrecipe` → `figrecipe`."""
-    if prog_name.startswith("scitex-"):
-        return prog_name[len("scitex-") :]
-    return prog_name
+def _xdg_config_home() -> Path:
+    raw = os.environ.get("XDG_CONFIG_HOME")
+    return Path(raw) if raw else _home() / ".config"
 
 
-def _cache_path(prog_name: str) -> Path:
-    """Canonical primary cache: `$SCITEX_DIR/<short>/runtime/completion/<prog>`."""
-    return _scitex_dir() / _pkg_short(prog_name) / "runtime" / "completion" / prog_name
+def completion_dropin_path(shell: str, prog_name: str) -> Path:
+    """Where `install-shell-completion` writes `prog_name`'s script for `shell`.
 
-
-def _xdg_symlink(prog_name: str) -> Path:
-    """XDG bash-completion auto-discovery slot.
-
-    Symlinking the primary cache into `~/.local/share/bash-completion/
-    completions/<prog>` lets bash-completion auto-source it on first
-    `<TAB>` even before the user adds the `source` line — defence in
-    depth. Best-effort only; failure to create the symlink does not
-    abort install.
+    These are the per-user directories each shell's completion framework scans
+    on its own, so no rc file has to name them.
     """
-    return (
-        Path(os.path.expanduser("~/.local/share/bash-completion/completions"))
-        / prog_name
-    )
+    if shell == "bash":
+        # bash-completion 2.x: BASH_COMPLETION_USER_DIR may list several
+        # colon-separated roots; the first one is the user's primary.
+        user_dirs = os.environ.get("BASH_COMPLETION_USER_DIR", "")
+        first = user_dirs.split(":")[0] if user_dirs else ""
+        root = Path(first) if first else _xdg_data_home() / "bash-completion"
+        return root / "completions" / prog_name
+    if shell == "zsh":
+        return _xdg_data_home() / "zsh" / "site-functions" / f"_{prog_name}"
+    if shell == "fish":
+        return _xdg_config_home() / "fish" / "completions" / f"{prog_name}.fish"
+    raise click.ClickException(f"Unsupported completion shell: {shell}.")
 
 
-def _source_line(cache_path: Path, prog_name: str) -> str:
-    quoted_path = shlex.quote(str(cache_path))
-    return f"[ -f {quoted_path} ] && source {quoted_path}  {_marker(prog_name)}"
-
-
-def _generate_script(shell: str, prog_name: str, command: click.Command) -> str:
+def generate_completion_script(
+    shell: str, prog_name: str, command: click.Command
+) -> str:
     """Generate with this interpreter's Click, without executing PATH entries."""
     completion_class = get_completion_class(shell)
     if completion_class is None:
@@ -109,11 +132,161 @@ def _generate_script(shell: str, prog_name: str, command: click.Command) -> str:
         raise click.ClickException(
             f"Failed to generate {shell} completion script for {prog_name}."
         )
-    return script
+    return script + "\n"
 
 
-def attach_shell_completion(main_group, *, prog_name: str) -> None:
-    """Register the 4 shell-completion leaves on `main_group`."""
+def _enclosing_git_work_tree(path: Path) -> Path | None:
+    """The nearest ancestor of `path` (inclusive) holding a `.git` entry."""
+    for candidate in (path, *path.parents):
+        if (candidate / ".git").exists():
+            return candidate
+    return None
+
+
+def _refuse_if_versioned(target: Path) -> None:
+    """Refuse to write a completion file into version-controlled territory.
+
+    Two ways a per-user path can land in a git work tree, both resolved through
+    symlinks: a directory on the way is (or links into) a checkout, e.g. a
+    dotfiles repo that manages `~/.local/share`; or the target itself is a
+    symlink a dotfiles manager placed there. Replacing either would dirty or
+    clobber a tracked file — the defect this helper exists to stop.
+    """
+    places = [target.parent.resolve()]
+    if target.is_symlink():
+        places.append(target.resolve().parent)
+    for place in places:
+        repo = _enclosing_git_work_tree(place)
+        if repo is not None:
+            raise click.ClickException(
+                f"refusing to write {target}: it resolves into the git work "
+                f"tree {repo}. Writing there would modify a version-controlled "
+                f"checkout. Point the shell at another directory (e.g. set "
+                f"XDG_DATA_HOME / BASH_COMPLETION_USER_DIR), or save the "
+                f"script yourself with `print-shell-completion`."
+            )
+
+
+def _atomic_write(path: Path, content: str) -> None:
+    """Write `content` to `path` via a same-directory temp file and rename.
+
+    `os.replace` swaps the directory entry, so a pre-existing symlink at
+    `path` is replaced rather than written through.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(content)
+        os.chmod(tmp_name, 0o644)
+        os.replace(tmp_name, path)
+    except BaseException:
+        try:
+            os.unlink(tmp_name)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+@dataclass(frozen=True)
+class CompletionInstall:
+    """Outcome of installing one console script's completion file."""
+
+    prog_name: str
+    path: Path
+    status: str  # "written" | "unchanged" | "would-write"
+
+
+def install_completion(
+    command: click.Command,
+    shell: str,
+    prog_names: tuple[str, ...] | list[str],
+    *,
+    dry_run: bool = False,
+) -> list[CompletionInstall]:
+    """Write one drop-in completion file per name in `prog_names`.
+
+    Never touches a shell rc file. Raises `click.ClickException` (before any
+    write) when a target would land inside a git work tree.
+    """
+    plans = []
+    for prog_name in prog_names:
+        target = completion_dropin_path(shell, prog_name)
+        _refuse_if_versioned(target)
+        plans.append((prog_name, target))
+
+    outcomes = []
+    for prog_name, target in plans:
+        if dry_run:
+            outcomes.append(CompletionInstall(prog_name, target, "would-write"))
+            continue
+        script = generate_completion_script(shell, prog_name, command)
+        current = (
+            target.read_text(encoding="utf-8")
+            if target.is_file() and not target.is_symlink()
+            else None
+        )
+        if current == script:
+            outcomes.append(CompletionInstall(prog_name, target, "unchanged"))
+            continue
+        _atomic_write(target, script)
+        outcomes.append(CompletionInstall(prog_name, target, "written"))
+    return outcomes
+
+
+def legacy_rc_lines(shell: str, prog_name: str) -> list[tuple[Path, str]]:
+    """Lines an earlier version of this helper appended to the rc file.
+
+    Read-only: the caller reports them so the user (or the owner of a dotfiles
+    repo) can delete them; this module never edits an rc file.
+    """
+    rc_name = {"bash": ".bashrc", "zsh": ".zshrc"}.get(shell)
+    if rc_name is None:
+        return []
+    rc = _home() / rc_name
+    try:
+        text = rc.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    marker = _legacy_marker(prog_name)
+    lines = text.splitlines()
+    found = []
+    for index, line in enumerate(lines):
+        if not line.rstrip().endswith(marker):
+            continue
+        found.append((rc, line))
+        # Some installers wrote the marker as its own comment line above the
+        # `eval` line; report that line too so the user deletes both.
+        if line.strip() == marker and index + 1 < len(lines):
+            found.append((rc, lines[index + 1]))
+    return found
+
+
+def _activation_hint(shell: str, outcomes: list[CompletionInstall]) -> str:
+    if shell == "bash":
+        return (
+            "bash-completion (>= 2) loads it on the first <TAB> in a new "
+            "shell; no rc edit needed."
+        )
+    if shell == "zsh":
+        directory = outcomes[0].path.parent if outcomes else ""
+        return (
+            f"zsh loads it from fpath: if {directory} is not on your fpath "
+            f"yet, add `fpath=({directory} $fpath)` before `compinit` in "
+            f"your zsh config (this command never edits it)."
+        )
+    return "fish loads it automatically in a new shell."
+
+
+def attach_shell_completion(
+    main_group, *, prog_name: str, aliases: tuple[str, ...] = ()
+) -> None:
+    """Register the 4 shell-completion leaves on `main_group`.
+
+    `aliases` names further console scripts bound to the same group (Click
+    keys completion on argv[0], so each name gets its own file).
+    """
+    prog_names = (prog_name, *aliases)
 
     @main_group.command(
         "print-shell-completion",
@@ -138,29 +311,32 @@ def attach_shell_completion(main_group, *, prog_name: str) -> None:
     )
     @click.option(
         "--shell",
-        type=click.Choice(["bash", "zsh", "fish"]),
+        type=click.Choice(list(SHELLS)),
         default="bash",
         help="Target shell. Default: bash.",
     )
     def print_shell_completion(shell):
-        click.echo(_generate_script(shell, prog_name, main_group))
+        click.echo(generate_completion_script(shell, prog_name, main_group), nl=False)
 
     @main_group.command(
         "install-shell-completion",
         cls=SpecCommand,
         help_spec=CliHelp(
-            summary="Wire up TAB completion in the user's shell rc.",
+            summary="Write TAB-completion drop-in files; never edits shell rc files.",
             description=(
-                "Activate in the current shell after install: `source ~/.bashrc`.",
+                "Writes one file per console script into the per-user "
+                "directory the shell's completion framework scans "
+                "(bash: ~/.local/share/bash-completion/completions/). "
+                "Idempotent; refuses to write into a git work tree.",
             ),
             examples=(
                 Example(
                     "{prog} install-shell-completion",
-                    "Install into ~/.bashrc.",
+                    "Install the bash drop-in.",
                 ),
                 Example(
                     "{prog} install-shell-completion --shell zsh",
-                    "Install into ~/.zshrc.",
+                    "Install the zsh drop-in (fpath site-functions).",
                 ),
                 Example(
                     "{prog} install-shell-completion --dry-run",
@@ -171,87 +347,36 @@ def attach_shell_completion(main_group, *, prog_name: str) -> None:
     )
     @click.option(
         "--shell",
-        type=click.Choice(["bash", "zsh", "fish"]),
+        type=click.Choice(list(SHELLS)),
         default="bash",
         help="Target shell. Default: bash.",
     )
     @click.option(
         "--dry-run",
         is_flag=True,
-        help="Print the eval line and target rc file without writing.",
+        help="Print the target drop-in path(s) without writing.",
     )
     @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
     def install_shell_completion(shell, dry_run, yes):
-        del yes  # accepted for §2 compliance; use --dry-run for preview
-        rc_path = _rc_path(shell, prog_name)
-
-        if shell == "fish":
-            if dry_run:
-                click.echo(f"Would write fish completion to {rc_path}")
-                return
-            os.makedirs(os.path.dirname(rc_path), exist_ok=True)
-            with open(rc_path, "w") as f:
-                f.write(_generate_script(shell, prog_name, main_group))
-            click.echo(f"Tab completion installed at {rc_path}")
-            click.echo(f"Run: source {rc_path}")
-            return
-
-        # Cache-file pattern (§11 + 03_required-introspection §1a):
-        #   1. Generate completion script ONCE → cache file under
-        #      $SCITEX_DIR/<short>/runtime/completion/<prog>.
-        #   2. Symlink it into the XDG bash-completion auto-discovery
-        #      slot (best-effort).
-        #   3. Append a `[ -f cache ] && source cache` line to rc.
-        # Sourcing rc takes microseconds vs. ~0.4s for the eval form
-        # that re-invokes the binary on every shell start.
-        cache = _cache_path(prog_name)
-        line = _source_line(cache, prog_name)
-        marker = _marker(prog_name)
-        legacy_eval = _eval_line(shell, prog_name)
-
-        if dry_run:
-            click.echo(f"Would write completion cache to {cache}")
-            click.echo(f"Would symlink XDG slot {_xdg_symlink(prog_name)}")
-            click.echo(f"Would append to {rc_path}:")
-            click.echo(f"  {line}")
-            return
-
-        cache.parent.mkdir(parents=True, exist_ok=True)
-        cache.write_text(_generate_script(shell, prog_name, main_group) + "\n")
-
-        xdg = _xdg_symlink(prog_name)
-        try:
-            xdg.parent.mkdir(parents=True, exist_ok=True)
-            if xdg.is_symlink() or xdg.exists():
-                xdg.unlink()
-            xdg.symlink_to(cache)
-        except OSError:
-            pass  # XDG slot is convenience; rc source line is canonical
-
-        # Migrate: drop the legacy eval line if a previous install left
-        # one in rc — otherwise the user gets both, slow start lingers.
-        existing = ""
-        if os.path.isfile(rc_path):
-            with open(rc_path) as f:
-                existing = f.read()
-        if marker in existing and line.strip() in existing:
-            click.echo(f"Tab completion already installed in {rc_path}")
-            return
-        if marker in existing:
-            # Strip every line carrying the marker so we replace cleanly.
-            kept = [ln for ln in existing.splitlines() if marker not in ln]
-            existing = "\n".join(kept).rstrip() + "\n"
-            with open(rc_path, "w") as f:
-                f.write(existing)
-            click.echo(f"Removed previous {prog_name} completion line from {rc_path}")
-        del legacy_eval  # informational only
-
-        with open(rc_path, "a") as f:
-            f.write(f"\n{line}\n")
-        click.echo(f"Tab completion installed for {prog_name}")
-        click.echo(f"  cache:  {cache}")
-        click.echo(f"  rc:     {rc_path}  (source line appended)")
-        click.echo(f"Run: source {rc_path}")
+        del yes  # accepted for §2 compliance; install never prompts
+        outcomes = install_completion(main_group, shell, prog_names, dry_run=dry_run)
+        for outcome in outcomes:
+            label = {
+                "would-write": "Would write",
+                "written": "Wrote",
+                "unchanged": "Up to date",
+            }[outcome.status]
+            click.echo(f"{label}: {outcome.path}")
+        for name in prog_names:
+            for rc, line in legacy_rc_lines(shell, name):
+                click.echo(
+                    f"note: {rc} still carries a line an older installer "
+                    f"appended; it is no longer needed and can be deleted:\n"
+                    f"  {line}",
+                    err=True,
+                )
+        if not dry_run:
+            click.echo(_activation_hint(shell, outcomes))
 
     @main_group.command(
         "install-tab-completion",
