@@ -10,6 +10,17 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.68.2] - 2026-11-28
+
+- MCP audit §2 judges SDK-derived tools by their operation (API contract v1,
+  rule API-T001; operator decision 2026-11-28): tools that scitex-sdk generates
+  from an `ApiOperation` are named `<package>_<resource>_<verb>`; the auditor
+  reads the verb from the installed `scitex.apis` plugin, checks it against the
+  synonym catalogue, and no longer reports `notes_notes_list` as a double
+  prefix. Hand-written tools keep the positional §2 rules (#1130).
+
+## [0.68.1] - 2026-11-28
+
 ### Fixed
 
 - **Shell completion no longer edits rc files** (#1127). The shared
