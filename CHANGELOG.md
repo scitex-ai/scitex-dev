@@ -10,6 +10,35 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Shell completion no longer edits rc files** (#1127). The shared
+  `attach_shell_completion` helper's `install-shell-completion` used to append
+  `[ -f ~/.scitex/<short>/runtime/completion/<prog> ] && source ...  # <prog>
+  tab completion` to `~/.bashrc` / `~/.zshrc`; where the rc file is a symlink
+  into a tracked dotfiles checkout, every package install dirtied that repo.
+  It now writes only a drop-in where the shell already looks
+  (bash: `${BASH_COMPLETION_USER_DIR:-${XDG_DATA_HOME:-~/.local/share}/bash-completion}/completions/<prog>`,
+  zsh: `$XDG_DATA_HOME/zsh/site-functions/_<prog>`, fish:
+  `$XDG_CONFIG_HOME/fish/completions/<prog>.fish`), is idempotent and atomic,
+  refuses to write into a git work tree (resolved through symlinks), and
+  reports, read-only, rc lines an older version left behind.
+- `scitex-dev ecosystem install` no longer wires completions unless
+  `--with-completions` is passed (was on by default).
+- `scitex-dev linter completion install` / `show-completion-status` use the
+  drop-in; the unreachable argparse-era rc writer was removed.
+
+### Added
+
+- `attach_shell_completion(..., aliases=(...))` for packages that ship a
+  second console script for the same group, and the public building blocks
+  `install_completion`, `completion_dropin_path`, `generate_completion_script`.
+
+### Changed
+
+- **PS-147** now flags any completion code that appends to a user rc file
+  (not only the `eval "$(_X_COMPLETE=...)"` form).
+
 ## [0.68.0] - 2026-11-28
 
 ### Added

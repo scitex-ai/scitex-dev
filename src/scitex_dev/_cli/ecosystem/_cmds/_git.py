@@ -283,13 +283,14 @@ def register(ecosystem):
     )
     @click.option(
         "--with-completions/--no-completions",
-        default=True,
+        default=False,
         show_default=True,
         help=(
-            "After pip install, run `<binary> install-shell-completion --yes` "
-            "for every package whose console script lands on PATH. Generates "
-            "the per-package cache file under ~/.scitex/<pkg-short>/runtime/"
-            "completion/ and a single source line in your rc."
+            "Opt-in: after pip install, run `<binary> install-shell-completion "
+            "--yes` for every package whose console script lands on PATH. "
+            "Each writes a drop-in under the shell's per-user completion "
+            "directory (bash: ~/.local/share/bash-completion/completions/); "
+            "no rc file is edited (scitex-dev#1127)."
         ),
     )
     @click.option(

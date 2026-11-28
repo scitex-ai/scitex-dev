@@ -2,9 +2,8 @@
 
 PS-145 (W) — package source reads ANOTHER scitex package's user-state
              tree (`~/.scitex/<other>/...`) or `SCITEX_<OTHER>_*` env var.
-PS-147 (W) — package source writes an eval-form shell-completion line
-             (`eval "$(_<NAME>_COMPLETE=bash_source ...)"`) into a user rc
-             file.
+PS-147 (W) — package source writes shell completion (an eval-form
+             line, a `source` line, or a script) into a user rc file.
 
 Both checkers are exercised directly with a stub Violation class against a
 `src/<pkg>/` tree in tmp_path.
@@ -81,12 +80,23 @@ _EVAL_COMPLETION = (
     "    )\n"
 )
 
-# Uses the cache-file completion pattern instead — no eval form.
-_CACHE_COMPLETION = (
+# Appends a cache `source` line to ~/.bashrc — the pattern the shared helper
+# used before scitex-dev#1127; still an rc edit, so still flagged.
+_SOURCE_LINE_COMPLETION = (
     "def install_completion():\n"
     '    rc = Path.home() / ".bashrc"\n'
     "    cache = Path.home() / '.scitex/demo/runtime/completion/demo'\n"
-    "    rc.write_text(f'[ -f {cache} ] && source {cache}\\n')\n"
+    "    with open(rc, 'a') as fh:\n"
+    "        fh.write(f'[ -f {cache} ] && source {cache}  # demo tab completion\\n')\n"
+)
+
+# Writes a drop-in into the bash-completion user dir; only READS ~/.bashrc to
+# report a legacy line. No rc write, no finding.
+_DROPIN_COMPLETION = (
+    "def install_completion(script):\n"
+    "    target = Path.home() / '.local/share/bash-completion/completions/demo'\n"
+    "    target.write_text(script)\n"
+    "    legacy = (Path.home() / '.bashrc').read_text()\n"
 )
 
 
@@ -100,11 +110,20 @@ class TestPS147EvalFormCompletion:
         # Assert
         assert [v.rule for v in out] == ["PS-147"]
 
-    def test_cache_file_completion_produces_no_finding(
-        self, tmp_path: Path
-    ) -> None:
-        # Arrange — control arm: cache-file pattern, no eval form
-        _write_src(tmp_path, "_completion.py", _CACHE_COMPLETION)
+    def test_source_line_appended_to_rc_is_flagged(self, tmp_path: Path) -> None:
+        # Arrange
+        _write_src(tmp_path, "_completion.py", _SOURCE_LINE_COMPLETION)
+        out: list = []
+        # Act
+        check_ps147_eval_form_completion(tmp_path, _StubViolation, out)
+        # Assert
+        assert [(v.rule, "open(rc, 'a')" in v.detail) for v in out] == [
+            ("PS-147", True)
+        ]
+
+    def test_dropin_completion_produces_no_finding(self, tmp_path: Path) -> None:
+        # Arrange — control arm: drop-in file, rc only read
+        _write_src(tmp_path, "_completion.py", _DROPIN_COMPLETION)
         out: list = []
         # Act
         check_ps147_eval_form_completion(tmp_path, _StubViolation, out)
